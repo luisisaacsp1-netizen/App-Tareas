@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OT · Contenedores Patagonia</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d1b2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="OT Patagonia">
+<link rel="apple-touch-icon" href="icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -257,7 +263,7 @@ main{max-width:820px;margin:0 auto;padding:24px 20px 80px;}
 // ═══════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════
-const API = 'https://script.google.com/macros/s/AKfycbyOFQ_v7Kxk_DXCPIwW5vt3BOZtKXsfF1pCQpNrZSHSMO5MfxK6CvrM2SzrFAv-dORW/exec';
+const API = 'REEMPLAZAR_CON_URL_DEL_SCRIPT';
 
 // ═══════════════════════════════════════════════════════
 // STATE
@@ -588,16 +594,39 @@ function renderNuevaTarea() {
         <input type="number" id="t_hhp" placeholder="Ej: 2.5" step="0.5" min="0">
       </div>
       <div class="field">
-        <label>Hora inicio trabajo</label>
-        <input type="time" id="t_hinicio" value="${hora}">
-      </div>
-      <div class="field">
         <label>Fecha compromiso</label>
         <input type="date" id="t_fco">
       </div>
-      <div class="field">
-        <label>Hora término (si termina hoy)</label>
-        <input type="time" id="t_htermino">
+      <div class="field full">
+        <label>¿La tarea termina hoy?</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button type="button" id="btnTareaCorta" onclick="setTipoDuracion('corta')"
+            style="flex:1;padding:9px;border-radius:6px;border:1.5px solid var(--border);background:var(--inp);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;cursor:pointer;transition:all .2s;color:var(--muted)">
+            ✓ SÍ — Termina hoy
+          </button>
+          <button type="button" id="btnTareaLarga" onclick="setTipoDuracion('larga')"
+            style="flex:1;padding:9px;border-radius:6px;border:1.5px solid var(--navy);background:var(--navy);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;cursor:pointer;color:#fff">
+            → NO — Continúa en días siguientes
+          </button>
+        </div>
+      </div>
+      <div id="camposHorario" style="display:none;grid-column:1/-1">
+        <div class="grid" style="margin-top:0">
+          <div class="field">
+            <label>Hora inicio</label>
+            <input type="time" id="t_hinicio" value="${hora}" oninput="calcHHNueva()">
+          </div>
+          <div class="field">
+            <label>Hora término</label>
+            <input type="time" id="t_htermino" oninput="calcHHNueva()">
+          </div>
+          <div class="field full">
+            <div class="hh-panel" id="hhNuevaTarea">
+              <div><div class="hh-lbl">HH calculadas</div><div class="hh-sub">Se registra como sesión automáticamente</div></div>
+              <div class="hh-val empty" id="hhValNueva">--</div>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="field full">
         <label>Comentario</label>
@@ -972,6 +1001,47 @@ async function guardarSesion() {
 // ═══════════════════════════════════════════════════════
 // HELPERS UI
 // ═══════════════════════════════════════════════════════
+function setTipoDuracion(tipo) {
+  const btnC = document.getElementById('btnTareaCorta');
+  const btnL = document.getElementById('btnTareaLarga');
+  const campos = document.getElementById('camposHorario');
+  if (!btnC || !btnL || !campos) return;
+  if (tipo === 'corta') {
+    btnC.style.background = 'var(--navy)';
+    btnC.style.color = '#fff';
+    btnC.style.borderColor = 'var(--navy)';
+    btnL.style.background = 'var(--inp)';
+    btnL.style.color = 'var(--muted)';
+    btnL.style.borderColor = 'var(--border)';
+    campos.style.display = 'block';
+    // Pre-fill inicio with current time
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mm = String(now.getMinutes()).padStart(2,'0');
+    const ini = document.getElementById('t_hinicio');
+    if (ini && !ini.value) ini.value = `${hh}:${mm}`;
+  } else {
+    btnL.style.background = 'var(--navy)';
+    btnL.style.color = '#fff';
+    btnL.style.borderColor = 'var(--navy)';
+    btnC.style.background = 'var(--inp)';
+    btnC.style.color = 'var(--muted)';
+    btnC.style.borderColor = 'var(--border)';
+    campos.style.display = 'none';
+  }
+}
+
+function calcHHNueva() {
+  const i = document.getElementById('t_hinicio')?.value;
+  const f = document.getElementById('t_htermino')?.value;
+  const el = document.getElementById('hhValNueva');
+  if (!el) return;
+  if (!i || !f) { el.innerHTML = '--'; el.className = 'hh-val empty'; return; }
+  const hh = calcHHRaw(i, f);
+  el.innerHTML = `${hh.toFixed(2)}<span>hrs</span>`;
+  el.className = 'hh-val';
+}
+
 function prevTarea() {
   const id   = document.getElementById('s_tid')?.value;
   const prev = document.getElementById('tPrev');
