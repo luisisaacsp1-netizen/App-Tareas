@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registro OT — Contenedores Patagonia</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy:   #0f1f3d;
+    --blue:   #1a3a6e;
+    --mid:    #2556a8;
+    --accent: #e8a317;
+    --acc2:   #f0c35a;
+    --teal:   #0d8f6b;
+    --red:    #c0392b;
+    --bg:     #f0f2f7;
+    --card:   #ffffff;
+    --border: #dde3ef;
+    --text:   #1a1a2e;
+    --muted:  #6b7280;
+    --success:#0d8f6b;
+    --inp:    #f8f9fc;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--navy);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-bottom: 2px solid var(--accent);
+  }
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .header-logo {
+    width: 32px;
+    height: 32px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--navy);
+  }
+  .header-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: 0.3px;
+  }
+  .header-sub {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    font-weight: 300;
+  }
+  .header-date {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+  }
+
+  /* ── Mode toggle ── */
+  .mode-bar {
+    background: var(--navy);
+    padding: 0 24px 16px;
+    display: flex;
+    gap: 8px;
+  }
+  .mode-btn {
+    flex: 1;
+    max-width: 220px;
+    padding: 10px 16px;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    background: transparent;
+    color: rgba(255,255,255,0.55);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mode-btn .ico { font-size: 16px; }
+  .mode-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--navy);
+  }
+  .mode-btn:not(.active):hover {
+    border-color: rgba(255,255,255,0.35);
+    color: rgba(255,255,255,0.8);
+  }
+
+  /* ── Main layout ── */
+  main {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 20px 16px 60px;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    padding: 24px;
+    margin-bottom: 12px;
+    animation: fadeUp .3s ease;
+  }
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(8px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Form grid ── */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .form-grid .full { grid-column: 1 / -1; }
+
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .field input,
+  .field select,
+  .field textarea {
+    background: var(--inp);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    transition: border-color .15s, box-shadow .15s;
+    width: 100%;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .field input:focus,
+  .field select:focus,
+  .field textarea:focus {
+    outline: none;
+    border-color: var(--mid);
+    box-shadow: 0 0 0 3px rgba(37,86,168,.1);
+    background: #fff;
+  }
+  .field textarea { resize: vertical; min-height: 72px; }
+  .field select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+  }
+
+  /* ── HH calculado ── */
+  .hh-display {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%);
+    border-radius: 10px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+  }
+  .hh-label { font-size: 11px; color: rgba(255,255,255,0.55); font-weight: 500; letter-spacing: 0.5px; }
+  .hh-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--acc2);
+    letter-spacing: -0.5px;
+  }
+  .hh-value.empty { font-size: 14px; color: rgba(255,255,255,0.25); }
+
+  /* ── Tarea preview ── */
+  .tarea-preview {
+    background: var(--inp);
+    border: 1.5px solid var(--border);
+    border-left: 3px solid var(--mid);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--muted);
+    min-height: 40px;
+    margin-top: 4px;
+  }
+  .tarea-preview.filled { color: var(--text); font-weight: 500; }
+
+  /* ── Submit button ── */
+  .btn-submit {
+    width: 100%;
+    padding: 14px;
+    background: var(--navy);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 8px;
+    letter-spacing: 0.2px;
+  }
+  .btn-submit:hover { background: var(--blue); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(15,31,61,.2); }
+  .btn-submit:active { transform: translateY(0); }
+  .btn-submit:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-submit .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: none;
+  }
+  .btn-submit.loading .spinner { display: block; }
+  .btn-submit.loading .btn-text { display: none; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--navy);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 50px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 8px 32px rgba(0,0,0,.25);
+    transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+    z-index: 999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.success { border-left: 4px solid var(--accent); }
+  .toast.error   { border-left: 4px solid var(--red); }
+
+  /* ── Tareas recientes ── */
+  .recent-list { display: flex; flex-direction: column; gap: 8px; }
+  .recent-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--inp);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .recent-item:hover { border-color: var(--mid); background: #eef3fb; }
+  .recent-id {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    background: var(--navy);
+    color: var(--acc2);
+    padding: 3px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .recent-name { font-size: 13px; font-weight: 500; flex: 1; }
+  .recent-meta { font-size: 11px; color: var(--muted); }
+  .badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .badge-proceso  { background: #fef3c7; color: #92400e; }
+  .badge-iniciar  { background: #dbeafe; color: #1e40af; }
+  .badge-listo    { background: #d1fae5; color: #065f46; }
+  .badge-standby  { background: #ede9fe; color: #5b21b6; }
+  .badge-cancel   { background: #fee2e2; color: #991b1b; }
+
+  .empty-state {
+    text-align: center;
+    padding: 24px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  /* ── Mobile ── */
+  @media (max-width: 520px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .form-grid .full { grid-column: 1; }
+    header { padding: 0 16px; }
+    main { padding: 16px 12px 60px; }
+    .card { padding: 18px 16px; }
+    .mode-btn span:not(.ico) { display: none; }
+    .mode-btn { max-width: 60px; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-brand">
+    <div class="header-logo">OT</div>
+    <div>
+      <div class="header-title">Registro Oficina Técnica</div>
+      <div class="header-sub">Contenedores Patagonia</div>
+    </div>
+  </div>
+  <div class="header-date" id="headerDate"></div>
+</header>
+
+<div class="mode-bar">
+  <button class="mode-btn active" id="btnNuevaTarea" onclick="setMode('tarea')">
+    <span class="ico">＋</span><span>Nueva Tarea</span>
+  </button>
+  <button class="mode-btn" id="btnSesion" onclick="setMode('sesion')">
+    <span class="ico">⏱</span><span>Registrar Sesión</span>
+  </button>
+  <button class="mode-btn" id="btnVerTareas" onclick="setMode('ver')">
+    <span class="ico">☰</span><span>Tareas Activas</span>
+  </button>
+</div>
+
+<main>
+
+  <!-- ══ MODO: NUEVA TAREA ══ -->
+  <div id="panelTarea">
+    <div class="card">
+      <div class="card-title">Identificación</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Responsable *</label>
+          <select id="t_nombre">
+            <option value="">— seleccionar —</option>
+            <option>Nicolas</option>
+            <option>Yamila</option>
+            <option>Luis</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Fecha ingreso</label>
+          <input type="date" id="t_fecha">
+        </div>
+        <div class="field full">
+          <label>Descripción de la tarea *</label>
+          <textarea id="t_tarea" placeholder="Ej: Cubicación módulo oficina proyecto minera Los Bronces..."></textarea>
+        </div>
+        <div class="field">
+          <label>Solicitante</label>
+          <input type="text" id="t_solicitante" placeholder="Nombre de quien solicita" list="listSolicitantes">
+          <datalist id="listSolicitantes">
+            <option>Thania</option><option>Monica</option><option>Brezzy</option>
+            <option>Rodolfo</option><option>Javiera</option><option>Eniliam</option>
+            <option>Patricia</option><option>Claudia</option><option>Michael</option>
+            <option>Juan</option><option>Luis S</option><option>Sofia</option>
+            <option>Tatiana</option><option>Pedro</option><option>Roxana</option>
+          </datalist>
+        </div>
+        <div class="field">
+          <label>Prioridad</label>
+          <select id="t_prioridad">
+            <option value="">— seleccionar —</option>
+            <option>Alta</option>
+            <option selected>Media</option>
+            <option>Baja</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Clasificación</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Área solicitante</label>
+          <select id="t_area">
+            <option value="">— seleccionar —</option>
+            <option>Ventas</option>
+            <option>Oficina Tecnica</option>
+            <option>Producción</option>
+            <option>Logistica</option>
+            <option>Postventa</option>
+            <option>Bodega</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Tipo de tarea</label>
+          <select id="t_tipo">
+            <option value="">— seleccionar —</option>
+            <option>Coordinación</option>
+            <option>Plano</option>
+            <option>Costo</option>
+            <option>Consulta</option>
+            <option>EDP</option>
+            <option>Ejecución</option>
+            <option>Informe</option>
+            <option>Vales</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>HH Planificadas</label>
+          <input type="number" id="t_hhplan" placeholder="Ej: 2.5" step="0.5" min="0">
+        </div>
+        <div class="field">
+          <label>Fecha compromiso</label>
+          <input type="date" id="t_fechacomp">
+        </div>
+        <div class="field full">
+          <label>Comentario</label>
+          <input type="text" id="t_comentario" placeholder="Notas adicionales (opcional)">
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-submit" id="btnGuardarTarea" onclick="guardarTarea()">
+      <div class="spinner"></div>
+      <span class="btn-text">Guardar Tarea</span>
+    </button>
+  </div>
+
+  <!-- ══ MODO: REGISTRAR SESIÓN ══ -->
+  <div id="panelSesion" style="display:none">
+    <div class="card">
+      <div class="card-title">Selección de tarea</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Responsable *</label>
+          <select id="s_nombre">
+            <option value="">— seleccionar —</option>
+            <option>Nicolas</option>
+            <option>Yamila</option>
+            <option>Luis</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Fecha de la sesión *</label>
+          <input type="date" id="s_fecha">
+        </div>
+        <div class="field full">
+          <label>Tarea activa *</label>
+          <select id="s_tareaId" onchange="actualizarPreviewTarea()">
+            <option value="">— cargando tareas activas… —</option>
+          </select>
+          <div class="tarea-preview" id="tareaPreview">Selecciona una tarea para ver su descripción</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Horario trabajado</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Hora inicio *</label>
+          <input type="time" id="s_inicio" oninput="calcularHH()">
+        </div>
+        <div class="field">
+          <label>Hora término *</label>
+          <input type="time" id="s_termino" oninput="calcularHH()">
+        </div>
+        <div class="field full">
+          <div class="hh-display">
+            <div>
+              <div class="hh-label">HH SESIÓN CALCULADAS</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px">Se guarda automáticamente</div>
+            </div>
+            <div class="hh-value empty" id="hhDisplay">--</div>
+          </div>
+        </div>
+        <div class="field full">
+          <label>Comentario de sesión</label>
+          <input type="text" id="s_comentario" placeholder="¿Qué se avanzó en esta sesión?">
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-submit" id="btnGuardarSesion" onclick="guardarSesion()">
+      <div class="spinner"></div>
+      <span class="btn-text">Registrar Sesión</span>
+    </button>
+  </div>
+
+  <!-- ══ MODO: VER TAREAS ACTIVAS ══ -->
+  <div id="panelVer" style="display:none">
+    <div class="card">
+      <div class="card-title">Tareas activas</div>
+      <div id="listaTareas" class="recent-list">
+        <div class="empty-state">Cargando tareas…</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbxdCXpxn64-ODmyw1nYFxAUCykJZROYSMmdPLxk5-QTiqVnWg1dG40xzL6tV3j8U-sn/exec';
+
+// ── Headers de las hojas ──────────────────────────────────────────────────
+const HDR_TAREAS  = ['ID','Nombre','Tarea','Solicitante','Area','Tipo','Prioridad',
+                     'HH_Plan','FechaIngreso','FechaCompromiso','Estado','Comentario',
+                     'HH_Real','N_Sesiones'];
+const HDR_SESIONES = ['TareaID','TareaNombre','Responsable','Fecha',
+                      'HoraInicio','HoraTermino','HH_Sesion','Comentario'];
+
+let tareas = [];
+let nextId = 1;
+
+// ── Init ──────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  // Fecha de hoy por defecto
+  const hoy = new Date().toISOString().split('T')[0];
+  document.getElementById('t_fecha').value = hoy;
+  document.getElementById('s_fecha').value = hoy;
+
+  // Header date
+  document.getElementById('headerDate').textContent =
+    new Date().toLocaleDateString('es-CL', { weekday:'short', day:'numeric', month:'short' });
+
+  // Inicializar headers si la hoja está vacía, luego cargar tareas
+  inicializarYCargar();
+});
+
+async function inicializarYCargar() {
+  try {
+    const res = await fetch(`${API}?tabla=Tareas`);
+    const rows = await res.json();
+    if (rows.length === 0) {
+      // Hoja vacía — insertar fila de encabezados
+      await postData({ tabla: 'Tareas',   fila: HDR_TAREAS });
+      await postData({ tabla: 'Sesiones', fila: HDR_SESIONES });
+      tareas = [];
+      nextId = 1;
+    } else if (rows.length === 1) {
+      // Solo encabezado, sin datos
+      tareas = [];
+      nextId = 1;
+    } else {
+      // Parsear filas (fila 0 = encabezados)
+      tareas = rows.slice(1).map(r => ({
+        id:          r[0],
+        nombre:      r[1],
+        tarea:       r[2],
+        solicitante: r[3],
+        area:        r[4],
+        tipo:        r[5],
+        prioridad:   r[6],
+        hhPlan:      r[7],
+        fechaIngreso:r[8],
+        fechaComp:   r[9],
+        estado:      r[10],
+        comentario:  r[11],
+      }));
+      nextId = tareas.length > 0
+        ? Math.max(...tareas.map(t => parseInt(t.id) || 0)) + 1
+        : 1;
+    }
+    cargarDropdownTareas();
+    renderListaTareas();
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+// ── Modo ──────────────────────────────────────────────────────────────────
+function setMode(mode) {
+  document.getElementById('panelTarea').style.display  = mode === 'tarea'  ? 'block' : 'none';
+  document.getElementById('panelSesion').style.display = mode === 'sesion' ? 'block' : 'none';
+  document.getElementById('panelVer').style.display    = mode === 'ver'    ? 'block' : 'none';
+
+  document.getElementById('btnNuevaTarea').classList.toggle('active', mode === 'tarea');
+  document.getElementById('btnSesion').classList.toggle('active',     mode === 'sesion');
+  document.getElementById('btnVerTareas').classList.toggle('active',  mode === 'ver');
+
+  if (mode === 'sesion') cargarDropdownTareas();
+  if (mode === 'ver')    renderListaTareas();
+}
+
+// ── Dropdown tareas activas ────────────────────────────────────────────────
+function cargarDropdownTareas() {
+  const dd = document.getElementById('s_tareaId');
+  const activas = tareas.filter(t =>
+    t.estado === 'En Proceso' || t.estado === 'Por Iniciar'
+  ).sort((a,b) => b.id - a.id);
+
+  dd.innerHTML = '<option value="">— seleccionar tarea —</option>';
+  activas.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = `#${t.id} · ${t.tarea.substring(0, 55)}${t.tarea.length > 55 ? '…' : ''}`;
+    dd.appendChild(opt);
+  });
+  if (activas.length === 0) {
+    dd.innerHTML = '<option value="">— no hay tareas activas —</option>';
+  }
+}
+
+function actualizarPreviewTarea() {
+  const id = document.getElementById('s_tareaId').value;
+  const prev = document.getElementById('tareaPreview');
+  const t = tareas.find(x => String(x.id) === String(id));
+  if (t) {
+    prev.textContent = `${t.tarea} · ${t.tipo || ''} · ${t.area || ''} · HH Plan: ${t.hhPlan || '—'}`;
+    prev.className = 'tarea-preview filled';
+  } else {
+    prev.textContent = 'Selecciona una tarea para ver su descripción';
+    prev.className = 'tarea-preview';
+  }
+}
+
+// ── Calcular HH sesión ─────────────────────────────────────────────────────
+function calcularHH() {
+  const ini = document.getElementById('s_inicio').value;
+  const ter = document.getElementById('s_termino').value;
+  const el  = document.getElementById('hhDisplay');
+  if (!ini || !ter) {
+    el.textContent = '--';
+    el.className = 'hh-value empty';
+    return null;
+  }
+  const [ih, im] = ini.split(':').map(Number);
+  const [th, tm] = ter.split(':').map(Number);
+  let diff = (th * 60 + tm) - (ih * 60 + im);
+  if (diff < 0) diff += 1440; // cruza medianoche
+  const hh = (diff / 60).toFixed(2);
+  el.textContent = hh + ' hrs';
+  el.className = 'hh-value';
+  return parseFloat(hh);
+}
+
+// ── Lista tareas activas ───────────────────────────────────────────────────
+function renderListaTareas() {
+  const cont = document.getElementById('listaTareas');
+  const activas = tareas.filter(t =>
+    t.estado !== 'Cancelado' && t.estado !== 'Listo'
+  ).sort((a,b) => b.id - a.id);
+
+  if (activas.length === 0) {
+    cont.innerHTML = '<div class="empty-state">No hay tareas activas registradas aún.</div>';
+    return;
+  }
+  cont.innerHTML = activas.map(t => {
+    const badgeClass = {
+      'En Proceso': 'badge-proceso',
+      'Por Iniciar': 'badge-iniciar',
+      'Listo': 'badge-listo',
+      'Standby': 'badge-standby',
+      'Cancelado': 'badge-cancel',
+    }[t.estado] || 'badge-iniciar';
+    return `
+      <div class="recent-item" onclick="usarTareaEnSesion('${t.id}')">
+        <span class="recent-id">#${t.id}</span>
+        <div style="flex:1;min-width:0">
+          <div class="recent-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.tarea}</div>
+          <div class="recent-meta">${t.nombre || ''} · ${t.tipo || ''} · ${t.area || ''}</div>
+        </div>
+        <span class="badge ${badgeClass}">${t.estado}</span>
+      </div>`;
+  }).join('');
+}
+
+function usarTareaEnSesion(id) {
+  setMode('sesion');
+  setTimeout(() => {
+    document.getElementById('s_tareaId').value = id;
+    actualizarPreviewTarea();
+  }, 100);
+}
+
+// ── POST helper ────────────────────────────────────────────────────────────
+async function postData(payload) {
+  const resp = await fetch(API, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return resp.json();
+}
+
+// ── Guardar tarea nueva ────────────────────────────────────────────────────
+async function guardarTarea() {
+  const nombre = document.getElementById('t_nombre').value;
+  const tarea  = document.getElementById('t_tarea').value.trim();
+  if (!nombre || !tarea) { showToast('Completa Responsable y Tarea', 'error'); return; }
+
+  const btn = document.getElementById('btnGuardarTarea');
+  btn.disabled = true;
+  btn.classList.add('loading');
+
+  const fila = [
+    nextId,
+    nombre,
+    tarea,
+    document.getElementById('t_solicitante').value,
+    document.getElementById('t_area').value,
+    document.getElementById('t_tipo').value,
+    document.getElementById('t_prioridad').value,
+    parseFloat(document.getElementById('t_hhplan').value) || '',
+    document.getElementById('t_fecha').value,
+    document.getElementById('t_fechacomp').value,
+    'Por Iniciar',
+    document.getElementById('t_comentario').value,
+    0, // HH_Real inicial
+    0, // N_Sesiones inicial
+  ];
+
+  try {
+    await postData({ tabla: 'Tareas', fila });
+    tareas.push({
+      id: nextId, nombre, tarea,
+      solicitante: fila[3], area: fila[4], tipo: fila[5],
+      prioridad: fila[6], hhPlan: fila[7],
+      fechaIngreso: fila[8], fechaComp: fila[9],
+      estado: 'Por Iniciar', comentario: fila[11],
+    });
+    nextId++;
+    showToast('✓ Tarea creada correctamente', 'success');
+    resetTarea();
+    cargarDropdownTareas();
+  } catch(e) {
+    showToast('Error al guardar. Revisa conexión.', 'error');
+  }
+
+  btn.disabled = false;
+  btn.classList.remove('loading');
+}
+
+function resetTarea() {
+  ['t_nombre','t_tarea','t_solicitante','t_area','t_tipo','t_comentario'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el.tagName === 'SELECT') el.value = '';
+    else el.value = '';
+  });
+  document.getElementById('t_prioridad').value = 'Media';
+  document.getElementById('t_hhplan').value = '';
+  document.getElementById('t_fechacomp').value = '';
+  document.getElementById('t_fecha').value = new Date().toISOString().split('T')[0];
+}
+
+// ── Guardar sesión ─────────────────────────────────────────────────────────
+async function guardarSesion() {
+  const tareaId  = document.getElementById('s_tareaId').value;
+  const nombre   = document.getElementById('s_nombre').value;
+  const inicio   = document.getElementById('s_inicio').value;
+  const termino  = document.getElementById('s_termino').value;
+  const fecha    = document.getElementById('s_fecha').value;
+
+  if (!tareaId || !nombre || !inicio || !termino || !fecha) {
+    showToast('Completa todos los campos obligatorios', 'error');
+    return;
+  }
+  const hh = calcularHH();
+  if (!hh || hh <= 0) { showToast('Verifica los horarios ingresados', 'error'); return; }
+
+  const btn = document.getElementById('btnGuardarSesion');
+  btn.disabled = true;
+  btn.classList.add('loading');
+
+  const t = tareas.find(x => String(x.id) === String(tareaId));
+  const fila = [
+    tareaId,
+    t ? t.tarea : '',
+    nombre,
+    fecha,
+    inicio,
+    termino,
+    hh,
+    document.getElementById('s_comentario').value,
+  ];
+
+  try {
+    await postData({ tabla: 'Sesiones', fila });
+    showToast(`✓ Sesión registrada: ${hh} hrs`, 'success');
+    document.getElementById('s_inicio').value = '';
+    document.getElementById('s_termino').value = '';
+    document.getElementById('s_comentario').value = '';
+    document.getElementById('hhDisplay').textContent = '--';
+    document.getElementById('hhDisplay').className = 'hh-value empty';
+  } catch(e) {
+    showToast('Error al guardar. Revisa conexión.', 'error');
+  }
+
+  btn.disabled = false;
+  btn.classList.remove('loading');
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3200);
+}
+</script>
+</body>
+</html>
