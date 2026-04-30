@@ -122,6 +122,7 @@ main{max-width:820px;margin:0 auto;padding:24px 20px 80px;}
 .bp{background:#fff3cd;color:#856404;}.bi{background:#d1ecf1;color:#0c5460;}
 .bl{background:#d4edda;color:#155724;}.bs{background:#e2d9f3;color:#4a1f8c;}
 .bc{background:#f8d7da;color:#721c24;}
+.bprog{background:#e0f2fe;color:#075985;}
 
 /* ── DASHBOARD ── */
 .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px;}
@@ -202,6 +203,38 @@ main{max-width:820px;margin:0 auto;padding:24px 20px 80px;}
 .toast.success{border-left-color:#1a7a4a;}
 .toast.error{border-left-color:var(--red);}
 
+/* ── GESTIÓN REGISTROS ── */
+.search-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.search-bar input{flex:1;min-width:180px;background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:9px 12px;font-family:"Open Sans",sans-serif;font-size:13px;color:var(--text);}
+.search-bar input:focus{outline:none;border-color:var(--navy3);box-shadow:0 0 0 3px rgba(26,48,80,.1);}
+.search-bar select{background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:9px 28px 9px 12px;font-family:"Open Sans",sans-serif;font-size:13px;color:var(--text);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23637388'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;-webkit-appearance:none;appearance:none;cursor:pointer;}
+.search-results{font-size:12px;color:var(--muted);margin-bottom:8px;padding-left:2px;}
+.reg-item{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:var(--inp);border:1px solid var(--border);border-radius:6px;margin-bottom:6px;transition:border-color .15s;}
+.reg-item:hover{border-color:var(--navy3);}
+.reg-info{flex:1;min-width:0;}
+.reg-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;}
+.reg-meta{font-size:11px;color:var(--muted);line-height:1.5;}
+.reg-actions{display:flex;gap:6px;flex-shrink:0;}
+.btn-edit{padding:5px 12px;border-radius:5px;border:1.5px solid var(--navy);background:transparent;color:var(--navy);font-family:"Montserrat",sans-serif;font-size:10px;font-weight:700;letter-spacing:.5px;cursor:pointer;transition:all .15s;}
+.btn-edit:hover{background:var(--navy);color:#fff;}
+.btn-del{padding:5px 12px;border-radius:5px;border:1.5px solid #c0392b;background:transparent;color:#c0392b;font-family:"Montserrat",sans-serif;font-size:10px;font-weight:700;letter-spacing:.5px;cursor:pointer;transition:all .15s;}
+.btn-del:hover{background:#c0392b;color:#fff;}
+.edit-form{background:#fff;border:1.5px solid var(--navy3);border-radius:8px;padding:16px;margin-top:6px;display:none;}
+.edit-form.open{display:block;}
+.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.edit-grid .full{grid-column:1/-1;}
+.edit-field{display:flex;flex-direction:column;gap:4px;}
+.edit-field label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+.edit-field input,.edit-field select,.edit-field textarea{background:var(--inp);border:1.5px solid var(--border);border-radius:5px;padding:7px 10px;font-family:"Open Sans",sans-serif;font-size:13px;color:var(--text);}
+.edit-field input:focus,.edit-field select:focus,.edit-field textarea:focus{outline:none;border-color:var(--navy3);}
+.edit-field select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23637388'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;-webkit-appearance:none;appearance:none;}
+.edit-btns{display:flex;gap:8px;}
+.edit-btns .btn{flex:1;margin-top:0;padding:9px;}
+.confirm-del{background:#fff3f3;border:1.5px solid #f1aeb5;border-radius:8px;padding:14px;margin-top:6px;display:none;}
+.confirm-del.open{display:block;}
+.confirm-del p{font-size:13px;color:#721c24;margin-bottom:10px;}
+.confirm-del-btns{display:flex;gap:8px;}
+
 /* ── MOBILE ── */
 @media(max-width:580px){
   .grid{grid-template-columns:1fr;}.grid .full{grid-column:1;}
@@ -263,7 +296,7 @@ main{max-width:820px;margin:0 auto;padding:24px 20px 80px;}
 // ═══════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════
-const API = 'https://script.google.com/macros/s/AKfycbyFAC5USR3HRMaRdIyQ2RxuEGQ4yVpEPXXz9rEoTG1n5SFqylSn6rY8FgHkdA3XGWqM/exec';
+const API = 'REEMPLAZAR_CON_URL_DEL_SCRIPT';
 
 // ═══════════════════════════════════════════════════════
 // STATE
@@ -291,7 +324,7 @@ async function doLogin() {
     document.getElementById('hdrNombre').textContent = r.nombre;
     await cargarDatos();
     buildNav();
-    setMode(SESSION.rol === 'admin' ? 'dashboard' : 'misTareas');
+    setMode(SESSION.rol === 'admin' ? 'dashboard' : 'miDash');
   } catch(e) {
     err.textContent = 'Error de conexión. Intenta nuevamente.';
   }
@@ -342,10 +375,11 @@ function buildNav() {
   const nav = document.getElementById('navBar');
   const isAdmin = SESSION.rol === 'admin';
   const tabs = [
-    ...(isAdmin ? [['dashboard','📊','Dashboard']] : []),
-    ['misTareas',   '☰', isAdmin ? 'Todas las Tareas' : 'Mis Tareas'],
-    ['nuevaTarea',  '＋', 'Nueva Tarea'],
-    ['sesion',      '⏱', 'Registrar Sesión'],
+    ...(isAdmin ? [['dashboard','📊','Dashboard']] : [['miDash','📊','Mi Resumen']]),
+    ...(isAdmin ? [['vistaGlobal','🗂','Vista Global']] : []),
+    ['misTareas', '☰', isAdmin ? 'Todas las Tareas' : 'Mis Tareas'],
+    ['nuevaTarea', '＋', 'Nueva Tarea'],
+    ['sesion',     '⏱', 'Registrar Sesión'],
     ...(isAdmin ? [['admin','⚙','Admin']] : []),
   ];
   nav.innerHTML = tabs.map(([id,ico,lbl]) =>
@@ -366,11 +400,13 @@ async function setMode(mode) {
   const main = document.getElementById('mainContent');
   main.innerHTML = '<div class="empty"><span class="ico">⏳</span>Cargando…</div>';
   switch(mode) {
-    case 'dashboard':  main.innerHTML = await renderDashboard(); break;
-    case 'misTareas':  main.innerHTML = renderMisTareas(); break;
-    case 'nuevaTarea': main.innerHTML = renderNuevaTarea(); break;
-    case 'sesion':     main.innerHTML = renderSesion(); break;
-    case 'admin':      main.innerHTML = renderAdmin(); break;
+    case 'dashboard':   main.innerHTML = await renderDashboard(); break;
+    case 'vistaGlobal': main.innerHTML = renderVistaGlobal(); bindEventsGlobal(); return;
+    case 'miDash':      main.innerHTML = renderMiDashboard(); return;
+    case 'misTareas':   main.innerHTML = renderMisTareas(); break;
+    case 'nuevaTarea':  main.innerHTML = renderNuevaTarea(); break;
+    case 'sesion':      main.innerHTML = renderSesion(); break;
+    case 'admin':       main.innerHTML = renderAdmin(); break;
   }
   bindEvents(mode);
 }
@@ -379,121 +415,271 @@ async function setMode(mode) {
 // RENDER: DASHBOARD (solo admin)
 // ═══════════════════════════════════════════════════════
 async function renderDashboard() {
-  const hoy = new Date().toISOString().split('T')[0];
-  const hace30 = new Date(Date.now() - 30*86400000).toISOString().split('T')[0];
+  // Week range by default
+  const hoy  = new Date();
+  const lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() - hoy.getDay() + (hoy.getDay()===0?-6:1));
+  const desdeDefault = lunes.toISOString().split('T')[0];
+  const hastaDefault = hoy.toISOString().split('T')[0];
 
   const [dash, cump] = await Promise.all([
-    apiGet({ accion:'dashboard', desde:hace30, hasta:hoy }),
+    apiGet({ accion:'dashboard', desde:desdeDefault, hasta:hastaDefault }),
     apiGet({ accion:'cumplimiento' }),
   ]);
 
-  const r = dash.resumen || {};
-  const cpi = r.cpi ? (r.cpi <= 1 ? `<span class="kpi-pos">▲ Eficiente (${r.cpi})</span>`
-    : `<span class="kpi-neg">▼ Sobre HH (${r.cpi})</span>`) : '—';
-  const desvClass = (r.desvTotal||0) > 0 ? 'kpi-neg' : 'kpi-pos';
+  return buildDashHTML(dash, cump, desdeDefault, hastaDefault);
+}
 
-  // Cumplimiento semáforo
+function buildDashHTML(dash, cump, desde, hasta) {
+  const r = dash.resumen || {};
+  const desvClass = (r.desvTotal||0) > 0 ? 'kpi-neg' : 'kpi-pos';
+  const cpi = r.cpi
+    ? (r.cpi <= 1
+      ? `<span class="kpi-pos" style="font-size:14px">✓ Eficiente (${r.cpi})</span>`
+      : `<span class="kpi-neg" style="font-size:14px">⚠ Sobre HH (${r.cpi})</span>`)
+    : '—';
+
+  // Cumplimiento
   const cumpHTML = (cump||[]).map(c => `
     <div class="cump-card cump-${c.estado}">
       <div class="cump-dot"></div>
-      <div><div class="cump-name">${c.nombre}</div>
-      <div class="cump-fecha">${c.ultimaFecha ? 'Último: '+c.ultimaFecha : 'Sin registros'}</div></div>
+      <div>
+        <div class="cump-name">${c.nombre}</div>
+        <div class="cump-fecha">${c.ultimaFecha ? 'Último: '+c.ultimaFecha : 'Sin registros'}</div>
+      </div>
     </div>`).join('');
 
-  // Barras HH por área
+  // Estados donut-like bars
+  const estados = dash.estados || {};
+  const totalTar = Object.values(estados).reduce((s,v)=>s+v,0)||1;
+  const estColors = {'Por Iniciar':'#d1ecf1','Programada':'#e0f2fe','En Proceso':'#fff3cd',
+    'Listo':'#d4edda','Standby':'#e2d9f3','Cancelado':'#f8d7da'};
+  const estText   = {'Por Iniciar':'#0c5460','Programada':'#075985','En Proceso':'#856404',
+    'Listo':'#155724','Standby':'#4a1f8c','Cancelado':'#721c24'};
+
+  const estHTML = Object.entries(estados).map(([e,n]) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="width:80px;font-size:11px;color:var(--text)">${e}</div>
+      <div style="flex:1;background:var(--offwhite);border-radius:4px;height:20px;overflow:hidden">
+        <div style="height:100%;background:${estColors[e]||'#eee'};width:${Math.round(n/totalTar*100)}%;
+          display:flex;align-items:center;justify-content:flex-end;padding-right:6px;
+          border-radius:4px;transition:width .5s">
+          <span style="font-size:10px;font-weight:700;color:${estText[e]||'#333'}">${n}</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);width:32px;text-align:right">
+        ${Math.round(n/totalTar*100)}%
+      </div>
+    </div>`).join('');
+
+  // HH por área bars
   const hhArea = dash.hhArea || {};
   const maxArea = Math.max(...Object.values(hhArea), 1);
   const areasHTML = Object.entries(hhArea).sort((a,b)=>b[1]-a[1]).map(([a,h]) => `
     <div class="bar-row">
       <div class="bar-lbl" title="${a}">${a}</div>
       <div class="bar-track"><div class="bar-fill" style="width:${Math.round(h/maxArea*100)}%"></div></div>
-      <div class="bar-val">${Math.round(h*10)/10} h</div>
+      <div class="bar-val">${Math.round(h*10)/10}h</div>
     </div>`).join('');
 
-  // Barras HH por tipo
+  // HH por tipo bars
   const hhTipo = dash.hhTipo || {};
   const maxTipo = Math.max(...Object.values(hhTipo), 1);
   const tiposHTML = Object.entries(hhTipo).sort((a,b)=>b[1]-a[1]).map(([t,h]) => `
     <div class="bar-row">
       <div class="bar-lbl" title="${t}">${t}</div>
       <div class="bar-track"><div class="bar-fill red" style="width:${Math.round(h/maxTipo*100)}%"></div></div>
-      <div class="bar-val">${Math.round(h*10)/10} h</div>
+      <div class="bar-val">${Math.round(h*10)/10}h</div>
     </div>`).join('');
 
-  // Barras por persona
+  // HH por persona bars
   const hhPers = dash.hhPersona || {};
   const maxPers = Math.max(...Object.values(hhPers), 1);
   const persHTML = Object.entries(hhPers).sort((a,b)=>b[1]-a[1]).map(([p,h]) => `
     <div class="bar-row">
       <div class="bar-lbl">${p}</div>
       <div class="bar-track"><div class="bar-fill teal" style="width:${Math.round(h/maxPers*100)}%"></div></div>
-      <div class="bar-val">${Math.round(h*10)/10} h</div>
+      <div class="bar-val">${Math.round(h*10)/10}h</div>
     </div>`).join('');
+
+  // Desviaciones tabla top 10
+  const desvRows = (dash.desviaciones||[])
+    .filter(d => d.plan > 0)
+    .sort((a,b) => Math.abs(b.desv) - Math.abs(a.desv))
+    .slice(0,10)
+    .map(d => {
+      const dc = d.desv > 0.5 ? 'color:#9c0006' : d.desv < -0.5 ? 'color:#1e7145' : '';
+      return `<tr>
+        <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${d.tarea}">${d.tarea}</td>
+        <td style="text-align:center">${d.plan}h</td>
+        <td style="text-align:center">${d.real}h</td>
+        <td style="text-align:center;font-weight:700;${dc}">${d.desv>0?'+':''}${d.desv}h</td>
+        <td style="text-align:center;${dc}">${d.pct!==null?d.pct+'%':'—'}</td>
+      </tr>`;
+    }).join('');
 
   // Promedio HH por tipo
   const promHTML = (dash.promTipo||[]).slice(0,8).map(p => `
-    <tr><td>${p.tipo}</td><td style="text-align:center">${p.n}</td>
-    <td style="text-align:center;font-weight:600">${p.promHH} h</td></tr>`).join('');
+    <tr>
+      <td>${p.tipo}</td>
+      <td style="text-align:center">${p.n}</td>
+      <td style="text-align:center;font-weight:600">${p.promHH}h</td>
+    </tr>`).join('');
 
   return `
   <div class="sec-hdr">
     <div class="sec-title"><div class="red-bar"></div>Dashboard Operacional</div>
-    <div class="sec-desc">Últimos 30 días · Solo visible para administradores</div>
+    <div class="sec-desc">Vista predeterminada: semana actual. Cambia el rango para análisis histórico.</div>
   </div>
 
+  <!-- Filtro período -->
   <div class="filter-bar">
-    <label>Desde</label><input type="date" id="fDesde" value="${hace30}">
-    <label>Hasta</label><input type="date" id="fHasta" value="${hoy}">
-    <button class="btn btn-sm" onclick="recargarDash()"><div class="stripe"></div><span class="btn-txt">Filtrar</span></button>
+    <div style="display:flex;align-items:center;gap:6px">
+      <button class="tab-pill active" id="fbtnSem" onclick="filtrarDash('semana')">Esta semana</button>
+      <button class="tab-pill" id="fbtnMes" onclick="filtrarDash('mes')">Este mes</button>
+      <button class="tab-pill" id="fbtnLibre" onclick="filtrarDash('libre')">Rango libre</button>
+    </div>
+    <div id="rangoLibre" style="display:none;display:flex;gap:8px;align-items:center">
+      <label style="font-size:11px;font-weight:600;color:var(--muted)">Desde</label>
+      <input type="date" id="fDesde" value="${desde}" style="padding:6px 10px;font-size:13px">
+      <label style="font-size:11px;font-weight:600;color:var(--muted)">Hasta</label>
+      <input type="date" id="fHasta" value="${hasta}" style="padding:6px 10px;font-size:13px">
+      <button class="btn btn-sm" onclick="recargarDash()"><div class="stripe"></div><span class="btn-txt">Aplicar</span></button>
+    </div>
   </div>
 
+  <!-- KPIs -->
   <div class="kpi-grid">
-    <div class="kpi"><div class="kpi-val">${r.totalTareas||0}</div><div class="kpi-lbl">Total Tareas</div></div>
-    <div class="kpi"><div class="kpi-val">${r.totalHHPlan||0}h</div><div class="kpi-lbl">HH Planificadas</div></div>
-    <div class="kpi"><div class="kpi-val">${r.totalHHReal||0}h</div><div class="kpi-lbl">HH Reales</div></div>
-    <div class="kpi"><div class="kpi-val ${desvClass}">${r.desvTotal>0?'+':''}${r.desvTotal||0}h</div><div class="kpi-lbl">Desviación Total</div></div>
-    <div class="kpi"><div class="kpi-val">${r.vencidas||0}</div><div class="kpi-lbl">Tareas Vencidas</div><div class="kpi-sub ${r.vencidas>0?'kpi-neg':'kpi-pos'}">${r.vencidas>0?'⚠ Requieren atención':'✓ Al día'}</div></div>
-    <div class="kpi"><div class="kpi-val" style="font-size:16px">${cpi}</div><div class="kpi-lbl">Índice Eficiencia (CPI)</div></div>
+    <div class="kpi">
+      <div class="kpi-val">${r.totalTareas||0}</div>
+      <div class="kpi-lbl">Tareas en el período</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">${r.totalHHPlan||0}h</div>
+      <div class="kpi-lbl">HH Planificadas</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">${r.totalHHReal||0}h</div>
+      <div class="kpi-lbl">HH Reales ejecutadas</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val ${desvClass}">${(r.desvTotal||0)>0?'+':''}${r.desvTotal||0}h</div>
+      <div class="kpi-lbl">Desviación total HH</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val" style="${(r.vencidas||0)>0?'color:var(--red)':''}">${r.vencidas||0}</div>
+      <div class="kpi-lbl">Tareas vencidas</div>
+      <div class="kpi-sub ${(r.vencidas||0)>0?'kpi-neg':'kpi-pos'}">${(r.vencidas||0)>0?'⚠ Requieren atención':'✓ Al día'}</div>
+    </div>
+    <div class="kpi">
+      <div style="margin-top:4px">${cpi}</div>
+      <div class="kpi-lbl">Índice de eficiencia (CPI)</div>
+    </div>
   </div>
 
+  <!-- Cumplimiento -->
   <div class="card">
-    <div class="card-lbl"><div class="dot"></div>Cumplimiento de registro diario</div>
+    <div class="card-lbl"><div class="dot"></div>Control de registro diario</div>
     <div class="cump-grid">${cumpHTML||'<div class="empty">Sin datos</div>'}</div>
   </div>
 
+  <!-- Estados -->
   <div class="chart-wrap">
-    <div class="chart-title">HH Reales por Área Solicitante</div>
-    ${areasHTML||'<div class="empty">Sin datos</div>'}
+    <div class="chart-title">Distribución de tareas por estado</div>
+    ${estHTML||'<div class="empty">Sin datos</div>'}
   </div>
 
-  <div class="chart-wrap">
-    <div class="chart-title">HH Reales por Tipo de Tarea</div>
-    ${tiposHTML||'<div class="empty">Sin datos</div>'}
+  <!-- 2 columns: área + tipo -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="chart-wrap" style="margin-bottom:0">
+      <div class="chart-title">HH Reales por Área</div>
+      ${areasHTML||'<div class="empty" style="padding:12px">Sin datos</div>'}
+    </div>
+    <div class="chart-wrap" style="margin-bottom:0">
+      <div class="chart-title">HH Reales por Tipo de Tarea</div>
+      ${tiposHTML||'<div class="empty" style="padding:12px">Sin datos</div>'}
+    </div>
   </div>
 
+  <!-- HH por persona -->
   <div class="chart-wrap">
     <div class="chart-title">HH Reales por Persona</div>
     ${persHTML||'<div class="empty">Sin datos</div>'}
   </div>
 
+  <!-- Desviaciones -->
   <div class="card">
-    <div class="card-lbl"><div class="dot"></div>Promedio HH real por tipo (calibración de estimaciones)</div>
+    <div class="card-lbl"><div class="dot"></div>Top 10 tareas con mayor desviación HH</div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Tarea</th><th>Plan</th><th>Real</th><th>Desviación</th><th>% Desv</th></tr></thead>
+        <tbody>${desvRows||'<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--muted)">Sin datos suficientes</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Promedio HH por tipo -->
+  <div class="card">
+    <div class="card-lbl"><div class="dot"></div>Promedio HH real por tipo — calibrar estimaciones</div>
     <div class="table-wrap">
       <table class="data-table">
         <thead><tr><th>Tipo de Tarea</th><th>N° Tareas</th><th>Prom. HH Real</th></tr></thead>
-        <tbody>${promHTML||'<tr><td colspan="3" style="text-align:center;padding:20px;color:var(--muted)">Sin datos</td></tr>'}</tbody>
+        <tbody>${promHTML||'<tr><td colspan="3" style="text-align:center;padding:16px;color:var(--muted)">Sin datos</td></tr>'}</tbody>
       </table>
     </div>
   </div>`;
 }
 
+async function filtrarDash(modo) {
+  ['Sem','Mes','Libre'].forEach(m => {
+    document.getElementById('fbtn'+m)?.classList.toggle('active', modo.toLowerCase()===m.toLowerCase());
+  });
+  const rangoLibre = document.getElementById('rangoLibre');
+
+  let desde, hasta;
+  const hoy = new Date();
+  hasta = hoy.toISOString().split('T')[0];
+
+  if (modo === 'semana') {
+    if (rangoLibre) rangoLibre.style.display = 'none';
+    const lunes = new Date(hoy);
+    lunes.setDate(hoy.getDate() - hoy.getDay() + (hoy.getDay()===0?-6:1));
+    desde = lunes.toISOString().split('T')[0];
+  } else if (modo === 'mes') {
+    if (rangoLibre) rangoLibre.style.display = 'none';
+    desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
+  } else {
+    if (rangoLibre) rangoLibre.style.display = 'flex';
+    return; // wait for user to click Aplicar
+  }
+
+  const main = document.getElementById('mainContent');
+  main.innerHTML = '<div class="empty"><span class="ico">⏳</span>Cargando…</div>';
+  const [dash, cump] = await Promise.all([
+    apiGet({ accion:'dashboard', desde, hasta }),
+    apiGet({ accion:'cumplimiento' }),
+  ]);
+  main.innerHTML = buildDashHTML(dash, cump, desde, hasta);
+  // Restore active button
+  ['Sem','Mes','Libre'].forEach(m => {
+    document.getElementById('fbtn'+m)?.classList.toggle('active', modo.toLowerCase()===m.toLowerCase());
+  });
+}
+
 async function recargarDash() {
   const desde = document.getElementById('fDesde')?.value || '';
   const hasta  = document.getElementById('fHasta')?.value || '';
+  if (!desde || !hasta) return;
   const main = document.getElementById('mainContent');
-  const dash = await apiGet({ accion:'dashboard', desde, hasta });
-  // Refresh completo simple
-  await setMode('dashboard');
+  main.innerHTML = '<div class="empty"><span class="ico">⏳</span>Cargando…</div>';
+  const [dash, cump] = await Promise.all([
+    apiGet({ accion:'dashboard', desde, hasta }),
+    apiGet({ accion:'cumplimiento' }),
+  ]);
+  main.innerHTML = buildDashHTML(dash, cump, desde, hasta);
+  document.getElementById('fbtnLibre')?.classList.add('active');
+  document.getElementById('fbtnSem')?.classList.remove('active');
+  document.getElementById('fbtnMes')?.classList.remove('active');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -507,7 +693,7 @@ function renderMisTareas() {
   const activas  = lista.filter(t => !['Listo','Cancelado'].includes(t.estado));
   const cerradas = lista.filter(t => ['Listo','Cancelado'].includes(t.estado)).slice(0,20);
 
-  const badgeMap = {'En Proceso':'bp','Por Iniciar':'bi','Listo':'bl','Standby':'bs','Cancelado':'bc'};
+  const badgeMap = {'En Proceso':'bp','Por Iniciar':'bi','Programada':'bprog','Listo':'bl','Standby':'bs','Cancelado':'bc'};
 
   const renderItems = (items) => items.length === 0
     ? '<div class="empty"><span class="ico">📋</span>No hay tareas en esta categoría.</div>'
@@ -596,6 +782,10 @@ function renderNuevaTarea() {
       <div class="field">
         <label>Fecha compromiso</label>
         <input type="date" id="t_fco">
+      </div>
+      <div class="field">
+        <label>Fecha de ejecución</label>
+        <input type="date" id="t_fejec" title="¿Cuándo planeas ejecutar esta tarea? Deja vacío si es indefinida">
       </div>
       <div class="field full">
         <label>¿La tarea termina hoy?</label>
@@ -714,8 +904,6 @@ function renderSesion() {
 // ═══════════════════════════════════════════════════════
 function renderAdmin() {
   const tiposLista = Object.keys(LISTAS);
-  const primerTipo = tiposLista[0] || 'Area';
-
   const pillsHTML = tiposLista.map((t,i) =>
     `<button class="tab-pill ${i===0?'active':''}" onclick="cambiarListaTab('${t}')" id="pill-${t}">${t}</button>`
   ).join('');
@@ -723,9 +911,55 @@ function renderAdmin() {
   return `
   <div class="sec-hdr">
     <div class="sec-title"><div class="red-bar"></div>Panel de Administración</div>
-    <div class="sec-desc">Edita las listas desplegables de la app. Solo visible para administradores.</div>
+    <div class="sec-desc">Solo visible para administradores.</div>
   </div>
-  <div class="card">
+
+  <div class="tab-group" style="margin-bottom:0">
+    <button class="tab-pill active" id="apill-registros" onclick="switchAdminTab('registros')">Gestión de Registros</button>
+    <button class="tab-pill" id="apill-listas" onclick="switchAdminTab('listas')">Editor de Listas</button>
+    <button class="tab-pill" id="apill-usuarios" onclick="switchAdminTab('usuarios')">Usuarios</button>
+  </div>
+
+  <!-- ── GESTIÓN REGISTROS ── -->
+  <div id="adminPanel-registros" class="card" style="border-top-left-radius:0;margin-top:0">
+    <div class="card-lbl"><div class="dot"></div>Buscar, editar o eliminar registros</div>
+
+    <div class="search-bar">
+      <input type="text" id="srchTexto" placeholder="🔍 Buscar por descripción..." oninput="buscarRegistros()">
+      <select id="srchResponsable" onchange="buscarRegistros()">
+        <option value="">Todos los responsables</option>
+        <option>Luis Sanchez</option><option>Luis Diaz</option><option>Yamila Silva</option>
+      </select>
+      <select id="srchEstado" onchange="buscarRegistros()">
+        <option value="">Todos los estados</option>
+        <option>Por Iniciar</option><option>En Proceso</option>
+        <option>Listo</option><option>Standby</option><option>Cancelado</option>
+      </select>
+      <select id="srchTipo" onchange="buscarRegistros()">
+        <option value="">Todos los tipos</option>
+      </select>
+      <select id="srchArea" onchange="buscarRegistros()">
+        <option value="">Todas las áreas</option>
+      </select>
+    </div>
+
+    <div class="tab-group" style="margin-bottom:12px">
+      <button class="tab-pill active" id="rpill-tareas" onclick="switchRegistroTab('tareas')">Tareas</button>
+      <button class="tab-pill" id="rpill-sesiones" onclick="switchRegistroTab('sesiones')">Sesiones</button>
+    </div>
+
+    <div id="searchResults-tareas">
+      <div class="search-results" id="srchCount">Mostrando todas las tareas</div>
+      <div id="listaTareasAdmin"></div>
+    </div>
+    <div id="searchResults-sesiones" style="display:none">
+      <div class="search-results" id="srchCountSes">Mostrando todas las sesiones</div>
+      <div id="listaSesionesAdmin"></div>
+    </div>
+  </div>
+
+  <!-- ── EDITOR LISTAS ── -->
+  <div id="adminPanel-listas" class="card" style="display:none;border-top-left-radius:0;margin-top:0">
     <div class="card-lbl"><div class="dot"></div>Editor de listas desplegables</div>
     <div class="tab-group" id="listaTabs">${pillsHTML}</div>
     <div id="listaEditor"></div>
@@ -736,7 +970,9 @@ function renderAdmin() {
       </button>
     </div>
   </div>
-  <div class="card">
+
+  <!-- ── USUARIOS ── -->
+  <div id="adminPanel-usuarios" class="card" style="display:none;border-top-left-radius:0;margin-top:0">
     <div class="card-lbl"><div class="dot"></div>Usuarios del sistema</div>
     <div class="table-wrap">
       <table class="data-table">
@@ -745,6 +981,367 @@ function renderAdmin() {
       </table>
     </div>
   </div>`;
+}
+
+function switchAdminTab(tab) {
+  ['registros','listas','usuarios'].forEach(t => {
+    const panel = document.getElementById(`adminPanel-${t}`);
+    const pill  = document.getElementById(`apill-${t}`);
+    if (panel) panel.style.display = t === tab ? 'block' : 'none';
+    if (pill)  pill.classList.toggle('active', t === tab);
+  });
+  if (tab === 'listas') {
+    const tiposLista = Object.keys(LISTAS);
+    if (tiposLista.length > 0) { listaTabActual = tiposLista[0]; renderListaEditor(tiposLista[0]); }
+  }
+  if (tab === 'usuarios') cargarUsuariosTabla();
+  if (tab === 'registros') initBuscador();
+}
+
+let registroTabActual = 'tareas';
+let sesionesCache = [];
+
+function switchRegistroTab(tab) {
+  registroTabActual = tab;
+  ['tareas','sesiones'].forEach(t => {
+    const el = document.getElementById(`searchResults-${t}`);
+    const pill = document.getElementById(`rpill-${t}`);
+    if (el)   el.style.display = t === tab ? 'block' : 'none';
+    if (pill) pill.classList.toggle('active', t === tab);
+  });
+  buscarRegistros();
+}
+
+async function initBuscador() {
+  // Fill tipo and area dropdowns from LISTAS
+  const ddTipo = document.getElementById('srchTipo');
+  const ddArea = document.getElementById('srchArea');
+  if (ddTipo && LISTAS['Tipo']) {
+    LISTAS['Tipo'].forEach(v => {
+      const o = document.createElement('option'); o.value=v; o.textContent=v; ddTipo.appendChild(o);
+    });
+  }
+  if (ddArea && LISTAS['Area']) {
+    LISTAS['Area'].forEach(v => {
+      const o = document.createElement('option'); o.value=v; o.textContent=v; ddArea.appendChild(o);
+    });
+  }
+  // Load sesiones
+  try {
+    const rows = await apiGet({ accion:'leer', tabla:'Sesiones' });
+    sesionesCache = Array.isArray(rows) && rows.length > 1 ? rows.slice(1).map(r => ({
+      id: r[0]+'_'+r[3]+'_'+r[4], tareaId:r[0], tareaNombre:r[1],
+      responsable:r[2], fecha:r[3], inicio:r[4], termino:r[5],
+      hh:r[6], comentario:r[7], rowIndex: null
+    })) : [];
+  } catch(e) { sesionesCache = []; }
+  buscarRegistros();
+}
+
+function buscarRegistros() {
+  const txt  = (document.getElementById('srchTexto')?.value || '').toLowerCase().trim();
+  const resp = document.getElementById('srchResponsable')?.value || '';
+  const est  = document.getElementById('srchEstado')?.value || '';
+  const tipo = document.getElementById('srchTipo')?.value || '';
+  const area = document.getElementById('srchArea')?.value || '';
+
+  if (registroTabActual === 'tareas') {
+    let res = [...TAREAS];
+    if (txt)  res = res.filter(t =>
+      t.tarea?.toLowerCase().includes(txt) ||
+      String(t.id).includes(txt) ||
+      t.solicitante?.toLowerCase().includes(txt) ||
+      t.comentario?.toLowerCase().includes(txt));
+    if (resp) res = res.filter(t => t.nombre === resp);
+    if (est)  res = res.filter(t => t.estado === est);
+    if (tipo) res = res.filter(t => t.tipo === tipo);
+    if (area) res = res.filter(t => t.area === area);
+
+    const count = document.getElementById('srchCount');
+    if (count) count.textContent = `${res.length} tarea${res.length!==1?'s':''} encontrada${res.length!==1?'s':''}`;
+    renderTareasAdmin(res);
+  } else {
+    let res = [...sesionesCache];
+    if (txt)  res = res.filter(s =>
+      s.tareaNombre?.toLowerCase().includes(txt) ||
+      String(s.tareaId).includes(txt) ||
+      s.comentario?.toLowerCase().includes(txt));
+    if (resp) res = res.filter(s => s.responsable === resp);
+
+    const count = document.getElementById('srchCountSes');
+    if (count) count.textContent = `${res.length} sesión${res.length!==1?'es':''} encontrada${res.length!==1?'s':''}`;
+    renderSesionesAdmin(res);
+  }
+}
+
+function renderTareasAdmin(lista) {
+  const cont = document.getElementById('listaTareasAdmin');
+  if (!cont) return;
+  if (lista.length === 0) {
+    cont.innerHTML = '<div class="empty"><span class="ico">🔍</span>No se encontraron tareas con esos filtros.</div>';
+    return;
+  }
+  const badgeMap = {'En Proceso':'bp','Por Iniciar':'bi','Programada':'bprog','Listo':'bl','Standby':'bs','Cancelado':'bc'};
+  cont.innerHTML = lista.slice(0,50).map(t => `
+    <div class="reg-item" id="regT-${t.id}">
+      <div class="reg-info">
+        <div class="reg-title">#${t.id} · ${t.tarea}</div>
+        <div class="reg-meta">
+          ${t.nombre} · ${t.tipo||'—'} · ${t.area||'—'} · HHP: ${t.hhPlan||'—'} · HHR: ${t.hhReal||'0'}
+          · <span class="badge ${badgeMap[t.estado]||'bi'}">${t.estado}</span>
+        </div>
+        <div class="edit-form" id="editT-${t.id}">
+          <div class="edit-grid">
+            <div class="edit-field full">
+              <label>Descripción</label>
+              <textarea id="eT_tar_${t.id}" rows="2">${t.tarea||''}</textarea>
+            </div>
+            <div class="edit-field">
+              <label>Responsable</label>
+              <select id="eT_nom_${t.id}">
+                ${['Luis Sanchez','Luis Diaz','Yamila Silva'].map(n=>`<option ${n===t.nombre?'selected':''}>${n}</option>`).join('')}
+              </select>
+            </div>
+            <div class="edit-field">
+              <label>Estado</label>
+              <select id="eT_est_${t.id}">
+                ${(LISTAS['Estado']||['Por Iniciar','En Proceso','Listo','Standby','Cancelado'])
+                  .map(e=>`<option ${e===t.estado?'selected':''}>${e}</option>`).join('')}
+              </select>
+            </div>
+            <div class="edit-field">
+              <label>Área</label>
+              <select id="eT_are_${t.id}">
+                <option value="">—</option>
+                ${(LISTAS['Area']||[]).map(a=>`<option ${a===t.area?'selected':''}>${a}</option>`).join('')}
+              </select>
+            </div>
+            <div class="edit-field">
+              <label>Tipo</label>
+              <select id="eT_tip_${t.id}">
+                <option value="">—</option>
+                ${(LISTAS['Tipo']||[]).map(a=>`<option ${a===t.tipo?'selected':''}>${a}</option>`).join('')}
+              </select>
+            </div>
+            <div class="edit-field">
+              <label>HH Plan</label>
+              <input type="number" id="eT_hhp_${t.id}" value="${t.hhPlan||''}" step="0.5" min="0">
+            </div>
+            <div class="edit-field">
+              <label>Fecha Compromiso</label>
+              <input type="date" id="eT_fco_${t.id}" value="${t.fechaComp||''}">
+            </div>
+            <div class="edit-field full">
+              <label>Comentario</label>
+              <input type="text" id="eT_com_${t.id}" value="${t.comentario||''}">
+            </div>
+          </div>
+          <div class="edit-btns">
+            <button class="btn btn-ghost" onclick="cerrarEditTarea(${t.id})"><span class="btn-txt">Cancelar</span></button>
+            <button class="btn" onclick="guardarEditTarea(${t.id})"><div class="stripe"></div><span class="btn-txt">Guardar cambios</span></button>
+          </div>
+        </div>
+        <div class="confirm-del" id="delT-${t.id}">
+          <p>⚠️ ¿Eliminar tarea #${t.id} y todas sus sesiones? Esta acción no se puede deshacer.</p>
+          <div class="confirm-del-btns">
+            <button class="btn btn-ghost btn-sm" onclick="cerrarConfirmDel('T',${t.id})"><span class="btn-txt">Cancelar</span></button>
+            <button class="btn btn-danger btn-sm" onclick="confirmarEliminarTarea(${t.id})"><span class="btn-txt">Sí, eliminar</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="reg-actions">
+        <button class="btn-edit" onclick="toggleEditTarea(${t.id})">Editar</button>
+        <button class="btn-del" onclick="toggleConfirmDel('T',${t.id})">Eliminar</button>
+      </div>
+    </div>`).join('');
+}
+
+function renderSesionesAdmin(lista) {
+  const cont = document.getElementById('listaSesionesAdmin');
+  if (!cont) return;
+  if (lista.length === 0) {
+    cont.innerHTML = '<div class="empty"><span class="ico">🔍</span>No se encontraron sesiones.</div>';
+    return;
+  }
+  cont.innerHTML = lista.slice(0,50).map((s,i) => `
+    <div class="reg-item" id="regS-${i}">
+      <div class="reg-info">
+        <div class="reg-title">Tarea #${s.tareaId} · ${s.tareaNombre?.substring(0,50)||''}${(s.tareaNombre?.length||0)>50?'…':''}</div>
+        <div class="reg-meta">${s.responsable} · ${s.fecha} · ${s.inicio}–${s.termino} · ${s.hh} hrs${s.comentario?' · '+s.comentario:''}</div>
+        <div class="edit-form" id="editS-${i}">
+          <div class="edit-grid">
+            <div class="edit-field">
+              <label>Fecha</label>
+              <input type="date" id="eS_fec_${i}" value="${s.fecha||''}">
+            </div>
+            <div class="edit-field">
+              <label>Responsable</label>
+              <select id="eS_nom_${i}">
+                ${['Luis Sanchez','Luis Diaz','Yamila Silva'].map(n=>`<option ${n===s.responsable?'selected':''}>${n}</option>`).join('')}
+              </select>
+            </div>
+            <div class="edit-field">
+              <label>Hora inicio</label>
+              <input type="time" id="eS_ini_${i}" value="${s.inicio||''}" oninput="recalcHHSesion(${i})">
+            </div>
+            <div class="edit-field">
+              <label>Hora término</label>
+              <input type="time" id="eS_ter_${i}" value="${s.termino||''}" oninput="recalcHHSesion(${i})">
+            </div>
+            <div class="edit-field">
+              <label>HH Sesión</label>
+              <input type="number" id="eS_hh_${i}" value="${s.hh||''}" step="0.25" min="0" style="background:#f0f0f0">
+            </div>
+            <div class="edit-field full">
+              <label>Comentario</label>
+              <input type="text" id="eS_com_${i}" value="${s.comentario||''}">
+            </div>
+          </div>
+          <div class="edit-btns">
+            <button class="btn btn-ghost" onclick="cerrarEditSesion(${i})"><span class="btn-txt">Cancelar</span></button>
+            <button class="btn" onclick="guardarEditSesion(${i},'${s.tareaId}','${s.fecha}','${s.inicio}')"><div class="stripe"></div><span class="btn-txt">Guardar</span></button>
+          </div>
+        </div>
+        <div class="confirm-del" id="delS-${i}">
+          <p>⚠️ ¿Eliminar esta sesión de ${s.hh} hrs del ${s.fecha}?</p>
+          <div class="confirm-del-btns">
+            <button class="btn btn-ghost btn-sm" onclick="cerrarConfirmDel('S',${i})"><span class="btn-txt">Cancelar</span></button>
+            <button class="btn btn-danger btn-sm" onclick="confirmarEliminarSesion(${i},'${s.tareaId}','${s.fecha}','${s.inicio}',${s.hh})"><span class="btn-txt">Sí, eliminar</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="reg-actions">
+        <button class="btn-edit" onclick="toggleEditSesion(${i})">Editar</button>
+        <button class="btn-del" onclick="toggleConfirmDel('S',${i})">Eliminar</button>
+      </div>
+    </div>`).join('');
+}
+
+// ── Toggle panels ─────────────────────────────────────────────────────────
+function toggleEditTarea(id) {
+  const el = document.getElementById(`editT-${id}`);
+  const del = document.getElementById(`delT-${id}`);
+  if (del) del.classList.remove('open');
+  if (el)  el.classList.toggle('open');
+}
+function cerrarEditTarea(id) {
+  const el = document.getElementById(`editT-${id}`);
+  if (el) el.classList.remove('open');
+}
+function toggleEditSesion(i) {
+  const el = document.getElementById(`editS-${i}`);
+  const del = document.getElementById(`delS-${i}`);
+  if (del) del.classList.remove('open');
+  if (el)  el.classList.toggle('open');
+}
+function cerrarEditSesion(i) {
+  const el = document.getElementById(`editS-${i}`);
+  if (el) el.classList.remove('open');
+}
+function toggleConfirmDel(type, id) {
+  const el = document.getElementById(`del${type}-${id}`);
+  const edit = document.getElementById(`edit${type}-${id}`);
+  if (edit) edit.classList.remove('open');
+  if (el)   el.classList.toggle('open');
+}
+function cerrarConfirmDel(type, id) {
+  const el = document.getElementById(`del${type}-${id}`);
+  if (el) el.classList.remove('open');
+}
+
+function recalcHHSesion(i) {
+  const ini = document.getElementById(`eS_ini_${i}`)?.value;
+  const ter = document.getElementById(`eS_ter_${i}`)?.value;
+  const hhEl = document.getElementById(`eS_hh_${i}`);
+  if (ini && ter && hhEl) {
+    const hh = calcHHRaw(ini, ter);
+    hhEl.value = hh.toFixed(2);
+  }
+}
+
+// ── Guardar edición tarea ─────────────────────────────────────────────────
+async function guardarEditTarea(id) {
+  const idx = TAREAS.findIndex(t => String(t.id) === String(id));
+  if (idx === -1) return;
+  const campos = {
+    1: document.getElementById(`eT_nom_${id}`)?.value || '',   // Nombre
+    2: document.getElementById(`eT_tar_${id}`)?.value || '',   // Tarea
+    4: document.getElementById(`eT_are_${id}`)?.value || '',   // Area
+    5: document.getElementById(`eT_tip_${id}`)?.value || '',   // Tipo
+    7: parseFloat(document.getElementById(`eT_hhp_${id}`)?.value)||'', // HH_Plan
+    9: document.getElementById(`eT_fco_${id}`)?.value || '',   // FechaCompromiso
+    10: document.getElementById(`eT_est_${id}`)?.value || '',  // Estado
+    11: document.getElementById(`eT_com_${id}`)?.value || '',  // Comentario
+  };
+  try {
+    await apiPost({ accion:'actualizar', tabla:'Tareas', id, campos });
+    // Update local cache
+    Object.entries(campos).forEach(([col, val]) => {
+      const colMap = {1:'nombre',2:'tarea',4:'area',5:'tipo',7:'hhPlan',9:'fechaComp',10:'estado',11:'comentario'};
+      if (colMap[col]) TAREAS[idx][colMap[col]] = val;
+    });
+    cerrarEditTarea(id);
+    toast('Tarea actualizada correctamente', 'success');
+    buscarRegistros();
+  } catch(e) { toast('Error al guardar', 'error'); }
+}
+
+// ── Eliminar tarea ────────────────────────────────────────────────────────
+async function confirmarEliminarTarea(id) {
+  try {
+    await apiPost({ accion:'eliminar', tabla:'Tareas', id });
+    // Also delete related sessions
+    await apiPost({ accion:'eliminarPorTareaId', tabla:'Sesiones', id });
+    const idx = TAREAS.findIndex(t => String(t.id) === String(id));
+    if (idx > -1) TAREAS.splice(idx, 1);
+    sesionesCache = sesionesCache.filter(s => String(s.tareaId) !== String(id));
+    toast('Tarea y sesiones eliminadas', 'success');
+    buscarRegistros();
+  } catch(e) { toast('Error al eliminar', 'error'); }
+}
+
+// ── Guardar edición sesión ────────────────────────────────────────────────
+async function guardarEditSesion(i, tareaId, fechaOrig, inicioOrig) {
+  const nuevaFecha = document.getElementById(`eS_fec_${i}`)?.value || '';
+  const nuevoResp  = document.getElementById(`eS_nom_${i}`)?.value || '';
+  const nuevoIni   = document.getElementById(`eS_ini_${i}`)?.value || '';
+  const nuevoTer   = document.getElementById(`eS_ter_${i}`)?.value || '';
+  const nuevoHH    = parseFloat(document.getElementById(`eS_hh_${i}`)?.value) || 0;
+  const nuevoCom   = document.getElementById(`eS_com_${i}`)?.value || '';
+  try {
+    await apiPost({ accion:'actualizarSesion', tabla:'Sesiones',
+      tareaId, fechaOrig, inicioOrig,
+      campos:{ fecha:nuevaFecha, responsable:nuevoResp, inicio:nuevoIni,
+               termino:nuevoTer, hh:nuevoHH, comentario:nuevoCom } });
+    // Update cache
+    if (sesionesCache[i]) {
+      sesionesCache[i] = { ...sesionesCache[i],
+        fecha:nuevaFecha, responsable:nuevoResp,
+        inicio:nuevoIni, termino:nuevoTer, hh:nuevoHH, comentario:nuevoCom };
+    }
+    cerrarEditSesion(i);
+    toast('Sesión actualizada correctamente', 'success');
+    buscarRegistros();
+  } catch(e) { toast('Error al guardar sesión', 'error'); }
+}
+
+// ── Eliminar sesión ───────────────────────────────────────────────────────
+async function confirmarEliminarSesion(i, tareaId, fecha, inicio, hh) {
+  try {
+    await apiPost({ accion:'eliminarSesion', tabla:'Sesiones', tareaId, fecha, inicio });
+    // Restar HH de la tarea
+    const tIdx = TAREAS.findIndex(t => String(t.id) === String(tareaId));
+    if (tIdx > -1) {
+      const newHH = Math.max(0, Math.round(((parseFloat(TAREAS[tIdx].hhReal)||0) - hh)*100)/100);
+      const newN  = Math.max(0, (parseInt(TAREAS[tIdx].nSesiones)||1) - 1);
+      await apiPost({ accion:'actualizar', tabla:'Tareas', id:tareaId, campos:{12:newHH, 13:newN} });
+      TAREAS[tIdx].hhReal = newHH;
+      TAREAS[tIdx].nSesiones = newN;
+    }
+    sesionesCache.splice(i, 1);
+    toast('Sesión eliminada', 'success');
+    buscarRegistros();
+  } catch(e) { toast('Error al eliminar sesión', 'error'); }
 }
 
 let listaTabActual = '';
@@ -817,12 +1414,8 @@ async function cargarUsuariosTabla() {
 // ═══════════════════════════════════════════════════════
 function bindEvents(mode) {
   if (mode === 'admin') {
-    const tiposLista = Object.keys(LISTAS);
-    if (tiposLista.length > 0) {
-      listaTabActual = tiposLista[0];
-      renderListaEditor(tiposLista[0]);
-    }
-    cargarUsuariosTabla();
+    // Default to registros tab
+    switchAdminTab('registros');
   }
 }
 
@@ -897,6 +1490,9 @@ async function guardarTarea() {
   const htermino = document.getElementById('t_htermino')?.value || '';
   const fec = document.getElementById('t_fec')?.value || new Date().toISOString().split('T')[0];
 
+  const fechaEjec = document.getElementById('t_fejec')?.value || '';
+  // If has future execution date and no end time → Programada
+  const estadoInicial = fechaEjec && fechaEjec > fec ? 'Programada' : 'Por Iniciar';
   const fila = [
     nextId, SESSION.nombre, tarea,
     document.getElementById('t_sol')?.value || '',
@@ -906,7 +1502,7 @@ async function guardarTarea() {
     parseFloat(document.getElementById('t_hhp')?.value) || '',
     fec,
     document.getElementById('t_fco')?.value || '',
-    'Por Iniciar',
+    estadoInicial,
     document.getElementById('t_com')?.value || '',
     0, 0,
   ];
@@ -1093,6 +1689,324 @@ function toast(msg, type='success') {
   t.className = `toast ${type} show`;
   setTimeout(() => t.classList.remove('show'), 3500);
 }
+
+
+// ════════════════════════════════════════════════════════
+// VISTA GLOBAL (admin) — Kanban + Lista interactiva
+// ════════════════════════════════════════════════════════
+function renderVistaGlobal() {
+  const personas = ['Todos','Luis Sanchez','Luis Diaz','Yamila Silva'];
+  const estados  = ['Por Iniciar','Programada','En Proceso','Listo','Standby','Cancelado'];
+  const bm = {'En Proceso':'bp','Por Iniciar':'bi','Programada':'bprog',
+               'Listo':'bl','Standby':'bs','Cancelado':'bc'};
+
+  const personaOpts = personas.map(p =>
+    `<option value="${p}">${p}</option>`).join('');
+  const areaOpts = ['Todas',...(LISTAS['Area']||[])].map(a =>
+    `<option value="${a}">${a}</option>`).join('');
+  const tipoOpts = ['Todos',...(LISTAS['Tipo']||[])].map(t =>
+    `<option value="${t}">${t}</option>`).join('');
+
+  return `
+  <div class="sec-hdr">
+    <div class="sec-title"><div class="red-bar"></div>Vista Global de Tareas</div>
+    <div class="sec-desc">Visualización completa de tareas del equipo. Filtra y alterna entre Kanban y Lista.</div>
+  </div>
+
+  <div class="filter-bar">
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label>Persona</label>
+      <select id="vg_persona" onchange="renderVGContent()" style="padding:7px 28px 7px 10px;font-size:13px">${personaOpts}</select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label>Área</label>
+      <select id="vg_area" onchange="renderVGContent()" style="padding:7px 28px 7px 10px;font-size:13px">${areaOpts}</select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label>Tipo</label>
+      <select id="vg_tipo" onchange="renderVGContent()" style="padding:7px 28px 7px 10px;font-size:13px">${tipoOpts}</select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label>Buscar</label>
+      <input type="text" id="vg_txt" placeholder="Texto libre..." oninput="renderVGContent()"
+        style="padding:7px 10px;font-size:13px;min-width:160px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px;margin-left:auto">
+      <label>Vista</label>
+      <div style="display:flex;gap:4px">
+        <button class="tab-pill active" id="vgBtnKanban" onclick="switchVGView('kanban')" style="padding:6px 12px">Kanban</button>
+        <button class="tab-pill" id="vgBtnLista" onclick="switchVGView('lista')" style="padding:6px 12px">Lista</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="vgKanban"></div>
+  <div id="vgLista" style="display:none"></div>`;
+}
+
+let vgView = 'kanban';
+function switchVGView(v) {
+  vgView = v;
+  document.getElementById('vgBtnKanban')?.classList.toggle('active', v==='kanban');
+  document.getElementById('vgBtnLista')?.classList.toggle('active', v==='lista');
+  document.getElementById('vgKanban').style.display  = v==='kanban' ? 'block' : 'none';
+  document.getElementById('vgLista').style.display   = v==='lista'  ? 'block' : 'none';
+  renderVGContent();
+}
+
+function getVGFiltered() {
+  const persona = document.getElementById('vg_persona')?.value || 'Todos';
+  const area    = document.getElementById('vg_area')?.value || 'Todas';
+  const tipo    = document.getElementById('vg_tipo')?.value || 'Todos';
+  const txt     = (document.getElementById('vg_txt')?.value || '').toLowerCase();
+  return TAREAS.filter(t => {
+    if (persona !== 'Todos' && t.nombre !== persona) return false;
+    if (area    !== 'Todas' && t.area !== area)      return false;
+    if (tipo    !== 'Todos' && t.tipo !== tipo)      return false;
+    if (txt && !t.tarea?.toLowerCase().includes(txt) &&
+               !String(t.id).includes(txt)) return false;
+    return true;
+  });
+}
+
+function renderVGContent() {
+  if (vgView === 'kanban') renderKanban();
+  else renderListaGlobal();
+}
+
+function renderKanban() {
+  const cont = document.getElementById('vgKanban');
+  if (!cont) return;
+  const filtered = getVGFiltered();
+  const estados = ['Por Iniciar','Programada','En Proceso','Listo','Standby','Cancelado'];
+  const colColors = {
+    'Por Iniciar':'#d1ecf1','Programada':'#e0f2fe','En Proceso':'#fff3cd',
+    'Listo':'#d4edda','Standby':'#e2d9f3','Cancelado':'#f8d7da'
+  };
+  const colText = {
+    'Por Iniciar':'#0c5460','Programada':'#075985','En Proceso':'#856404',
+    'Listo':'#155724','Standby':'#4a1f8c','Cancelado':'#721c24'
+  };
+  const bm = {'En Proceso':'bp','Por Iniciar':'bi','Programada':'bprog','Listo':'bl','Standby':'bs','Cancelado':'bc'};
+
+  cont.innerHTML = `
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:4px">
+    ${estados.map(est => {
+      const items = filtered.filter(t => t.estado === est);
+      return `
+      <div style="background:#fff;border-radius:8px;border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow)">
+        <div style="background:${colColors[est]};color:${colText[est]};padding:10px 14px;
+          font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;
+          text-transform:uppercase;display:flex;justify-content:space-between;align-items:center">
+          ${est}
+          <span style="background:rgba(0,0,0,.1);padding:2px 8px;border-radius:10px;font-size:11px">${items.length}</span>
+        </div>
+        <div style="padding:8px;max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">
+          ${items.length === 0
+            ? '<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px">Sin tareas</div>'
+            : items.map(t => `
+            <div onclick="abrirModalTarea(${t.id})"
+              style="background:var(--inp);border:1px solid var(--border);border-radius:6px;
+                padding:9px 10px;cursor:pointer;transition:border-color .15s"
+              onmouseover="this.style.borderColor='var(--navy3)'"
+              onmouseout="this.style.borderColor='var(--border)'">
+              <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:3px">
+                <span style="background:var(--navy);color:#fff;padding:1px 5px;border-radius:3px;font-size:9px;margin-right:4px">#${t.id}</span>
+                ${t.nombre}
+              </div>
+              <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;
+                white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.tarea}">${t.tarea}</div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:10px;color:var(--muted)">${t.tipo||'—'} · ${t.area||'—'}</span>
+                <span style="font-size:10px;font-weight:600;color:var(--navy)">${t.hhReal||'0'}/${t.hhPlan||'—'}h</span>
+              </div>
+            </div>`).join('')
+          }
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderListaGlobal() {
+  const cont = document.getElementById('vgLista');
+  if (!cont) return;
+  const filtered = getVGFiltered().sort((a,b) => (parseInt(b.id)||0)-(parseInt(a.id)||0));
+  const bm = {'En Proceso':'bp','Por Iniciar':'bi','Programada':'bprog','Listo':'bl','Standby':'bs','Cancelado':'bc'};
+  if (filtered.length === 0) {
+    cont.innerHTML = '<div class="empty"><span class="ico">🔍</span>Sin resultados</div>';
+    return;
+  }
+  cont.innerHTML = `
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>#</th><th>Tarea</th><th>Responsable</th><th>Tipo</th><th>Área</th>
+          <th>HHP</th><th>HHR</th><th>F.Comp</th><th>Estado</th></tr></thead>
+        <tbody>
+          ${filtered.map(t => `
+          <tr onclick="abrirModalTarea(${t.id})" style="cursor:pointer">
+            <td style="font-family:monospace;font-size:11px">${t.id}</td>
+            <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.tarea}">${t.tarea}</td>
+            <td>${t.nombre}</td>
+            <td>${t.tipo||'—'}</td>
+            <td>${t.area||'—'}</td>
+            <td style="text-align:center">${t.hhPlan||'—'}</td>
+            <td style="text-align:center;font-weight:600">${t.hhReal||'0'}</td>
+            <td style="font-size:11px">${t.fechaComp||'—'}</td>
+            <td><span class="badge ${bm[t.estado]||'bi'}">${t.estado}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function bindEventsGlobal() {
+  renderKanban();
+}
+
+// ════════════════════════════════════════════════════════
+// MI DASHBOARD (usuarios normales)
+// ════════════════════════════════════════════════════════
+function renderMiDashboard() {
+  const misTareas = TAREAS.filter(t => t.nombre === SESSION.nombre);
+  const estados = ['Por Iniciar','Programada','En Proceso','Listo','Standby','Cancelado'];
+  const bm = {'En Proceso':'bp','Por Iniciar':'bi','Programada':'bprog','Listo':'bl','Standby':'bs','Cancelado':'bc'};
+
+  // Contadores por estado
+  const contadores = {};
+  estados.forEach(e => { contadores[e] = misTareas.filter(t => t.estado === e).length; });
+
+  // HH esta semana
+  const hoy = new Date();
+  const lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() - hoy.getDay() + (hoy.getDay()===0?-6:1));
+  const lunesStr = lunes.toISOString().split('T')[0];
+
+  const hhPlanSem = misTareas
+    .filter(t => (t.fechaIngreso||'') >= lunesStr)
+    .reduce((s,t) => s + (parseFloat(t.hhPlan)||0), 0);
+  const hhRealSem = misTareas
+    .filter(t => (t.fechaIngreso||'') >= lunesStr)
+    .reduce((s,t) => s + (parseFloat(t.hhReal)||0), 0);
+
+  // Tareas activas ordenadas por prioridad
+  const prioMap = {'Alta':0,'Media':1,'Baja':2};
+  const activas = misTareas
+    .filter(t => !['Listo','Cancelado'].includes(t.estado))
+    .sort((a,b) => (prioMap[a.prioridad]||1) - (prioMap[b.prioridad]||1));
+
+  // Completadas esta semana
+  const completadasSem = misTareas.filter(t =>
+    t.estado === 'Listo' && (t.fechaIngreso||'') >= lunesStr).length;
+
+  const colCont = {'Por Iniciar':'#d1ecf1;color:#0c5460','Programada':'#e0f2fe;color:#075985',
+    'En Proceso':'#fff3cd;color:#856404','Listo':'#d4edda;color:#155724',
+    'Standby':'#e2d9f3;color:#4a1f8c','Cancelado':'#f8d7da;color:#721c24'};
+
+  return `
+  <div class="sec-hdr">
+    <div class="sec-title"><div class="red-bar"></div>Mi Resumen — ${SESSION.nombre}</div>
+    <div class="sec-desc">Vista rápida de tu carga y actividad de esta semana.</div>
+  </div>
+
+  <!-- KPIs semana -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
+    <div class="kpi">
+      <div class="kpi-val">${hhPlanSem.toFixed(1)}h</div>
+      <div class="kpi-lbl">HH Planificadas esta semana</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">${hhRealSem.toFixed(1)}h</div>
+      <div class="kpi-lbl">HH Reales esta semana</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">${completadasSem}</div>
+      <div class="kpi-lbl">Completadas esta semana</div>
+    </div>
+  </div>
+
+  <!-- Contadores por estado -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+    ${estados.map(e => `
+    <div style="background:${colCont[e]||'#f4f6f9;color:#637388'};border-radius:8px;
+      padding:12px 14px;text-align:center;cursor:pointer"
+      onclick="setMode('misTareas')">
+      <div style="font-family:Montserrat,sans-serif;font-size:22px;font-weight:700">${contadores[e]}</div>
+      <div style="font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-top:2px">${e}</div>
+    </div>`).join('')}
+  </div>
+
+  <!-- HH bar chart -->
+  <div class="chart-wrap">
+    <div class="chart-title">HH Plan vs Real — tareas activas</div>
+    ${activas.length === 0
+      ? '<div class="empty" style="padding:16px">Sin tareas activas</div>'
+      : activas.slice(0,8).map(t => {
+          const plan = parseFloat(t.hhPlan)||0;
+          const real = parseFloat(t.hhReal)||0;
+          const max  = Math.max(plan, real, 1);
+          return `
+          <div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+              <span style="font-size:11px;font-weight:600;color:var(--text);
+                max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+                title="${t.tarea}">${t.tarea}</span>
+              <span class="badge ${{'En Proceso':'bp','Por Iniciar':'bi','Programada':'bprog','Listo':'bl','Standby':'bs','Cancelado':'bc'}[t.estado]||'bi'}"
+                style="font-size:9px">${t.estado}</span>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <span style="font-size:10px;color:var(--muted);width:28px">Plan</span>
+              <div class="bar-track" style="flex:1">
+                <div class="bar-fill" style="width:${plan/max*100}%;background:var(--navy)"></div>
+              </div>
+              <span style="font-size:10px;font-weight:600;width:36px;text-align:right">${plan}h</span>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;margin-top:3px">
+              <span style="font-size:10px;color:var(--muted);width:28px">Real</span>
+              <div class="bar-track" style="flex:1">
+                <div class="bar-fill" style="width:${real/max*100}%;background:${real>plan?'var(--red)':'var(--teal,#0d8f6b)'}"></div>
+              </div>
+              <span style="font-size:10px;font-weight:600;width:36px;text-align:right">${real}h</span>
+            </div>
+          </div>`;
+        }).join('')
+    }
+  </div>
+
+  <!-- Lista tareas activas -->
+  <div class="card">
+    <div class="card-lbl"><div class="dot"></div>Mis tareas activas (${activas.length})</div>
+    ${activas.length === 0
+      ? '<div class="empty">No tienes tareas activas 🎉</div>'
+      : `<div class="tlist">
+        ${activas.map(t => `
+        <div class="titem" onclick="abrirModalTarea(${t.id})">
+          <span class="tid">#${t.id}</span>
+          <div class="tinfo">
+            <div class="tname">${t.tarea}</div>
+            <div class="tmeta">${t.tipo||'—'} · ${t.area||'—'} · HHP:${t.hhPlan||'—'} HHR:${t.hhReal||'0'}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+            <span class="badge ${bm[t.estado]||'bi'}">${t.estado}</span>
+            ${t.prioridad==='Alta'?'<span class="badge" style="background:#fee2e2;color:#991b1b">🔴 Alta</span>':''}
+          </div>
+        </div>`).join('')}
+      </div>`
+    }
+  </div>
+
+  <div style="display:flex;gap:10px;margin-top:4px">
+    <button class="btn" style="flex:1" onclick="setMode('nuevaTarea')">
+      <div class="stripe"></div><span class="btn-txt">＋ Nueva Tarea</span>
+    </button>
+    <button class="btn" style="flex:1;background:var(--navy3)" onclick="setMode('sesion')">
+      <div class="stripe"></div><span class="btn-txt">⏱ Registrar Sesión</span>
+    </button>
+  </div>`;
+}
+
 
 // Cerrar modal al hacer click fuera
 document.getElementById('modalBg').addEventListener('click', function(e) {
