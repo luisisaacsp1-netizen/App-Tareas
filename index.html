@@ -296,7 +296,7 @@ main{max-width:820px;margin:0 auto;padding:24px 20px 80px;}
 // ═══════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════
-const API = 'REEMPLAZAR_CON_URL_DEL_SCRIPT';
+const API = 'https://script.google.com/macros/s/AKfycbxNdcbnpercDcPSRNnfk0aSUpXtw7htE6UEw4GklbOp9I3P8b3fiDh3pLqRJn9p9P5H/exec';
 
 // ═══════════════════════════════════════════════════════
 // STATE
