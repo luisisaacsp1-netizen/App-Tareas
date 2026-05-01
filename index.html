@@ -377,6 +377,96 @@ main { max-width: 780px; margin: 0 auto; padding: 22px 18px 80px; }
   .nb { padding: 9px 10px; } .nb span:not(.i) { display: none; }
   main { padding: 14px 10px 60px; } .card { padding: 16px 14px; }
 }
+
+/* ── GANTT ─────────────────────────────────────────────────── */
+.gantt-wrap{overflow-x:auto;margin-bottom:12px;}
+.gantt{min-width:700px;background:#fff;border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--s1);}
+.gantt-head{display:flex;border-bottom:2px solid var(--border);}
+.gantt-name-col{width:160px;flex-shrink:0;padding:8px 10px;font-family:Montserrat,sans-serif;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;border-right:1px solid var(--border);}
+.gantt-days{flex:1;display:flex;}
+.gantt-day-hdr{flex:1;padding:6px 4px;text-align:center;font-family:Montserrat,sans-serif;font-size:9px;font-weight:700;color:var(--muted);border-right:1px solid var(--border);min-width:32px;}
+.gantt-day-hdr.today{background:var(--navy);color:#fff;border-radius:0;}
+.gantt-row{display:flex;border-bottom:1px solid var(--border);min-height:38px;align-items:center;}
+.gantt-row:last-child{border-bottom:none;}
+.gantt-row:hover .gantt-name{background:#edf1f8;}
+.gantt-name{width:160px;flex-shrink:0;padding:6px 10px;font-size:11px;font-weight:600;color:var(--text);border-right:1px solid var(--border);cursor:default;transition:background .15s;}
+.gantt-name .gn-meta{font-size:9px;color:var(--muted);font-weight:400;}
+.gantt-cells{flex:1;display:flex;position:relative;height:38px;align-items:center;}
+.gantt-cell{flex:1;height:100%;border-right:1px solid var(--border);min-width:32px;position:relative;}
+.gantt-cell.today-col{background:rgba(13,27,46,.04);}
+.gantt-bar{position:absolute;top:6px;height:26px;background:var(--navy);border-radius:4px;cursor:grab;transition:opacity .15s,box-shadow .15s;display:flex;align-items:center;padding:0 6px;overflow:hidden;min-width:24px;z-index:2;}
+.gantt-bar:hover{opacity:.85;box-shadow:var(--s2);}
+.gantt-bar.dragging{opacity:.7;box-shadow:var(--s2);cursor:grabbing;z-index:10;}
+.gantt-bar.listo{background:var(--green);}
+.gantt-bar.proceso{background:#856404;}
+.gantt-bar.prog{background:#075985;}
+.gantt-bar-lbl{font-size:9px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gantt-drop{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(37,86,168,.12);border:2px dashed var(--navy3);border-radius:4px;display:none;z-index:1;}
+.gantt-cell.drag-over .gantt-drop{display:block;}
+
+/* ── MODAL REPROG ─────────────────────────────────────────── */
+.reprog-modal{min-width:320px;}
+.reprog-info{background:var(--off);border-radius:6px;padding:10px 12px;font-size:12px;margin-bottom:14px;}
+.reprog-info strong{display:block;font-size:13px;font-weight:600;margin-bottom:4px;}
+
+/* ── EISENHOWER ───────────────────────────────────────────── */
+.eis-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;}
+.eis-btn{border:2px solid var(--border);border-radius:8px;padding:10px;text-align:center;cursor:pointer;transition:all .2s;background:var(--inp);}
+.eis-btn.on-yes{border-color:var(--navy);background:#f0f4fb;}
+.eis-btn.on-no{border-color:var(--muted);background:var(--off);}
+.eis-btn:hover{border-color:var(--navy3);}
+.eis-ico{font-size:20px;display:block;margin-bottom:3px;}
+.eis-lbl{font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+.eis-quad{border-radius:6px;padding:8px 12px;font-size:12px;font-weight:600;text-align:center;margin-top:6px;}
+.eq-1{background:#fee2e2;color:#991b1b;}
+.eq-2{background:#d4edda;color:#155724;}
+.eq-3{background:#fff3cd;color:#856404;}
+.eq-4{background:var(--off);color:var(--muted);}
+
+/* ── WIP ALERT ────────────────────────────────────────────── */
+.wip-alert{background:var(--amberl);border:1px solid #ffd966;border-radius:7px;padding:10px 12px;font-size:12px;color:#856404;margin-bottom:10px;display:none;}
+.wip-alert.show{display:flex;gap:8px;align-items:flex-start;}
+
+/* ── CARGA DE TRABAJO ─────────────────────────────────────── */
+.carga-card{background:#fff;border-radius:var(--r);border:1px solid var(--border);padding:16px 18px;margin-bottom:10px;box-shadow:var(--s1);}
+.carga-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.carga-name{font-family:Montserrat,sans-serif;font-size:13px;font-weight:700;color:var(--navy);}
+.carga-pct{font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;}
+.carga-pct.ok{color:var(--green);}
+.carga-pct.warn{color:var(--amber);}
+.carga-pct.over{color:var(--red);}
+.carga-bar{height:10px;background:var(--off);border-radius:5px;overflow:hidden;margin-bottom:8px;}
+.carga-fill{height:100%;border-radius:5px;transition:width .6s ease;}
+.carga-fill.ok{background:var(--green);}
+.carga-fill.warn{background:var(--amber);}
+.carga-fill.over{background:var(--red);}
+.carga-meta{font-size:11px;color:var(--muted);display:flex;gap:14px;}
+.carga-detail{margin-top:10px;display:none;}
+.carga-detail.op{display:block;}
+
+/* ── KPI PRODUCTIVIDAD ────────────────────────────────────── */
+.prod-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px;}
+.prod-card{background:#fff;border-radius:var(--r);border:1px solid var(--border);padding:14px;box-shadow:var(--s1);}
+.prod-name{font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;color:var(--navy);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+.prod-kpi{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--off);}
+.prod-kpi:last-child{border-bottom:none;}
+.prod-kl{font-size:11px;color:var(--muted);}
+.prod-kv{font-family:Montserrat,sans-serif;font-size:13px;font-weight:700;color:var(--navy);}
+
+/* ── WEEKLY REVIEW ────────────────────────────────────────── */
+.wr-item{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--inp);border:1px solid var(--border);border-radius:6px;margin-bottom:6px;}
+.wr-info{flex:1;min-width:0;}
+.wr-actions{display:flex;gap:5px;flex-shrink:0;}
+.wr-btn{padding:4px 10px;border-radius:4px;font-family:Montserrat,sans-serif;font-size:9px;font-weight:700;letter-spacing:.3px;cursor:pointer;border:1.5px solid;transition:all .15s;}
+.wr-esta{border-color:var(--navy);color:var(--navy);}
+.wr-esta:hover{background:var(--navy);color:#fff;}
+.wr-post{border-color:var(--amber);color:var(--amber);}
+.wr-post:hover{background:var(--amberl);}
+.wr-canc{border-color:var(--red);color:var(--red);}
+.wr-canc:hover{background:var(--redl);}
+
+/* ── HORAS EXTRA indicator ────────────────────────────────── */
+.extra-tag{display:inline-flex;align-items:center;gap:4px;background:var(--amberl);color:#856404;border-radius:4px;padding:2px 7px;font-size:9px;font-weight:700;font-family:Montserrat,sans-serif;}
 </style>
 </head>
 <body>
@@ -413,7 +503,6 @@ main { max-width: 780px; margin: 0 auto; padding: 22px 18px 80px; }
 
 <!-- MODAL -->
 <div class="mb" id="mb"><div class="mc" id="mc"></div></div>
-
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -636,6 +725,10 @@ function buildNav() {
     ['tareas','☰', isAdmin?'Todas las Tareas':'Mis Tareas'],
     ['nuevaTarea','＋','Nueva Tarea'],
     ['sesion','⏱','Sesión'],
+    ...(isAdmin?[['gantt','📅','Gantt']]:[['gantt','📅','Gantt']]),
+    ...(isAdmin?[['carga','📦','Carga']]:[]),
+    ...(isAdmin?[['kpiProd','🏆','Productividad']]:[]),
+    ['weeklyReview','📋','Revisión'],
     ...(isAdmin?[['admin','⚙','Admin']]:[]),
   ];
   document.getElementById('navBar').innerHTML = tabs.map(([id,ico,lbl])=>
@@ -657,6 +750,10 @@ async function setMode(mode) {
     case 'nuevaTarea':  taskType=''; main.innerHTML = vNuevaTarea(); break;
     case 'sesion':      main.innerHTML = vSesion(); break;
     case 'admin':       main.innerHTML = vAdmin(); setTimeout(()=>initAdmin(),50); break;
+    case 'gantt':       main.innerHTML = vGantt(); setTimeout(()=>{switchGantt('semana');},50); break;
+    case 'carga':       main.innerHTML = '<div class="emp"><span class="ei">⏳</span>Cargando…</div>'; vCargaTrabajo().then(h=>{main.innerHTML=h;}); break;
+    case 'kpiProd':     main.innerHTML = '<div class="emp"><span class="ei">⏳</span>Cargando…</div>'; vKPIProductividad().then(h=>{main.innerHTML=h;}); break;
+    case 'weeklyReview':main.innerHTML = '<div class="emp"><span class="ei">⏳</span>Cargando…</div>'; vWeeklyReview().then(h=>{main.innerHTML=h;}); break;
   }
 }
 
@@ -1126,10 +1223,8 @@ function vNuevaTarea() {
           <label class="rq">Tipo ${tip('Plano=diseño CAD, Costo=cotización/cubicación, Consulta=respuesta técnica, Coordinación=gestión, EDP=estado de pago, Informe=reporte, Vales=documentos, Ejecución=trabajo físico.')}</label>
           <select id="tTip" onchange="clearErr(['tTip'])"><option value="">— seleccionar —</option>${opts('Tipo')}</select>
         </div>
-        <div class="fi">
-          <label>Prioridad ${tip('Alta: urgente, impacta proyectos activos. Media: importante sin urgencia. Baja: puede esperar.')}</label>
-          <select id="tPri"><option value="">—</option>${opts('Prioridad')}</select>
-        </div>
+        <div id="wipAlertNT"></div>
+        ${renderEisenhouerField(true)}
         <div class="fi">
           <label class="rq">HH Planificadas ${tip('Horas estimadas para esta tarea. Se compara con el tiempo real para medir eficiencia.')}</label>
           <input type="number" id="tHHp" placeholder="Ej: 2.5" step="0.25" min="0.25" oninput="clearErr(['tHHp'])">
@@ -1256,6 +1351,7 @@ function vSesion() {
         <label>¿Qué se avanzó? ${tip('Descripción breve del avance. Ayuda al análisis y seguimiento.')}</label>
         <input type="text" id="sCom" placeholder="Ej: Revisé dimensiones, generé plano preliminar…">
       </div>
+      ${renderExtraField()}
     </div>
     <div id="alSes" style="margin-top:8px"></div>
   </div>
@@ -1308,6 +1404,8 @@ async function guardarTarea() {
   const fec=todayStr();
   const fej=document.getElementById('tFej')?.value||'';
   const estado=taskType==='express'?'En Proceso':(fej&&fej>fec?'Programada':'Por Iniciar');
+  const urgente=eisUrgente===true?'Si':eisUrgente===false?'No':'';
+  const importante=eisImportante===true?'Si':eisImportante===false?'No':'';
   const fila=[nextId,SESSION.nombre,
     document.getElementById('tTar').value.trim(),
     document.getElementById('tSol')?.value||'',
@@ -1341,7 +1439,7 @@ async function guardarTarea() {
     } else { toast('📋 Tarea guardada · '+estado,'ok'); }
     nextId++;
     await apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario});
-    taskType=''; setMode('nuevaTarea');
+    taskType=''; eisUrgente=null; eisImportante=null; setMode('nuevaTarea');
   } catch(e){toast('Error al guardar','er');}
   if(btn){btn.disabled=false;btn.classList.remove('ld');}
 }
@@ -1368,9 +1466,11 @@ async function guardarSesion() {
   const t=TAREAS.find(x=>String(x.id)===String(tid));
   const hoy=todayStr();
   try {
+    const motExtra = esExtra ? (document.getElementById('sMotExtra')?.value||'') : '';
     await apiPost({accion:'insertar',tabla:'Sesiones',
       fila:[tid,t?.tarea||'',SESSION.nombre,fec,ini,ter,hh,
-        document.getElementById('sCom')?.value||'',hoy]});
+        document.getElementById('sCom')?.value||'',hoy,esExtra?'Sí':'No',motExtra]});
+    esExtra=false;
     if (t) {
       const idx=TAREAS.findIndex(x=>String(x.id)===String(tid));
       const nHH=Math.round(((parseFloat(t.hhReal)||0)+hh)*100)/100;
@@ -1493,6 +1593,7 @@ function vAdmin() {
     <button class="tab" id="apill-lst" onclick="switchAdmin('lst')">Editor Listas</button>
     <button class="tab" id="apill-usr" onclick="switchAdmin('usr')">Usuarios</button>
     <button class="tab" id="apill-al" onclick="switchAdmin('al')">Alertas Horario</button>
+    <button class="tab" id="apill-repr" onclick="switchAdmin('repr')">Reprogramaciones</button>
   </div>
 
   <div id="ap-reg" class="card" style="margin-top:0;border-top-left-radius:0">
@@ -1532,6 +1633,15 @@ function vAdmin() {
     </table></div>
   </div>
 
+  <div id="ap-repr" class="card" style="display:none;margin-top:0;border-top-left-radius:0">
+    <div class="cl"><div class="d"></div>Historial de reprogramaciones</div>
+    <div class="tabs" style="margin-bottom:12px">
+      <button class="tab on" id="reprPS" onclick="switchRepr('semana')">Esta semana</button>
+      <button class="tab" id="reprPM" onclick="switchRepr('mes')">Este mes</button>
+    </div>
+    <div id="reprContent"></div>
+  </div>
+
   <div id="ap-al" class="card" style="display:none;margin-top:0;border-top-left-radius:0">
     <div class="cl"><div class="d"></div>Resumen alertas de horario sin reportar</div>
     <div class="tabs" style="margin-bottom:12px">
@@ -1555,12 +1665,34 @@ function initAdmin() {
 }
 
 function switchAdmin(tab) {
-  ['reg','lst','usr','al'].forEach(t=>{
+  ['reg','lst','usr','al','repr'].forEach(t=>{
     document.getElementById('ap-'+t).style.display=t===tab?'block':'none';
     document.getElementById('apill-'+t)?.classList.toggle('on',t===tab);
   });
   if(tab==='usr') loadUsrs();
   if(tab==='al') renderAlRes('h');
+  if(tab==='repr') switchRepr('semana');
+}
+
+function switchRepr(p) {
+  document.getElementById('reprPS')?.classList.toggle('on',p==='semana');
+  document.getElementById('reprPM')?.classList.toggle('on',p==='mes');
+  const hoy=todayStr(),lun=mondayStr(),mes=new Date().toISOString().slice(0,7)+'-01';
+  const desde=p==='semana'?lun:mes;
+  apiGet({accion:'reprogramaciones',desde,hasta:hoy}).then(data=>{
+    const cont=document.getElementById('reprContent'); if(!cont)return;
+    if(!data.length){cont.innerHTML='<div class="emp">Sin reprogramaciones en el período</div>';return;}
+    cont.innerHTML=`<div class="tw"><table class="dt">
+      <thead><tr><th>#</th><th>Tarea</th><th>Responsable</th><th>Fecha orig.</th><th>Fecha nueva</th><th>Motivo</th><th>¿Urgencia?</th></tr></thead>
+      <tbody>${data.map(r=>`<tr>
+        <td>${r.tareaId}</td>
+        <td style="max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.tarea||''}">${r.tarea||'—'}</td>
+        <td>${r.responsable}</td><td>${r.fechaOrig}</td><td>${r.fechaNueva}</td>
+        <td>${r.motivo}</td>
+        <td><span class="badge ${r.esUrgencia==='Sí'?'bp':'bl'}">${r.esUrgencia}</span></td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  });
 }
 
 function switchReg(tab) {
@@ -1769,6 +1901,556 @@ function renderAlRes(periodo) {
     </div>`;
   });
   c.innerHTML=html||'<div class="emp">Sin datos para este período</div>';
+}
+
+// ════════════════════════════════════════════════════════════════
+// PART B — GANTT, EISENHOWER, WIP, CARGA, KPI, HORAS EXTRA, WEEKLY REVIEW
+// ════════════════════════════════════════════════════════════════
+
+// ── GANTT STATE ──────────────────────────────────────────────────────
+let ganttView = 'semana'; // dia | semana | mes
+let ganttDragTask = null;
+let ganttDragOrigDate = null;
+
+// ── GANTT VIEW ───────────────────────────────────────────────────────
+function vGantt() {
+  const isAdmin = SESSION.rol === 'admin';
+  const persOpts = isAdmin
+    ? ['Todos','Luis Sanchez','Luis Diaz','Yamila Silva'].map(p=>`<option>${p}</option>`).join('')
+    : `<option>${SESSION.nombre}</option>`;
+  return `
+  <div class="ph"><div class="pt"><div class="rb"></div>Planificación — Gantt</div>
+    <div class="pd">Arrastra las tareas para reprogramar. Se registra motivo y fecha original.</div></div>
+  <div class="fb">
+    <div><label>Vista</label>
+      <div class="tabs" style="margin-bottom:0">
+        <button class="tab" id="gbD" onclick="switchGantt('dia')">Día</button>
+        <button class="tab on" id="gbS" onclick="switchGantt('semana')">Semana</button>
+        <button class="tab" id="gbM" onclick="switchGantt('mes')">Mes</button>
+      </div>
+    </div>
+    ${isAdmin?`<div><label>Persona</label><select id="gPers" onchange="renderGantt()" style="padding:7px 24px 7px 10px;font-size:12px">${persOpts}</select></div>`:''}
+    <div style="margin-left:auto;align-self:flex-end">
+      <button class="btn sm ghost" onclick="ganttNav(-1)">◀ Anterior</button>
+      <span id="ganttPeriodLbl" style="font-size:11px;font-weight:600;margin:0 8px;color:var(--navy)"></span>
+      <button class="btn sm ghost" onclick="ganttNav(1)">Siguiente ▶</button>
+    </div>
+  </div>
+  <div class="gantt-wrap"><div id="ganttContainer"></div></div>`;
+}
+
+let ganttOffset = 0; // weeks/days/months offset from today
+
+function switchGantt(v) {
+  ganttView = v; ganttOffset = 0;
+  ['D','S','M'].forEach(x=>document.getElementById('gb'+x)?.classList.toggle('on',
+    x===(v==='dia'?'D':v==='semana'?'S':'M')));
+  renderGantt();
+}
+
+function ganttNav(dir) { ganttOffset += dir; renderGantt(); }
+
+function getGanttDates() {
+  const today = new Date();
+  let dates = [], label = '';
+  if (ganttView === 'dia') {
+    const d = new Date(today); d.setDate(d.getDate() + ganttOffset);
+    dates = [d];
+    label = d.toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long'});
+  } else if (ganttView === 'semana') {
+    const mon = new Date(today);
+    mon.setDate(today.getDate() - today.getDay() + (today.getDay()===0?-6:1) + ganttOffset*7);
+    for (let i=0;i<7;i++) { const d=new Date(mon); d.setDate(mon.getDate()+i); dates.push(d); }
+    label = `Semana del ${dates[0].toLocaleDateString('es-CL',{day:'numeric',month:'short'})} al ${dates[6].toLocaleDateString('es-CL',{day:'numeric',month:'short'})}`;
+  } else {
+    const d = new Date(today.getFullYear(), today.getMonth()+ganttOffset, 1);
+    const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+    for (let i=1;i<=last;i++) dates.push(new Date(d.getFullYear(),d.getMonth(),i));
+    label = d.toLocaleDateString('es-CL',{month:'long',year:'numeric'});
+  }
+  return { dates, label };
+}
+
+function renderGantt() {
+  const cont = document.getElementById('ganttContainer'); if (!cont) return;
+  const { dates, label } = getGanttDates();
+  const lblEl = document.getElementById('ganttPeriodLbl'); if(lblEl) lblEl.textContent = label;
+  const todayStr2 = todayStr();
+  const isAdmin = SESSION.rol === 'admin';
+  const persFilter = isAdmin ? (document.getElementById('gPers')?.value||'Todos') : SESSION.nombre;
+  const tareasFilt = TAREAS.filter(t => {
+    if (!['Por Iniciar','Programada','En Proceso','Listo'].includes(t.estado)) return false;
+    if (persFilter !== 'Todos' && t.nombre !== persFilter) return false;
+    return true;
+  });
+
+  // For each tarea, determine which dates it spans
+  function taskDates(t) {
+    const fej = t.fechaEjecucion || t.fechaIngreso || todayStr2;
+    return { start: dateStr(fej), end: dateStr(t.fechaComp || fej) };
+  }
+
+  // Build header
+  const headCells = dates.map(d => {
+    const ds = d.toISOString().split('T')[0];
+    const isToday = ds === todayStr2;
+    const lbl = ganttView==='mes'
+      ? d.getDate()
+      : d.toLocaleDateString('es-CL',{weekday:'short',day:'numeric'});
+    return `<div class="gantt-day-hdr ${isToday?'today':''}" data-date="${ds}">${lbl}</div>`;
+  }).join('');
+
+  const datesStr = dates.map(d=>d.toISOString().split('T')[0]);
+
+  // Build rows
+  const rows = tareasFilt.map(t => {
+    const { start, end } = taskDates(t);
+    const barCls = t.estado==='Listo'?'listo':t.estado==='En Proceso'?'proceso':t.estado==='Programada'?'prog':'';
+
+    // Calculate bar position within visible dates
+    const startIdx = Math.max(0, datesStr.indexOf(start));
+    const endIdx   = Math.min(datesStr.length-1, datesStr.indexOf(end)<0 ? startIdx : datesStr.indexOf(end));
+    const hasBar   = datesStr.includes(start) || (start < datesStr[0] && end >= datesStr[0]);
+
+    // Cell width is 1/dates.length of total, bar spans from startIdx to endIdx
+    const cells = datesStr.map((ds,i) => `
+      <div class="gantt-cell ${ds===todayStr2?'today-col':''}"
+        data-date="${ds}" data-taskid="${t.id}"
+        ondragover="ganttDragOver(event,this)" ondragleave="this.classList.remove('drag-over')"
+        ondrop="ganttDrop(event,this,'${t.id}','${start}')">
+        <div class="gantt-drop"></div>
+      </div>`).join('');
+
+    // Bar overlay - positioned absolutely over cells
+    const cellPct = 100/datesStr.length;
+    const barLeft = (hasBar ? Math.max(0,datesStr.indexOf(start<datesStr[0]?datesStr[0]:start)) : -1) * cellPct;
+    const barWidth = hasBar ? ((endIdx - Math.max(0,datesStr.indexOf(start<datesStr[0]?datesStr[0]:start)))+1) * cellPct : 0;
+
+    const barHTML = hasBar ? `
+      <div class="gantt-bar ${barCls}" draggable="true"
+        style="left:${barLeft}%;width:${barWidth}%;box-sizing:border-box"
+        ondragstart="ganttDragStart(event,'${t.id}','${start}')"
+        ondragend="ganttDragEnd(event)"
+        title="#${t.id} · ${t.tarea} · ${t.hhPlan||'—'}HHP · ${t.hhReal||'0'}HHR">
+        <span class="gantt-bar-lbl">#${t.id} ${t.tarea.substring(0,20)}</span>
+      </div>` : '';
+
+    return `
+    <div class="gantt-row">
+      <div class="gantt-name">
+        <div>${t.tarea.substring(0,22)}${t.tarea.length>22?'…':''}</div>
+        <div class="gn-meta">${t.nombre} · <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span></div>
+      </div>
+      <div class="gantt-cells">${cells}${barHTML}</div>
+    </div>`;
+  }).join('');
+
+  cont.innerHTML = `
+  <div class="gantt">
+    <div class="gantt-head">
+      <div class="gantt-name-col">Tarea</div>
+      <div class="gantt-days">${headCells}</div>
+    </div>
+    ${rows || '<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Sin tareas para este período</div>'}
+  </div>`;
+}
+
+function ganttDragStart(e, taskId, origDate) {
+  ganttDragTask = taskId;
+  ganttDragOrigDate = origDate;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function ganttDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.gantt-cell').forEach(c=>c.classList.remove('drag-over'));
+}
+function ganttDragOver(e, cell) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.gantt-cell').forEach(c=>c.classList.remove('drag-over'));
+  cell.classList.add('drag-over');
+}
+function ganttDrop(e, cell, taskId, origDate) {
+  e.preventDefault();
+  cell.classList.remove('drag-over');
+  const newDate = cell.dataset.date;
+  if (!newDate || newDate === origDate) return;
+  const t = TAREAS.find(x=>String(x.id)===String(taskId)); if(!t)return;
+  abrirModalReprog(taskId, t.tarea, origDate, newDate, t.nombre);
+}
+
+function abrirModalReprog(taskId, tareaNombre, fechaOrig, fechaNueva, responsable) {
+  const motivoOpts = (LISTAS['MotivoReprog']||['Tarea urgente interrumpió','Error de estimación','Otro'])
+    .map(m=>`<option value="${m}">${m}</option>`).join('');
+  const canEdit = SESSION.rol==='admin' || SESSION.nombre===responsable;
+  if (!canEdit) { toast('No tienes permiso para reprogramar esta tarea','er'); return; }
+
+  document.getElementById('mc').innerHTML = `
+    <div class="mt"><div class="rb"></div>Reprogramar Tarea</div>
+    <div class="reprog-info">
+      <strong>#${taskId} · ${tareaNombre}</strong>
+      De: <strong>${fechaOrig}</strong> → <strong>${fechaNueva}</strong>
+    </div>
+    <div class="efi" style="margin-bottom:12px">
+      <label>Motivo de reprogramación *</label>
+      <select id="rMotivo" style="background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:8px 24px 8px 10px;font-family:Open Sans,sans-serif;font-size:13px;width:100%">
+        <option value="">— seleccionar —</option>${motivoOpts}
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <label style="font-size:12px;font-weight:600;color:var(--muted);cursor:pointer">
+        <input type="checkbox" id="rUrgencia" style="margin-right:6px">
+        ¿Fue interrumpida por una tarea urgente?
+      </label>
+    </div>
+    <div class="ma">
+      <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>
+      <button class="btn" onclick="confirmarReprog('${taskId}','${tareaNombre}','${responsable}','${fechaOrig}','${fechaNueva}')">
+        <span class="st"></span><span class="bt">Confirmar reprogramación</span>
+      </button>
+    </div>`;
+  document.getElementById('mb').classList.add('op');
+}
+
+async function confirmarReprog(taskId, tareaNombre, responsable, fechaOrig, fechaNueva) {
+  const motivo = document.getElementById('rMotivo')?.value;
+  if (!motivo) { toast('Selecciona un motivo','er'); return; }
+  const esUrg = document.getElementById('rUrgencia')?.checked || false;
+  await apiPost({ accion:'reprogramar', tareaId:taskId, tareaNombre,
+    responsable, fechaOriginal:fechaOrig, fechaNueva,
+    motivo, esUrgencia:esUrg, reprogramadoPor:SESSION.nombre });
+  // Update local
+  const idx = TAREAS.findIndex(t=>String(t.id)===String(taskId));
+  if (idx>-1) {
+    TAREAS[idx].fechaEjecucion = fechaNueva;
+    if (fechaNueva > todayStr()) TAREAS[idx].estado = 'Programada';
+  }
+  cerrarModal();
+  toast('Tarea reprogramada correctamente','ok');
+  renderGantt();
+}
+
+// ════════════════════════════════════════════════════════════════
+// EISENHOWER — replaces Prioridad in forms
+// ════════════════════════════════════════════════════════════════
+let eisUrgente = null, eisImportante = null;
+
+function renderEisenhouerField(showImportante=true) {
+  return `
+  <div class="fi fw">
+    <label>Clasificación ${showImportante?'Eisenhower':''} ${tip('Urgente = requiere acción inmediata. Importante = tiene impacto significativo en los objetivos.')}</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px">
+      <div>
+        <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;margin-bottom:5px">¿Es urgente?</div>
+        <div class="eis-grid">
+          <div class="eis-btn" id="eisUS" onclick="setEis('urgente',true)"><span class="eis-ico">🔴</span><div class="eis-lbl">Sí</div></div>
+          <div class="eis-btn" id="eisUN" onclick="setEis('urgente',false)"><span class="eis-ico">🟢</span><div class="eis-lbl">No</div></div>
+        </div>
+      </div>
+      ${showImportante?`
+      <div>
+        <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;margin-bottom:5px">¿Es importante?</div>
+        <div class="eis-grid">
+          <div class="eis-btn" id="eisIS" onclick="setEis('importante',true)"><span class="eis-ico">⭐</span><div class="eis-lbl">Sí</div></div>
+          <div class="eis-btn" id="eisIN" onclick="setEis('importante',false)"><span class="eis-ico">⬜</span><div class="eis-lbl">No</div></div>
+        </div>
+      </div>`:''}
+    </div>
+    <div class="eis-quad" id="eisQuad" style="display:none"></div>
+  </div>`;
+}
+
+function setEis(dim, val) {
+  if (dim==='urgente') eisUrgente=val;
+  else eisImportante=val;
+  // Update UI
+  document.getElementById('eisUS')?.classList.toggle('on-yes', eisUrgente===true);
+  document.getElementById('eisUN')?.classList.toggle('on-no', eisUrgente===false);
+  document.getElementById('eisIS')?.classList.toggle('on-yes', eisImportante===true);
+  document.getElementById('eisIN')?.classList.toggle('on-no', eisImportante===false);
+  updateEisQuad();
+}
+
+function updateEisQuad() {
+  const el = document.getElementById('eisQuad'); if (!el) return;
+  if (eisUrgente===null && eisImportante===null) { el.style.display='none'; return; }
+  const u = eisUrgente!==false;
+  const i = eisImportante!==false;
+  const quads = [
+    [true,  true,  'eq-1','⚡ Hacer ahora — Urgente e Importante'],
+    [false, true,  'eq-2','📅 Planificar — Importante, no urgente'],
+    [true,  false, 'eq-3','👥 Delegar — Urgente, no importante'],
+    [false, false, 'eq-4','🗑 Reconsiderar — Ni urgente ni importante'],
+  ];
+  const q = quads.find(([qu,qi])=>qu===u&&qi===i);
+  if (q) {
+    el.style.display='block';
+    el.className='eis-quad '+q[2];
+    el.textContent=q[3];
+  }
+}
+
+function getEisHidden() {
+  // Returns hidden inputs string for form embedding
+  return `<input type="hidden" id="eisUrg" value="${eisUrgente===true?'Si':eisUrgente===false?'No':''}">
+          <input type="hidden" id="eisImp" value="${eisImportante===true?'Si':eisImportante===false?'No':''}">`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// WIP LIMIT CHECK
+// ════════════════════════════════════════════════════════════════
+const WIP_LIMIT = 3; // configurable in admin later
+
+function checkWIP(nombre, excludeId=null) {
+  const enProceso = TAREAS.filter(t =>
+    t.nombre===nombre && t.estado==='En Proceso' &&
+    (excludeId===null || String(t.id)!==String(excludeId))
+  ).length;
+  return { count: enProceso, exceeded: enProceso >= WIP_LIMIT };
+}
+
+function renderWIPAlert(nombre) {
+  const { count, exceeded } = checkWIP(nombre);
+  if (!exceeded) return '';
+  return `<div class="al d" style="margin-bottom:10px">
+    <span class="al-ico">⚠️</span>
+    <div class="al-txt">
+      <strong>Límite WIP alcanzado</strong>
+      ${nombre} ya tiene ${count} tarea(s) En Proceso (límite: ${WIP_LIMIT}).
+      Termina alguna antes de iniciar otra. Puedes igualmente confirmar.
+    </div>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;font-size:11px">
+      <input type="checkbox" id="chkWIP"> Confirmar</label>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// CARGA DE TRABAJO FUTURA
+// ════════════════════════════════════════════════════════════════
+async function vCargaTrabajo() {
+  const data = await apiGet({ accion:'cargaTrabajo', periodo:'semana' });
+  return buildCargaHTML(data, 'semana');
+}
+
+function buildCargaHTML(data, periodo) {
+  const personas = data.personas || [];
+  const cards = personas.map(p => {
+    const pct = p.pctOcupacion;
+    const cls = pct<70?'ok':pct<100?'warn':'over';
+    const fillW = Math.min(pct, 150);
+    const msg = pct<70?'✅ Capacidad disponible':pct<100?'⚠ Carga moderada':'🔴 Sobrecargado';
+    const tarRows = (p.tareas||[]).map(t=>`
+      <div class="br">
+        <div class="bl2" title="${t.tarea}">#${t.id} ${t.tarea.substring(0,22)}${t.tarea.length>22?'…':''}</div>
+        <div class="bt2"><div class="bf a" style="width:${Math.min(100,Math.round((t.pendiente/(p.hhDisponibles||1))*100))}%"></div></div>
+        <div class="bv">${fmtHH(t.pendiente)}h</div>
+      </div>`).join('');
+    return `
+    <div class="carga-card">
+      <div class="carga-head">
+        <div>
+          <div class="carga-name">${p.persona}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${p.nTareas} tareas activas · ${p.hhComprometidas}h pendientes / ${p.hhDisponibles}h disponibles</div>
+        </div>
+        <div class="carga-pct ${cls}">${pct}%<div style="font-size:10px;font-weight:400">${msg}</div></div>
+      </div>
+      <div class="carga-bar"><div class="carga-fill ${cls}" style="width:${Math.min(100,fillW)}%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)">
+        <span>0h</span><span>${p.hhDisponibles}h disponibles</span>
+      </div>
+      ${tarRows ? `
+      <div style="margin-top:10px">
+        <button class="btn sm ghost" onclick="this.nextElementSibling.classList.toggle('op');this.textContent=this.nextElementSibling.classList.contains('op')?'▲ Ocultar detalle':'▼ Ver detalle de tareas'">▼ Ver detalle de tareas</button>
+        <div class="carga-detail"><div style="margin-top:8px">${tarRows}</div></div>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="ph"><div class="pt"><div class="rb"></div>Carga de Trabajo Futura</div>
+    <div class="pd">HH comprometidas vs disponibles desde hoy en adelante.</div></div>
+  <div class="fb">
+    <div><label>Período</label>
+      <div class="tabs" style="margin-bottom:0">
+        <button class="tab ${periodo==='dia'?'on':''}" id="cgD" onclick="recargarCarga('dia')">Hoy</button>
+        <button class="tab ${periodo==='semana'?'on':''}" id="cgS" onclick="recargarCarga('semana')">Esta semana</button>
+        <button class="tab ${periodo==='mes'?'on':''}" id="cgM" onclick="recargarCarga('mes')">Este mes</button>
+      </div>
+    </div>
+  </div>
+  ${cards || '<div class="emp"><span class="ei">📊</span>Sin datos</div>'}`;
+}
+
+async function recargarCarga(periodo) {
+  const main = document.getElementById('main');
+  main.innerHTML='<div class="emp"><span class="ei">⏳</span>Cargando…</div>';
+  const data = await apiGet({ accion:'cargaTrabajo', periodo });
+  main.innerHTML = buildCargaHTML(data, periodo);
+}
+
+// ════════════════════════════════════════════════════════════════
+// KPI PRODUCTIVIDAD
+// ════════════════════════════════════════════════════════════════
+async function vKPIProductividad() {
+  const hoy = todayStr(), lunes = mondayStr();
+  const data = await apiGet({ accion:'kpiProductividad', desde:lunes, hasta:hoy });
+  return buildKPIHTML(data, lunes, hoy);
+}
+
+function buildKPIHTML(data, desde, hasta) {
+  if (!Array.isArray(data)||!data.length) return '<div class="emp"><span class="ei">📊</span>Sin datos</div>';
+  const cards = data.map(p => {
+    const effCls = p.eficienciaEstimacion===null?'':p.eficienciaEstimacion<=1.1&&p.eficienciaEstimacion>=0.9?'pos':p.eficienciaEstimacion<=1.3&&p.eficienciaEstimacion>=0.7?'':'neg';
+    const prodCls = p.productividad>=70?'pos':p.productividad>=50?'':'neg';
+    return `
+    <div class="prod-card">
+      <div class="prod-name">${p.persona}</div>
+      <div class="prod-kpi"><span class="prod-kl">Tareas completadas</span><span class="prod-kv">${p.completadas}/${p.totalTareas} (${p.tasaCompletitud}%)</span></div>
+      <div class="prod-kpi"><span class="prod-kl">HH productivas</span><span class="prod-kv ${prodCls}">${p.productividad}%</span></div>
+      <div class="prod-kpi"><span class="prod-kl">HH Real / Disponibles</span><span class="prod-kv">${p.hhReal}h / ${p.hhDisponibles}h</span></div>
+      <div class="prod-kpi"><span class="prod-kl">Exactitud estimaciones</span><span class="prod-kv ${effCls}">${p.eficienciaEstimacion!==null?(p.eficienciaEstimacion*100).toFixed(0)+'%':'—'}</span></div>
+      <div class="prod-kpi"><span class="prod-kl">Reprogramaciones</span><span class="prod-kv">${p.reprogramaciones}</span></div>
+      <div class="prod-kpi"><span class="prod-kl">Interrupciones urgentes</span><span class="prod-kv ${p.interrupcionesUrgentes>0?'neg':''}">${p.interrupcionesUrgentes} (${p.tasaInterrupcion}%)</span></div>
+      <div class="prod-kpi"><span class="prod-kl">Horas extra</span><span class="prod-kv ${p.hhExtra>4?'neg':''}">${p.hhExtra}h</span></div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="ph"><div class="pt"><div class="rb"></div>KPI Productividad Individual</div>
+    <div class="pd">Solo visible para administradores.</div></div>
+  <div class="fb">
+    <div><label>Período</label>
+      <div class="tabs" style="margin-bottom:0">
+        <button class="tab on" id="kpS" onclick="recargarKPI('semana')">Esta semana</button>
+        <button class="tab" id="kpM" onclick="recargarKPI('mes')">Este mes</button>
+        <button class="tab" id="kpL" onclick="recargarKPI('libre')">Libre</button>
+      </div>
+    </div>
+    <div id="kpLibre" style="display:none;gap:8px;align-items:flex-end">
+      <div><label>Desde</label><input type="date" id="kpD" value="${desde}"></div>
+      <div><label>Hasta</label><input type="date" id="kpH" value="${hasta}"></div>
+      <button class="btn sm" onclick="recargarKPILibre()"><span class="bt">Aplicar</span></button>
+    </div>
+  </div>
+  <div class="prod-grid">${cards}</div>`;
+}
+
+async function recargarKPI(p) {
+  ['S','M','L'].forEach(x=>document.getElementById('kp'+x)?.classList.toggle('on',
+    x===(p==='semana'?'S':p==='mes'?'M':'L')));
+  const libre = document.getElementById('kpLibre');
+  if (p==='libre') { if(libre) libre.style.display='flex'; return; }
+  if(libre) libre.style.display='none';
+  const hoy=todayStr();
+  const desde=p==='semana'?mondayStr():new Date().toISOString().slice(0,7)+'-01';
+  const main=document.getElementById('main');
+  main.innerHTML='<div class="emp"><span class="ei">⏳</span>Cargando…</div>';
+  const data=await apiGet({accion:'kpiProductividad',desde,hasta:hoy});
+  main.innerHTML=buildKPIHTML(data,desde,hoy);
+}
+async function recargarKPILibre(){
+  const d=document.getElementById('kpD')?.value,h=document.getElementById('kpH')?.value;
+  if(!d||!h)return;
+  const main=document.getElementById('main');
+  main.innerHTML='<div class="emp"><span class="ei">⏳</span>Cargando…</div>';
+  const data=await apiGet({accion:'kpiProductividad',desde:d,hasta:h});
+  main.innerHTML=buildKPIHTML(data,d,h);
+}
+
+// ════════════════════════════════════════════════════════════════
+// HORAS EXTRA — add to vSesion form
+// ════════════════════════════════════════════════════════════════
+function renderExtraField() {
+  const motivoOpts = (LISTAS['MotivoExtra']||['Cumplir plazo comprometido','Urgencia de cliente','Otro'])
+    .map(m=>`<option value="${m}">${m}</option>`).join('');
+  return `
+  <div class="fi fw" id="fiExtra">
+    <label>¿Es hora extra? ${tip('Marcar si esta sesión fue fuera del horario laboral normal o en día no laborable.')}</label>
+    <div style="display:flex;gap:8px;margin-bottom:6px">
+      <button type="button" class="tt-btn ex" id="btnExtraS" onclick="setExtra(true)"
+        style="flex:1;padding:8px"><span style="font-size:16px">⏰</span><div class="tt-name" style="font-size:9px">Sí, es hora extra</div></button>
+      <button type="button" class="tt-btn pl" id="btnExtraN" onclick="setExtra(false)"
+        style="flex:1;padding:8px"><span style="font-size:16px">✅</span><div class="tt-name" style="font-size:9px">No, horario normal</div></button>
+    </div>
+    <select id="sMotExtra" style="display:none;background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:8px 24px 8px 10px;font-size:13px;width:100%">
+      <option value="">— Motivo de hora extra —</option>${motivoOpts}
+    </select>
+  </div>`;
+}
+
+let esExtra = false;
+function setExtra(val) {
+  esExtra = val;
+  document.getElementById('btnExtraS')?.classList.toggle('on', val);
+  document.getElementById('btnExtraN')?.classList.toggle('on', !val);
+  const mot = document.getElementById('sMotExtra');
+  if(mot) mot.style.display = val ? 'block' : 'none';
+}
+
+// ════════════════════════════════════════════════════════════════
+// WEEKLY REVIEW
+// ════════════════════════════════════════════════════════════════
+async function vWeeklyReview() {
+  const usuario = SESSION.rol==='admin' ? 'admin' : SESSION.nombre;
+  const data = await apiGet({ accion:'weeklyReview', usuario });
+  return buildWRHTML(data);
+}
+
+function buildWRHTML(data) {
+  if (!Array.isArray(data)||!data.length) return `
+    <div class="ph"><div class="pt"><div class="rb"></div>Revisión Semanal</div></div>
+    <div class="emp"><span class="ei">🎉</span>No hay tareas pendientes por revisar</div>`;
+
+  const vencidas = data.filter(t=>t.vencida);
+  const normales = data.filter(t=>!t.vencida);
+
+  const renderItems = (arr) => arr.map(t=>`
+    <div class="wr-item">
+      <div class="wr-info">
+        <div style="font-size:12px;font-weight:600">#${t.id} · ${t.tarea}</div>
+        <div style="font-size:10px;color:var(--muted)">${t.nombre} · ${t.tipo||'—'} · ${t.area||'—'} · HHP:${t.hhPlan||'—'}</div>
+      </div>
+      <div class="wr-actions">
+        <button class="wr-btn wr-esta" onclick="wrAccion(${t.id},'esta')">Esta semana</button>
+        <button class="wr-btn wr-post" onclick="wrAccion(${t.id},'post')">Posponer</button>
+        <button class="wr-btn wr-canc" onclick="wrAccion(${t.id},'canc')">Cancelar</button>
+      </div>
+    </div>`).join('');
+
+  return `
+  <div class="ph"><div class="pt"><div class="rb"></div>Revisión Semanal</div>
+    <div class="pd">Decide qué harás con cada tarea pendiente. Recomendado: hacer cada lunes.</div></div>
+  ${vencidas.length>0?`
+  <div class="card">
+    <div class="cl"><div class="d"></div>⚠️ Vencidas (${vencidas.length}) — fecha compromiso ya pasó</div>
+    ${renderItems(vencidas)}
+  </div>`:''}
+  <div class="card">
+    <div class="cl"><div class="d"></div>Por planificar (${normales.length})</div>
+    ${normales.length>0?renderItems(normales):'<div class="emp" style="padding:12px">Sin tareas pendientes</div>'}
+  </div>`;
+}
+
+async function wrAccion(id, accion) {
+  const idx = TAREAS.findIndex(t=>String(t.id)===String(id)); if(idx<0)return;
+  if (accion==='esta') {
+    await apiPost({accion:'actualizar',tabla:'Tareas',id,campos:{10:'En Proceso',9:todayStr()}});
+    TAREAS[idx].estado='En Proceso';
+    toast('Tarea movida a Esta Semana','ok');
+  } else if (accion==='post') {
+    await apiPost({accion:'actualizar',tabla:'Tareas',id,campos:{10:'Programada'}});
+    TAREAS[idx].estado='Programada';
+    toast('Tarea pospuesta','ok');
+  } else {
+    await apiPost({accion:'actualizar',tabla:'Tareas',id,campos:{10:'Cancelado'}});
+    TAREAS[idx].estado='Cancelado';
+    toast('Tarea cancelada','ok');
+  }
+  // Refresh
+  const usuario = SESSION.rol==='admin'?'admin':SESSION.nombre;
+  const data = await apiGet({accion:'weeklyReview',usuario});
+  document.getElementById('main').innerHTML = buildWRHTML(data);
 }
 
 </script>
