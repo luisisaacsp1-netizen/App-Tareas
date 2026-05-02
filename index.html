@@ -24,6 +24,13 @@
 html{font-size:14px;}
 body{font-family:"Open Sans",sans-serif;background:var(--off);color:var(--text);min-height:100vh;}
 
+
+/* SKELETON LOADER */
+.skel{background:linear-gradient(90deg,#e8ecf4 25%,#f4f6f9 50%,#e8ecf4 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:6px;}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skel-line{height:14px;margin-bottom:8px;}
+.skel-card{background:#fff;border-radius:var(--r);border:1px solid var(--border);padding:18px 20px;margin-bottom:12px;box-shadow:var(--s1);}
+
 /* LOGIN */
 #loginScreen{position:fixed;inset:0;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000;padding:20px;}
 .login-logo{height:58px;object-fit:contain;margin-bottom:32px;}
@@ -467,7 +474,7 @@ main{max-width:900px;margin:0 auto;padding:20px 16px 80px;}
 // ══════════════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════════════
-const API = 'https://script.google.com/macros/s/AKfycbxzNIb8JrSHbaqVMASd3cHlbnXSn5qn2jG4OrlsOPofaFGg_tNsC2UihOVghR4A9U4f/exec';
+const API = 'https://script.google.com/macros/s/AKfycbyaF_6ml36PzyOlidnmNBscHuSzZP-VYJWF4bqqzXQoQVlppVb3xiVwSukV-aT9bPaA/exec';
 const SCHEDULE = {1:[8,17,12,13],2:[8,18,12,13],3:[8,17,12,13],4:[8,18,12,13],5:[8,17,12,13]};
 const BADGE = {'Por Iniciar':'bi','Programada':'bpr','En Proceso':'bp','Listo':'bl','Standby':'bs','Cancelado':'bc'};
 const ESTADO_COLS = {
@@ -635,7 +642,22 @@ async function doLogin() {
   } catch(e){err.textContent='Error de conexión. Intenta nuevamente.';}
 }
 
-async function loadData() {
+async function loadData(forceRefresh=false) {
+  // Try cache first (valid for 3 minutes)
+  if (!forceRefresh) {
+    try {
+      const cached = sessionStorage.getItem('ot_cache');
+      const cachedTime = parseInt(sessionStorage.getItem('ot_cache_time')||'0');
+      if (cached && Date.now() - cachedTime < 180000) {
+        const d = JSON.parse(cached);
+        TAREAS = d.tareas; SESIONES = d.sesiones; LISTAS = d.listas;
+        nextId = TAREAS.length>0 ? Math.max(...TAREAS.map(t=>parseInt(t.id)||0))+1 : 1;
+        _updateAlertCount();
+        return;
+      }
+    } catch(e) {}
+  }
+  // Parallel fetch
   const[tRows,listas,sRows]=await Promise.all([
     apiGet({accion:'leer',tabla:'Tareas'}),
     apiGet({accion:'listas'}),
@@ -652,17 +674,26 @@ async function loadData() {
     inicio:r[4],termino:r[5],hh:r[6],comentario:r[7],esExtra:r[8]||'No',motivoExtra:r[9]||''
   })):[];
   nextId=TAREAS.length>0?Math.max(...TAREAS.map(t=>parseInt(t.id)||0))+1:1;
-  // Count unprogrammed tasks alert
-  const hoy=todayStr();
+  // Save to cache
+  try {
+    sessionStorage.setItem('ot_cache', JSON.stringify({tareas:TAREAS,sesiones:SESIONES,listas:LISTAS}));
+    sessionStorage.setItem('ot_cache_time', String(Date.now()));
+  } catch(e) {}
+  _updateAlertCount();
+}
+
+function _updateAlertCount() {
   const ayer=new Date(); ayer.setDate(ayer.getDate()-1);
   const ayerStr=ayer.toISOString().split('T')[0];
   const myName=activeUser();
   alertasNoProgCount=TAREAS.filter(t=>
-    t.nombre===myName&&
-    !['Listo','Cancelado'].includes(t.estado)&&
-    !t.fechaEjecucion&&
-    t.fechaIngreso<=ayerStr
+    t.nombre===myName&&!['Listo','Cancelado'].includes(t.estado)&&
+    !t.fechaEjecucion&&t.fechaIngreso<=ayerStr
   ).length;
+}
+
+function invalidateCache() {
+  try { sessionStorage.removeItem('ot_cache'); sessionStorage.removeItem('ot_cache_time'); } catch(e) {}
 }
 
 function logout() {
@@ -708,7 +739,7 @@ const SECS = {
       {id:'agenda',   ico:'📅', lbl:'Agenda'},
       {id:'tareas',   ico:'☰',  lbl:'Mis Tareas'},
       {id:'nuevaTarea',ico:'＋',lbl:'Nueva Tarea'},
-      {id:'sesion',   ico:'⏱',  lbl:'Sesión'},
+      {id:'confirmar',ico:'✅', lbl:'Confirmar Bloque'},
       {id:'revision', ico:'📋', lbl:'Revisión Semanal'},
     ]
   },
@@ -766,26 +797,80 @@ async function goSub(sec, sub) {
   currentSec=sec; currentSub=sub;
   document.querySelectorAll('.snb').forEach(b=>b.classList.toggle('on',b.id===`snb-${sub}`));
   const main=document.getElementById('main');
-  main.innerHTML='<div class="emp"><span class="ei">⏳</span>Cargando…</div>';
+  main.innerHTML=`<div class="skel-card"><div class="skel skel-line" style="width:40%;height:20px;margin-bottom:16px"></div>
+  <div class="skel skel-line" style="width:100%"></div><div class="skel skel-line" style="width:80%"></div>
+  <div class="skel skel-line" style="width:60%"></div></div>
+<div class="skel-card"><div class="skel skel-line" style="width:30%;height:16px;margin-bottom:12px"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+  </div></div>`;
   switch(sub) {
     // SECTION A
     case 'agenda':      main.innerHTML=vAgenda(); setTimeout(()=>initCal(),60); break;
     case 'tareas':      main.innerHTML=vTareas(); break;
     case 'nuevaTarea':  taskType='';eisUrgente=null;eisImportante=null;main.innerHTML=vNuevaTarea(); break;
-    case 'sesion':      main.innerHTML=vSesion(); break;
-    case 'revision':    main.innerHTML='<div class="emp"><span class="ei">⏳</span>Cargando…</div>';
+    case 'confirmar':   main.innerHTML=vConfirmarBloque(); break;
+    case 'sesion_libre':main.innerHTML=vSesion(); break;
+    case 'revision':    main.innerHTML=`<div class="skel-card"><div class="skel skel-line" style="width:40%;height:20px;margin-bottom:16px"></div>
+  <div class="skel skel-line" style="width:100%"></div><div class="skel skel-line" style="width:80%"></div>
+  <div class="skel skel-line" style="width:60%"></div></div>
+<div class="skel-card"><div class="skel skel-line" style="width:30%;height:16px;margin-bottom:12px"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+  </div></div>`;
                         vWeeklyReview().then(h=>{main.innerHTML=h;}); break;
     // SECTION B
-    case 'dPlan':       main.innerHTML='<div class="emp"><span class="ei">⏳</span>Cargando…</div>';
-                        vDashPlan().then(h=>{main.innerHTML=h;}); break;
-    case 'dRend':       main.innerHTML='<div class="emp"><span class="ei">⏳</span>Cargando…</div>';
-                        vDashRend().then(h=>{main.innerHTML=h;}); break;
-    case 'dCostos':     main.innerHTML='<div class="emp"><span class="ei">⏳</span>Cargando…</div>';
-                        vDashCostos().then(h=>{main.innerHTML=h;}); break;
-    case 'dGlobal':     main.innerHTML=vGlobal(); setTimeout(()=>renderKanban(),50); break;
+    case 'dPlan':
+      main.innerHTML=`<div class="skel-card"><div class="skel skel-line" style="width:40%;height:20px;margin-bottom:16px"></div>
+  <div class="skel skel-line" style="width:100%"></div><div class="skel skel-line" style="width:80%"></div>
+  <div class="skel skel-line" style="width:60%"></div></div>
+<div class="skel-card"><div class="skel skel-line" style="width:30%;height:16px;margin-bottom:12px"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+  </div></div>`;
+      vDashPlan().then(h=>{main.innerHTML=h;setTimeout(()=>applyDashFilter('plan'),80);}); break;
+    case 'dRend':
+      main.innerHTML=`<div class="skel-card"><div class="skel skel-line" style="width:40%;height:20px;margin-bottom:16px"></div>
+  <div class="skel skel-line" style="width:100%"></div><div class="skel skel-line" style="width:80%"></div>
+  <div class="skel skel-line" style="width:60%"></div></div>
+<div class="skel-card"><div class="skel skel-line" style="width:30%;height:16px;margin-bottom:12px"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+  </div></div>`;
+      vDashRend().then(h=>{main.innerHTML=h;setTimeout(()=>applyDashFilter('rend'),80);}); break;
+    case 'dCostos':
+      main.innerHTML=`<div class="skel-card"><div class="skel skel-line" style="width:40%;height:20px;margin-bottom:16px"></div>
+  <div class="skel skel-line" style="width:100%"></div><div class="skel skel-line" style="width:80%"></div>
+  <div class="skel skel-line" style="width:60%"></div></div>
+<div class="skel-card"><div class="skel skel-line" style="width:30%;height:16px;margin-bottom:12px"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+  </div></div>`;
+      vDashCostos().then(h=>{main.innerHTML=h;setTimeout(()=>applyDashFilter('costos'),80);}); break;
+    case 'dGlobal':
+      main.innerHTML=vGlobal();
+      setTimeout(()=>applyDashFilter('global'),80); break;
     // SECTION C
     case 'cRegistros':  main.innerHTML=vCRegistros(); setTimeout(()=>initRegistros(),50); break;
-    case 'cUsuarios':   main.innerHTML='<div class="emp"><span class="ei">⏳</span>Cargando…</div>';
+    case 'cUsuarios':   main.innerHTML=`<div class="skel-card"><div class="skel skel-line" style="width:40%;height:20px;margin-bottom:16px"></div>
+  <div class="skel skel-line" style="width:100%"></div><div class="skel skel-line" style="width:80%"></div>
+  <div class="skel skel-line" style="width:60%"></div></div>
+<div class="skel-card"><div class="skel skel-line" style="width:30%;height:16px;margin-bottom:12px"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+    <div class="skel" style="height:70px;border-radius:8px"></div>
+  </div></div>`;
                         vCUsuarios().then(h=>{main.innerHTML=h;}); break;
     case 'cConfig':     main.innerHTML=vCConfig(); setTimeout(()=>initConfig(),50); break;
   }
@@ -1145,20 +1230,27 @@ function vNuevaTarea() {
   const hora=new Date().toTimeString().slice(0,5);
   return`
   <div class="ph"><div class="pt"><div class="rb"></div>Nueva Tarea</div></div>
+
   <div class="card">
-    <div class="cl"><div class="d"></div>Tipo de tarea ${tip('Express: se hace ahora mismo en pocos minutos. Planificada: requiere más tiempo o se hará después.')}</div>
-    <div class="tt-grid">
+    <div class="cl"><div class="d"></div>Tipo de tarea ${tip('Express: se hace ahora mismo en pocos minutos. Simple: un día, un bloque. Compuesta: múltiples bloques en varios días.')}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
       <div class="tt-btn ex" id="ttE" onclick="setTT('express')">
         <span class="tt-ico">⚡</span><div class="tt-name">Express</div>
-        <div class="tt-desc">Se hace ahora mismo<br><em style="font-size:9px">orientativo: pocos minutos</em></div>
+        <div class="tt-desc">Se hace ahora<br><em style="font-size:9px">orientativo: menos de 3 min o acción inmediata</em></div>
       </div>
-      <div class="tt-btn pl" id="ttP" onclick="setTT('planned')">
-        <span class="tt-ico">📋</span><div class="tt-name">Planificada</div>
-        <div class="tt-desc">Requiere más tiempo<br>o se hace después</div>
+      <div class="tt-btn pl" id="ttS" onclick="setTT('simple')">
+        <span class="tt-ico">📋</span><div class="tt-name">Simple</div>
+        <div class="tt-desc">Un día<br>Un bloque de tiempo</div>
+      </div>
+      <div class="tt-btn pl" id="ttC" onclick="setTT('compuesta')">
+        <span class="tt-ico">📦</span><div class="tt-name">Compuesta</div>
+        <div class="tt-desc">Varios días o<br>múltiples bloques</div>
       </div>
     </div>
   </div>
+
   <div id="fmTarea" style="display:none">
+    <!-- IDENTIFICACIÓN -->
     <div class="card">
       <div class="cl"><div class="d"></div>Identificación</div>
       <div class="g2">
@@ -1176,6 +1268,8 @@ function vNuevaTarea() {
         </div>
       </div>
     </div>
+
+    <!-- CLASIFICACIÓN -->
     <div class="card">
       <div class="cl"><div class="d"></div>Clasificación</div>
       <div class="g2">
@@ -1188,15 +1282,15 @@ function vNuevaTarea() {
           <select id="tTip" onchange="clearErr(['tTip'])"><option value="">— seleccionar —</option>${opts('Tipo')}</select>
         </div>
         <div class="fi">
-          <label class="rq">HH Planificadas ${tip('Horas estimadas. Se compara con el tiempo real para medir eficiencia.')}</label>
-          <input type="number" id="tHHp" placeholder="Ej: 2.5" step="0.25" min="0.25" oninput="clearErr(['tHHp']);calcFechaTermino()">
+          <label class="rq">HH Planificadas ${tip('Horas estimadas. Base para calcular hora término y medir eficiencia real vs plan.')}</label>
+          <input type="number" id="tHHp" placeholder="Ej: 2.5" step="0.25" min="0.25" oninput="clearErr(['tHHp']);calcTerminoSimple()">
         </div>
         <div class="fi">
-          <label>Fecha límite ${tip('Fecha máxima para entregar. Genera alerta si se acerca o vence.')}</label>
+          <label>Fecha límite ${tip('Fecha máxima de entrega. Genera alertas si se acerca o vence.')}</label>
           <input type="date" id="tFco">
         </div>
         <div class="fi fw" id="divEis">
-          <label>Clasificación ${tip('Urgente = requiere acción inmediata. Importante = impacto significativo en objetivos.')}</label>
+          <label>Clasificación ${tip('Urgente = requiere acción inmediata. Importante = impacto en objetivos.')}</label>
           <div class="eis-row">
             <div class="eis-half">
               <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;margin-bottom:5px">¿Es urgente?</div>
@@ -1217,29 +1311,47 @@ function vNuevaTarea() {
         </div>
       </div>
     </div>
-    <div class="card" id="cardProg">
-      <div class="cl"><div class="d"></div>Programación ${tip('Opcional al crear: puedes programar ahora o en las próximas 24 horas. Si no programas, recibirás alerta.')}</div>
+
+    <!-- PROGRAMACIÓN (simple) -->
+    <div class="card" id="cardProgSimple" style="display:none">
+      <div class="cl"><div class="d"></div>Programación ${tip('Opcional al crear. Tienes hasta 24 horas para programar. Si no lo haces, recibirás alerta.')}</div>
       <div class="g2">
         <div class="fi">
-          <label>Fecha de ejecución ${tip('¿Cuándo planeas ejecutar? Si es futura, quedará como Programada.')}</label>
-          <input type="date" id="tFej" value="${hoy}" onchange="calcFechaTermino()">
+          <label>Fecha de ejecución ${tip('Cuándo ejecutarás esta tarea.')}</label>
+          <input type="date" id="tFej" value="${hoy}" onchange="calcTerminoSimple()">
         </div>
         <div class="fi">
-          <label>Hora inicio ${tip('Hora en que comenzarás a trabajar. Junto a HH planificadas calcula el término estimado.')}</label>
-          <input type="time" id="tHini" onchange="calcFechaTermino()">
+          <label>Hora inicio ${tip('Hora en que comenzarás.')}</label>
+          <input type="time" id="tHini" onchange="calcTerminoSimple()">
         </div>
         <div class="fi">
-          <label>Hora término estimada ${tip('Se calcula automáticamente con hora inicio + HH planificadas.')}</label>
+          <label>Hora término ${tip('Calculada automáticamente: hora inicio + HH planificadas.')}</label>
           <input type="time" id="tHter" readonly style="background:#f0f0f0;color:var(--muted)">
         </div>
-        <div class="fi fw">
-          <label>Comentario ${tip('Notas adicionales o contexto relevante.')}</label>
+        <div class="fi">
+          <label>Comentario</label>
           <input type="text" id="tCom" placeholder="Notas adicionales (opcional)">
         </div>
       </div>
+      <div id="alProgSimple" style="margin-top:8px"></div>
     </div>
+
+    <!-- PROGRAMACIÓN (compuesta) -->
+    <div class="card" id="cardProgComp" style="display:none">
+      <div class="cl"><div class="d"></div>Programación — Bloques ${tip('Agrega cada bloque de trabajo. Puedes también programar arrastrando desde la Agenda.')}</div>
+      <div id="bloquesContainer"></div>
+      <button class="btn sm ghost" style="margin-top:8px" onclick="agregarBloque()">
+        <span class="bt">＋ Agregar bloque</span>
+      </button>
+      <div class="fi" style="margin-top:10px">
+        <label>Comentario</label>
+        <input type="text" id="tComC" placeholder="Notas adicionales (opcional)">
+      </div>
+    </div>
+
+    <!-- EXPRESS: tiempo ejecutado ahora -->
     <div class="card" id="cardExp" style="display:none">
-      <div class="cl"><div class="d"></div>Tiempo ejecutado ${tip('Ingresa horario real. Las HH se calculan automáticamente y la tarea queda cerrada.')}</div>
+      <div class="cl"><div class="d"></div>Tiempo ejecutado ${tip('Ingresa horario real. Se crea bloque confirmado y la tarea queda cerrada.')}</div>
       <div class="g2">
         <div class="fi">
           <label class="rq">Hora inicio</label>
@@ -1250,17 +1362,89 @@ function vNuevaTarea() {
           <input type="time" id="tHterE" oninput="calcHHN();updAlExp()">
         </div>
         <div class="fi fw">
-          <div class="hhp"><div class="hhpl"><div class="l">HH calculadas</div><div class="s">Se crea sesión y cierra la tarea</div></div>
+          <div class="hhp"><div class="hhpl"><div class="l">HH calculadas</div><div class="s">Bloque confirmado · Tarea cerrada</div></div>
             <div class="hhv e" id="hhN">--</div></div>
         </div>
       </div>
       <div id="alExp" style="margin-top:8px"></div>
     </div>
+
     <button class="btn w" id="btnT" onclick="guardarTarea()">
       <div class="sp"></div><div class="st"></div><span class="bt" id="btnTTxt">Guardar</span>
     </button>
   </div>`;
 }
+
+let bloques = []; // [{fecha, inicio, termino}]
+
+function setTT(type) {
+  taskType=type;
+  document.getElementById('ttE')?.classList.toggle('on', type==='express');
+  document.getElementById('ttS')?.classList.toggle('on', type==='simple');
+  document.getElementById('ttC')?.classList.toggle('on', type==='compuesta');
+  document.getElementById('fmTarea').style.display='block';
+  document.getElementById('cardExp').style.display         = type==='express'   ?'block':'none';
+  document.getElementById('cardProgSimple').style.display  = type==='simple'    ?'block':'none';
+  document.getElementById('cardProgComp').style.display    = type==='compuesta' ?'block':'none';
+  const lbl = type==='express'?'⚡ Guardar y cerrar':type==='simple'?'📋 Guardar tarea simple':'📦 Guardar tarea compuesta';
+  document.getElementById('btnTTxt').textContent=lbl;
+  if(type==='express') { setEis('u',true); setEis('i',true); }
+  if(type==='compuesta') { bloques=[]; renderBloques(); }
+}
+
+function calcTerminoSimple() {
+  const ini=document.getElementById('tHini')?.value;
+  const hhp=parseFloat(document.getElementById('tHHp')?.value)||0;
+  const ter=document.getElementById('tHter');
+  if(ini&&hhp&&ter){
+    const endMin=t2m(ini)+Math.round(hhp*60);
+    ter.value=m2t(endMin%1440);
+  }
+  // Show overlap/gap alerts
+  const fej=document.getElementById('tFej')?.value;
+  const tHter=document.getElementById('tHter')?.value;
+  const c=document.getElementById('alProgSimple');
+  if(c&&fej&&ini&&tHter) c.innerHTML=renderAlerts(activeUser(),fej,ini,tHter);
+}
+
+// Bloques for compuesta
+function renderBloques() {
+  const cont=document.getElementById('bloquesContainer'); if(!cont)return;
+  if(bloques.length===0){
+    cont.innerHTML=`<div style="font-size:12px;color:var(--muted);padding:8px;text-align:center">
+      Sin bloques. Agrega bloques aquí o arrastra desde la Agenda después de guardar.</div>`;
+    return;
+  }
+  cont.innerHTML=bloques.map((b,i)=>`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:flex-end;margin-bottom:8px;padding:10px;background:var(--inp);border-radius:6px;border:1px solid var(--border)">
+      <div class="fi"><label>Fecha</label>
+        <input type="date" value="${b.fecha}" onchange="bloques[${i}].fecha=this.value;updBloque(${i})"></div>
+      <div class="fi"><label>Hora inicio</label>
+        <input type="time" value="${b.inicio}" onchange="bloques[${i}].inicio=this.value;updBloque(${i})"></div>
+      <div class="fi"><label>Hora término</label>
+        <input type="time" value="${b.termino}" onchange="bloques[${i}].termino=this.value"></div>
+      <button class="btn danger sm" style="margin-bottom:0;align-self:flex-end" onclick="bloques.splice(${i},1);renderBloques()">✕</button>
+    </div>`).join('');
+}
+
+function agregarBloque() {
+  const hoy=todayStr(), hora=new Date().toTimeString().slice(0,5);
+  const hhp=parseFloat(document.getElementById('tHHp')?.value)||1;
+  const termino=m2t((t2m(hora)+Math.round(hhp*60))%1440);
+  bloques.push({fecha:hoy, inicio:hora, termino});
+  renderBloques();
+}
+
+function updBloque(i) {
+  const b=bloques[i];
+  if(b.inicio&&b.fecha){
+    const hhp=parseFloat(document.getElementById('tHHp')?.value)||1;
+    const endMin=t2m(b.inicio)+Math.round(hhp*60);
+    bloques[i].termino=m2t(endMin%1440);
+    renderBloques();
+  }
+}
+
 
 function setTT(type) {
   taskType=type;
@@ -2320,6 +2504,11 @@ async function guardarTarea() {
   const estado=taskType==='express'?'En Proceso':(fej&&fej>fec?'Programada':'Por Iniciar');
   const urg=eisUrgente===true?'Si':eisUrgente===false?'No':'';
   const imp=eisImportante===true?'Si':eisImportante===false?'No':'';
+  // Determine fechaEjecucion based on task type
+  let fechaEjec='';
+  if(taskType==='simple') fechaEjec=document.getElementById('tFej')?.value||'';
+  else if(taskType==='compuesta'&&bloques.length>0) fechaEjec=bloques[0].fecha||'';
+  const comField = taskType==='compuesta'?document.getElementById('tComC')?.value:document.getElementById('tCom')?.value;
   const fila=[nextId,activeUser(),
     document.getElementById('tTar').value.trim(),
     document.getElementById('tSol')?.value||'',
@@ -2327,14 +2516,27 @@ async function guardarTarea() {
     urg,imp,
     parseFloat(document.getElementById('tHHp').value)||'',
     fec,document.getElementById('tFco')?.value||'',estado,
-    document.getElementById('tCom')?.value||'',0,0,
-    document.getElementById('tFej')?.value||''];
+    comField||'',0,0,
+    fechaEjec];
   try {
     await apiPost({accion:'insertar',tabla:'Tareas',fila});
     const nt={id:nextId,nombre:activeUser(),tarea:fila[2],solicitante:fila[3],area:fila[4],tipo:fila[5],
       urgente:fila[6],importante:fila[7],hhPlan:fila[8],fechaIngreso:fec,fechaComp:fila[10],
       estado,comentario:fila[12],hhReal:0,nSes:0,fechaEjecucion:fila[15]};
     TAREAS.push(nt);
+    // For compuesta: save each block as a planned session stub
+    if(taskType==='compuesta'&&bloques.length>0) {
+      for(const b of bloques) {
+        if(b.fecha&&b.inicio&&b.termino) {
+          const hhB=calcHHRaw(b.inicio,b.termino);
+          // Save as a planned marker - use comentario to mark as planned
+          await apiPost({accion:'insertar',tabla:'Sesiones',
+            fila:[nextId,fila[2],activeUser(),b.fecha,b.inicio,b.termino,hhB,'[Bloque planificado]',fec,'No','']});
+          SESIONES.push({tareaId:nextId,tareaNombre:fila[2],responsable:activeUser(),
+            fecha:b.fecha,inicio:b.inicio,termino:b.termino,hh:hhB,comentario:'[Bloque planificado]',esExtra:'No',motivoExtra:''});
+        }
+      }
+    }
     if(taskType==='express'){
       const ini=document.getElementById('tHinE').value,ter=document.getElementById('tHterE').value;
       const hh=calcHHRaw(ini,ter);
@@ -2348,8 +2550,7 @@ async function guardarTarea() {
     } else {toast('📋 Tarea guardada · '+estado,'ok');}
     nextId++;
     await apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario});
-    // Refresh alert count
-    await loadData();
+    invalidateCache(); await loadData(true);
     taskType='';eisUrgente=null;eisImportante=null;
     goSub('A','nuevaTarea');
   }catch(e){toast('Error al guardar','er');}
@@ -2381,6 +2582,7 @@ async function guardarSesion() {
       SESIONES.push({tareaId:tid,tareaNombre:t.tarea,responsable:activeUser(),fecha:fec,inicio:ini,termino:ter,hh,esExtra:esExtra?'Sí':'No',motivoExtra:motExtra});
     }
     await apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario});
+    invalidateCache();
     esExtra=false;toast(`Sesión registrada: ${hh}h`,'ok');goSub('A','sesion');
   }catch(e){toast('Error al guardar','er');}
   if(btn){btn.disabled=false;btn.classList.remove('ld');}
@@ -2455,6 +2657,221 @@ function irSesion(id){
   setTimeout(()=>{const dd=document.getElementById('sTid');if(dd){dd.value=id;prevTarea();}},150);
 }
 
+
+// ══════════════════════════════════════════════════════════
+// CONFIRMAR BLOQUE (replaces vSesion)
+// ══════════════════════════════════════════════════════════
+function vConfirmarBloque() {
+  const hoy=todayStr();
+  const me=activeUser();
+  // Get programmed blocks: sessions with no confirmation yet
+  // Also get tasks with fechaEjecucion today or past that aren't Listo
+  const pendientes=(activeRol()==='admin'&&!VIEW_AS?TAREAS:TAREAS.filter(t=>t.nombre===me))
+    .filter(t=>!['Listo','Cancelado'].includes(t.estado)&&t.fechaEjecucion)
+    .sort((a,b)=>(a.fechaEjecucion>b.fechaEjecucion?1:-1));
+
+  const pasadas=pendientes.filter(t=>t.fechaEjecucion<=hoy);
+  const futuras=pendientes.filter(t=>t.fechaEjecucion>hoy);
+
+  const motivoExtraOpts=(LISTAS['MotivoExtra']||['Cumplir plazo','Urgencia cliente','Otro'])
+    .map(m=>`<option value="${m}">${m}</option>`).join('');
+
+  const renderItem = t => {
+    const isHoy = t.fechaEjecucion===hoy;
+    const sesExist = SESIONES.filter(s=>String(s.tareaId)===String(t.id)&&dateStr(s.fecha)===t.fechaEjecucion);
+    const hhEjec = sesExist.reduce((s,se)=>s+(parseFloat(se.hh)||0),0);
+    return `
+    <div class="ti2" style="flex-direction:column;align-items:stretch;gap:8px;cursor:default;${isHoy?'border-color:var(--navy3)':''}">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="tid">#${t.id}</span>
+        <div class="tn2">
+          <div class="tna">${t.tarea}</div>
+          <div class="tme">${t.nombre} · ${t.tipo||'—'} · Prog: ${t.fechaEjecucion} · HHP:${t.hhPlan||'—'}</div>
+        </div>
+        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+        ${hhEjec>0?`<span class="badge bl">✓ ${hhEjec}h</span>`:''}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:flex-end">
+        <div class="fi"><label>Fecha real</label>
+          <input type="date" id="cf_fec_${t.id}" value="${t.fechaEjecucion}"></div>
+        <div class="fi"><label class="rq">Hora inicio real</label>
+          <input type="time" id="cf_ini_${t.id}" oninput="calcHHCF('${t.id}');updAlCF('${t.id}')"></div>
+        <div class="fi"><label class="rq">Hora término real</label>
+          <input type="time" id="cf_ter_${t.id}" oninput="calcHHCF('${t.id}');updAlCF('${t.id}')"></div>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+          <div class="hhv e" id="cf_hh_${t.id}" style="font-size:14px">--</div>
+          <div style="font-size:9px;color:var(--muted)">hrs</div>
+        </div>
+      </div>
+      <div id="cf_al_${t.id}"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="cf_com_${t.id}" placeholder="¿Qué se avanzó? (opcional)"
+          style="flex:1;min-width:140px;background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:7px 9px;font-size:12px">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" id="cf_ex_${t.id}" onchange="toggleExtraCF('${t.id}')"> ⏰ Hora extra
+        </label>
+        <select id="cf_mot_${t.id}" style="display:none;background:var(--inp);border:1.5px solid var(--border);border-radius:5px;padding:6px 20px 6px 8px;font-size:12px">
+          <option value="">— Motivo extra —</option>${motivoExtraOpts}
+        </select>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn sm" onclick="confirmarBloque('${t.id}',false)" style="flex:1">
+          <span class="st"></span><span class="bt">✅ Confirmar bloque</span>
+        </button>
+        <button class="btn sm" onclick="confirmarBloque('${t.id}',true)" style="flex:1;background:var(--green)">
+          <span class="bt">✅ Confirmar y cerrar tarea</span>
+        </button>
+      </div>
+    </div>`;
+  };
+
+  return `
+  <div class="ph"><div class="pt"><div class="rb"></div>Confirmar Bloques</div>
+    <div class="pd">Confirma los bloques programados con tu tiempo real ejecutado.</div></div>
+
+  ${pasadas.length>0?`
+  <div class="card">
+    <div class="cl"><div class="d"></div>⚡ Para confirmar hoy y vencidos (${pasadas.length})</div>
+    <div style="display:flex;flex-direction:column;gap:10px">${pasadas.map(renderItem).join('')}</div>
+  </div>`:'<div class="al ok" style="margin-bottom:12px"><span class="al-ico">✅</span><div class="al-txt">Sin bloques pendientes de confirmar</div></div>'}
+
+  ${futuras.length>0?`
+  <div class="card">
+    <div class="cl"><div class="d"></div>📅 Programados próximamente (${futuras.length})</div>
+    <div class="tl">${futuras.map(t=>`
+      <div class="ti2" onclick="abrirModal(${t.id})">
+        <span class="tid">#${t.id}</span>
+        <div class="tn2"><div class="tna">${t.tarea}</div>
+          <div class="tme">${t.nombre} · Programado: ${t.fechaEjecucion} · HHP:${t.hhPlan||'—'}</div></div>
+        <span class="badge bpr">Prog.</span>
+      </div>`).join('')}
+    </div>
+  </div>`:''}
+
+  <div style="margin-top:12px">
+    <button class="btn sm ghost w" onclick="goSub('A','sesion_libre')">
+      <span class="bt">+ Registrar sesión libre (sin bloque programado)</span>
+    </button>
+  </div>`;
+}
+
+function calcHHCF(tid) {
+  const i=document.getElementById('cf_ini_'+tid)?.value;
+  const f=document.getElementById('cf_ter_'+tid)?.value;
+  const el=document.getElementById('cf_hh_'+tid); if(!el)return;
+  if(!i||!f){el.textContent='--';el.className='hhv e';return;}
+  const h=calcHHRaw(i,f);
+  el.textContent=h.toFixed(2);el.className='hhv';
+}
+function updAlCF(tid) {
+  const i=document.getElementById('cf_ini_'+tid)?.value;
+  const f=document.getElementById('cf_ter_'+tid)?.value;
+  const fec=document.getElementById('cf_fec_'+tid)?.value;
+  const c=document.getElementById('cf_al_'+tid);
+  if(c)c.innerHTML=renderAlerts(activeUser(),fec||'',i||null,f||null);
+}
+function toggleExtraCF(tid) {
+  const chk=document.getElementById('cf_ex_'+tid)?.checked;
+  const mot=document.getElementById('cf_mot_'+tid);
+  if(mot)mot.style.display=chk?'block':'none';
+}
+
+async function confirmarBloque(tid, cerrar=false) {
+  const ini=document.getElementById('cf_ini_'+tid)?.value;
+  const ter=document.getElementById('cf_ter_'+tid)?.value;
+  const fec=document.getElementById('cf_fec_'+tid)?.value||todayStr();
+  if(!ini||!ter){toast('Ingresa hora inicio y término','er');return;}
+  const cfx=checkOverlap(activeUser(),fec,ini,ter);
+  if(cfx.length>0&&!document.getElementById('chkOvlp')?.checked){
+    toast('Confirma el traslape en la alerta','er');return;
+  }
+  const hh=calcHHRaw(ini,ter);
+  if(!hh||hh<=0){toast('Verifica los horarios','er');return;}
+  const esEx=document.getElementById('cf_ex_'+tid)?.checked||false;
+  const motEx=esEx?(document.getElementById('cf_mot_'+tid)?.value||''):'';
+  const com=document.getElementById('cf_com_'+tid)?.value||'';
+  const t=TAREAS.find(x=>String(x.id)===String(tid));
+  const hoy=todayStr();
+  await apiPost({accion:'insertar',tabla:'Sesiones',
+    fila:[tid,t?.tarea||'',activeUser(),fec,ini,ter,hh,com,hoy,esEx?'Sí':'No',motEx]});
+  if(t){
+    const idx=TAREAS.findIndex(x=>String(x.id)===String(tid));
+    const nHH=Math.round(((parseFloat(t.hhReal)||0)+hh)*100)/100;
+    const nN=(parseInt(t.nSes)||0)+1;
+    const nuevoCampos=cerrar?{13:nHH,14:nN,11:'Listo'}:{13:nHH,14:nN};
+    await apiPost({accion:'actualizar',tabla:'Tareas',id:tid,campos:nuevoCampos});
+    if(idx>-1){TAREAS[idx].hhReal=nHH;TAREAS[idx].nSes=nN;if(cerrar)TAREAS[idx].estado='Listo';}
+    SESIONES.push({tareaId:tid,tareaNombre:t.tarea,responsable:activeUser(),fecha:fec,inicio:ini,termino:ter,hh,esExtra:esEx?'Sí':'No',motivoExtra:motEx});
+  }
+  await apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario});
+  invalidateCache();
+  toast(cerrar?'Bloque confirmado y tarea cerrada ✅':`Bloque confirmado: ${hh}h`,'ok');
+  main.innerHTML=vConfirmarBloque();
+}
+
+
+// Sesión libre (sin bloque programado)
+function vSesion() {
+  const hoy=todayStr();
+  const act=(activeRol()==='admin'&&!VIEW_AS?TAREAS:TAREAS.filter(t=>t.nombre===activeUser()))
+    .filter(t=>!['Listo','Cancelado'].includes(t.estado))
+    .sort((a,b)=>(parseInt(b.id)||0)-(parseInt(a.id)||0));
+  const ddOpts=act.length===0?'<option value="">— sin tareas activas —</option>'
+    :'<option value="">— seleccionar —</option>'+
+      act.map(t=>`<option value="${t.id}">#${t.id} · ${t.tarea.substring(0,55)}${t.tarea.length>55?'…':''}</option>`).join('');
+  const motivoExtraOpts=(LISTAS['MotivoExtra']||['Cumplir plazo','Urgencia cliente','Otro'])
+    .map(m=>`<option value="${m}">${m}</option>`).join('');
+  return`
+  <div class="ph"><div class="pt"><div class="rb"></div>Registrar Sesión Libre</div>
+    <div class="pd">Para registrar tiempo trabajado sin bloque programado previo.</div></div>
+  <div class="card">
+    <div class="cl"><div class="d"></div>Tarea y fecha</div>
+    <div class="g2">
+      <div class="fi fw"><label class="rq">Tarea activa ${tip('Solo aparecen tareas no cerradas.')}</label>
+        <select id="sTid" onchange="prevTarea();updAlSes()">${ddOpts}</select>
+        <div class="prev" id="tPrev">Selecciona una tarea</div>
+      </div>
+      <div class="fi"><label class="rq">Fecha</label>
+        <input type="date" id="sFec" value="${hoy}" onchange="updAlSes()"></div>
+      <div class="fi"><label>Responsable</label>
+        <input id="sNom" value="${activeUser()}" readonly style="background:#f0f0f0;color:var(--muted)"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="cl"><div class="d"></div>Horario</div>
+    <div class="g2">
+      <div class="fi"><label class="rq">Hora inicio</label>
+        <input type="time" id="sIni" oninput="calcHHS();updAlSes()"></div>
+      <div class="fi"><label class="rq">Hora término</label>
+        <input type="time" id="sTer" oninput="calcHHS();updAlSes()"></div>
+      <div class="fi fw">
+        <div class="hhp"><div class="hhpl"><div class="l">HH calculadas</div></div>
+          <div class="hhv e" id="hhS">--</div></div>
+      </div>
+      <div class="fi fw"><label>¿Qué se avanzó?</label>
+        <input type="text" id="sCom" placeholder="Ej: Revisé dimensiones…"></div>
+      <div class="fi fw">
+        <label>¿Es hora extra?</label>
+        <div style="display:flex;gap:10px">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px">
+            <input type="radio" name="extra" id="sExN" value="No" checked onchange="setExtra(false)"> Normal
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px">
+            <input type="radio" name="extra" id="sExS" value="Sí" onchange="setExtra(true)"> ⏰ Hora extra
+          </label>
+        </div>
+        <select id="sMotExtra" style="display:none;margin-top:6px;background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:7px 20px 7px 9px;font-size:13px;width:100%">
+          <option value="">— Motivo hora extra —</option>${motivoExtraOpts}
+        </select>
+      </div>
+    </div>
+    <div id="alSes" style="margin-top:8px"></div>
+  </div>
+  <button class="btn w" id="btnS" onclick="guardarSesion()">
+    <div class="sp"></div><div class="st"></div><span class="bt">Registrar</span>
+  </button>`;
+}
+
 // ── FILTER INIT ───────────────────────────────────────────
 // Auto-apply dashboard filters on load
 document.addEventListener('click',function(e){
@@ -2464,14 +2881,7 @@ document.addEventListener('click',function(e){
 
 
 // ── Auto-apply dashboard filters on first render ──────────────────────
-const _origGoSub = goSub;
-async function goSub(sec, sub) {
-  await _origGoSub(sec, sub);
-  // After render, apply initial filter for dashboard panels
-  if (['dPlan','dRend','dCostos','dGlobal'].includes(sub)) {
-    setTimeout(() => applyDashFilter(sub.replace('d','').toLowerCase()), 100);
-  }
-}
+// Dashboard filters applied inline in goSub cases above
 </script>
 </body>
 </html>
