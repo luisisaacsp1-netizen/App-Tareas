@@ -7,11 +7,10 @@ const SS = SpreadsheetApp.getActiveSpreadsheet();
 
 // ── Encabezados por hoja ────────────────────────────────────────
 const HEADERS = {
-  Tareas:   ['ID','Nombre','Tarea','Solicitante','Area','Tipo','Prioridad',
-             'HH_Plan','FechaIngreso','FechaCompromiso','FechaEjecucion','Estado','Comentario',
-             'HH_Real','N_Sesiones'],
+  Tareas:   ['ID','Nombre','Tarea','Solicitante','Area','Tipo','Urgente','Importante',
+             'HH_Plan','FechaIngreso','FechaComp','Estado','Comentario','HH_Real','N_Sesiones','FechaEjecucion'],
   Sesiones: ['TareaID','TareaNombre','Responsable','Fecha',
-             'HoraInicio','HoraTermino','HH_Sesion','Comentario','FechaRegistro'],
+             'HoraInicio','HoraTermino','HH_Sesion','Comentario','FechaRegistro','EsExtra','MotivoExtra'],
   Usuarios: ['Usuario','Nombre','Password','Rol','UltimoRegistro'],
   Listas:   ['Tipo','Valor'],
   Config:   ['Clave','Valor'],
@@ -108,6 +107,8 @@ function doGet(e) {
     resultado = obtenerCumplimiento();
   } else if (accion === 'dashboard') {
     resultado = obtenerDashboard(e.parameter.desde, e.parameter.hasta);
+  } else if (accion === 'gestionUsuario') {
+    resultado = gestionUsuario(data);
   } else if (accion === 'reprogramar') {
     resultado = registrarReprogramacion(data);
   } else if (accion === 'eliminarSesion') {
@@ -149,6 +150,8 @@ function doPost(e) {
     resultado = guardarLista(data.items);
   } else if (accion === 'actualizarUltimoRegistro') {
     resultado = actualizarUltimoRegistro(data.usuario);
+  } else if (accion === 'gestionUsuario') {
+    resultado = gestionUsuario(data);
   } else if (accion === 'reprogramar') {
     resultado = registrarReprogramacion(data);
   } else if (accion === 'eliminarSesion') {
@@ -660,9 +663,36 @@ function obtenerWeeklyReview(usuario) {
 }
 
 
+
+// ── Gestión de usuarios ───────────────────────────────────────────────
+function gestionUsuario(data) {
+  const sheet = SS.getSheetByName('Usuarios');
+  if (!sheet) return { ok: false };
+  const rows = sheet.getDataRange().getValues();
+
+  if (!data.usuarioOrig) {
+    // New user
+    sheet.appendRow([data.usuario, data.nombre, data.pass, data.rol, '']);
+    return { ok: true };
+  }
+
+  // Edit existing
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === data.usuarioOrig) {
+      sheet.getRange(i+1, 1).setValue(data.usuario);
+      sheet.getRange(i+1, 2).setValue(data.nombre);
+      if (data.pass) sheet.getRange(i+1, 3).setValue(data.pass);
+      sheet.getRange(i+1, 4).setValue(data.rol);
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: 'Usuario no encontrado' };
+}
+
 // ── Helper JSON response ────────────────────────────────────────
 function jsonResponse(data) {
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
