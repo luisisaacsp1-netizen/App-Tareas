@@ -670,7 +670,13 @@ function overlaps(s1,e1,s2,e2){return s1<e2&&s2<e1;}
 function getSessOnDate(nombre,date){
   return SESIONES.filter(s=>{
     if(s.responsable!==nombre) return false;
-    const fd = s._dateNorm || dateStr(s.fecha);
+    const fd = s._dateNorm || (()=>{
+      let d = s.fecha;
+      if(d instanceof Date) d = d.toISOString().split('T')[0];
+      else d = String(d||'').substring(0,10);
+      s._dateNorm = d;
+      return d;
+    })();
     return fd === date;
   });
 }
@@ -1151,7 +1157,23 @@ function renderCal() {
 
   // Get sessions for this person in this date range
   const dateStrs=dates.map(d=>d.toISOString().split('T')[0]);
-  const relevantSessions=SESIONES.filter(s=>s.responsable===nombre&&dateStrs.includes(dateStr(s.fecha)));
+  // Normalize all session dates once before filtering
+  SESIONES.forEach(s => {
+    if(!s._dateNorm) {
+      let fd = s.fecha;
+      if(fd instanceof Date) fd = fd.toISOString().split('T')[0];
+      else fd = String(fd||'').substring(0,10);
+      s._dateNorm = (fd >= '2020-01-01' && fd <= '2099-12-31') ? fd : '';
+    }
+    // Also normalize times
+    if(s.inicio && String(s.inicio).length > 5) s.inicio = String(s.inicio).substring(0,5);
+    if(s.termino && String(s.termino).length > 5) s.termino = String(s.termino).substring(0,5);
+  });
+  const relevantSessions=SESIONES.filter(s=>
+    s.responsable===nombre &&
+    s._dateNorm &&
+    dateStrs.includes(s._dateNorm)
+  );
   // Get tasks with fechaEjecucion or fechaComp in range
   const relevantTasks=TAREAS.filter(t=>t.nombre===nombre&&(
     dateStrs.includes(dateStr(t.fechaEjecucion||''))||
@@ -1165,14 +1187,7 @@ function renderCal() {
     const totalWork=blks.reduce((s,b)=>s+(b.end-b.start),0)/60;
     // Count both planned and confirmed blocks for saturation
     // Include tasks with fechaEjecucion = this day even without sessions
-    const sessionsOnDay = relevantSessions.filter(s=>{
-      const fd=s._dateNorm||dateStr(s.fecha);
-      if(fd!==ds||!s.inicio||!s.termino) return false;
-      // Normalize time - strip seconds
-      s.inicio = String(s.inicio).substring(0,5);
-      s.termino = String(s.termino).substring(0,5);
-      return s.inicio.length===5&&s.termino.length===5;
-    });
+    const sessionsOnDay = relevantSessions.filter(s=>(s._dateNorm||dateStr(s.fecha))===ds&&s.inicio&&s.termino&&s.inicio.length<=5&&s.termino.length<=5);
     // Also add HH from tasks scheduled this day but no session yet
     const tasksOnDay = TAREAS.filter(t=>t.nombre===nombre&&t.fechaEjecucion===ds&&!['Listo','Cancelado'].includes(t.estado));
     const coveredFromSessions = sessionsOnDay.reduce((s,se)=>{ try{return s+calcHHRaw(se.inicio,se.termino);}catch(e){return s;} },0);
