@@ -3399,9 +3399,6 @@ async function guardarTarea() {
   const btn=document.getElementById('btnT');if(btn){btn.disabled=true;btn.classList.add('ld');}
   const fec=todayStr();
   const fej=document.getElementById('tFej')?.value||'';
-  const estado=taskType==='express'?'En Proceso':(fechaEjec?'Programada':'Por Iniciar');
-  const urg=eisUrgente===true?'Si':eisUrgente===false?'No':'';
-  const imp=eisImportante===true?'Si':eisImportante===false?'No':'';
   // Determine fechaEjecucion based on task type
   // For simple: only programmed if BOTH date AND start time are filled
   let fechaEjec='';
@@ -3413,6 +3410,11 @@ async function guardarTarea() {
   } else if(taskType==='compuesta'&&bloques.length>0) {
     fechaEjec=bloques[0].fecha||'';
   }
+
+  const estado=taskType==='express'?'En Proceso':(fechaEjec?'Programada':'Por Iniciar');
+  const urg=eisUrgente===true?'Si':eisUrgente===false?'No':'';
+  const imp=eisImportante===true?'Si':eisImportante===false?'No':'';
+
   const comField = taskType==='compuesta'?document.getElementById('tComC')?.value:document.getElementById('tCom')?.value;
   const fila=[nextId,SESSION.nombre,
     document.getElementById('tTar').value.trim(),
@@ -3427,8 +3429,13 @@ async function guardarTarea() {
   const express_ini = taskType_saved==='express' ? (document.getElementById('tHinE')?.value||'') : '';
   const express_ter = taskType_saved==='express' ? (document.getElementById('tHterE')?.value||'') : '';
 
+  // Show clear status to user
+  const statusEl = document.getElementById('btnTTxt');
+  if(statusEl) statusEl.textContent = 'Guardando... (puede tardar 5-10 seg)';
+
   try {
-    await apiPost({accion:'insertar',tabla:'Tareas',fila});
+    const result = await apiPost({accion:'insertar',tabla:'Tareas',fila});
+    if(statusEl) statusEl.textContent = 'Guardado ✅';
 
     const newId = nextId;
     const nt={id:newId,nombre:SESSION.nombre,tarea:fila[2],solicitante:fila[3],area:fila[4],tipo:fila[5],
@@ -3471,8 +3478,14 @@ async function guardarTarea() {
     toast(taskType_saved==='express'?'⚡ Express registrada':'✅ Tarea guardada','ok');
     taskType='';eisUrgente=null;eisImportante=null;
     goSub('A','agenda')
-  }catch(e){toast('Error al guardar','er');}
+  }catch(e){
+    console.error('guardarTarea error:', e);
+    toast('Error: ' + (e.message||'revisar conexión') + ' — intenta de nuevo','er');
+    const statusEl2=document.getElementById('btnTTxt');
+    if(statusEl2) statusEl2.textContent='Reintentar';
+  }
   if(btn){btn.disabled=false;btn.classList.remove('ld');}
+  const sf=document.getElementById('btnTTxt');if(sf&&sf.textContent==='Guardando... (puede tardar 5-10 seg)')sf.textContent='Guardar';
 }
 
 async function guardarSesion() {
@@ -3501,7 +3514,12 @@ async function guardarSesion() {
     await apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario});
     invalidateCache();
     esExtra=false;toast(`Sesión registrada: ${hh}h`,'ok');goSub('A','sesion');
-  }catch(e){toast('Error al guardar','er');}
+  }catch(e){
+    console.error('guardarTarea error:', e);
+    toast('Error: ' + (e.message||'revisar conexión') + ' — intenta de nuevo','er');
+    const statusEl2=document.getElementById('btnTTxt');
+    if(statusEl2) statusEl2.textContent='Reintentar';
+  }
   if(btn){btn.disabled=false;btn.classList.remove('ld');}
 }
 
