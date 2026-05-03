@@ -1046,18 +1046,10 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ═══════════════════════════════════════════════════════════════════
 
 function vAgenda() {
-  const isAdmin = SESSION.rol === 'admin';
-  // Build person options — admin gets selector, users see only themselves
-  const myName = SESSION.nombre;
-  const persOpts = isAdmin
-    ? ['Luis Sanchez','Luis Diaz','Yamila Silva']
-        .map(p=>`<option value="${p}" ${p===myName?'selected':''}>${shortName(p)}</option>`)
-        .join('')
-    : `<option value="${myName}">${shortName(myName)}</option>`;
-
   return `
   <div class="ph">
     <div class="pt"><div class="rb"></div>Agenda
+      <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px">${SESSION.nombre}</span>
       <span id="calPeriodLbl" style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px"></span>
     </div>
   </div>
@@ -1069,9 +1061,6 @@ function vAgenda() {
         <button class="tab on" id="cvS" onclick="calSwitchView('semana')">Semana</button>
         <button class="tab" id="cvM" onclick="calSwitchView('mes')">Mes</button>
       </div>
-    </div>
-    <div class="fb-f"><label>Persona</label>
-      <select id="calPers" onchange="calRender()" ${!isAdmin?'disabled style="background:#f0f0f0"':''}>${persOpts}</select>
     </div>
     <div style="margin-left:auto;display:flex;align-items:flex-end;gap:5px">
       <button class="btn sm ghost" onclick="calNav(-1)">◀</button>
@@ -1109,11 +1098,8 @@ let _calOffset = 0;
 const HOUR_H = 48;
 
 function calGetPerson() {
-  // SINGLE SOURCE OF TRUTH for calendar person
-  // Non-admin: always SESSION.nombre, no exceptions
-  if (SESSION.rol !== 'admin') return SESSION.nombre;
-  const el = document.getElementById('calPers');
-  return (el && el.value) ? el.value : SESSION.nombre;
+  // ALWAYS the logged-in user. No exceptions. No selector. No contamination.
+  return SESSION.nombre;
 }
 
 function initCal() {
@@ -1376,8 +1362,9 @@ function calRenderMes(dates, person, todayS) {
 }
 
 function calRefreshTray(person) {
+  const _p = SESSION.nombre; // always own tasks
   const unscheduled = TAREAS.filter(t =>
-    t.nombre === person &&
+    t.nombre === _p &&
     !t.fechaEjecucion &&
     !['Listo','Cancelado'].includes(t.estado)
   );
@@ -1674,13 +1661,8 @@ async function confirmarProgramacion(taskId) {
 
 function vConfirmarBloque(overridePers=null) {
   const hoy = todayStr();
-  const me  = overridePers || (SESSION.rol==='admin' ? SESSION.nombre : SESSION.nombre);
+  const me  = SESSION.nombre; // always own tasks
   const isAdmin = SESSION.rol === 'admin';
-
-  const persOpts = isAdmin
-    ? ['Luis Sanchez','Luis Diaz','Yamila Silva']
-        .map(p=>`<option value="${p}" ${p===me?'selected':''}>${shortName(p)}</option>`).join('')
-    : `<option value="${me}">${shortName(me)}</option>`;
 
   // Tasks with a programmed block whose date <= today (need confirmation)
   const pendientes = TAREAS
@@ -1766,12 +1748,7 @@ function vConfirmarBloque(overridePers=null) {
   <div class="ph"><div class="pt"><div class="rb"></div>Confirmar Bloques</div>
     <div class="pd">Bloques programados cuyo horario ya pasó. Confirma, reprograma o cancela.</div></div>
 
-  ${isAdmin?`<div class="fb" style="margin-bottom:12px">
-    <div class="fb-f"><label>Ver bloques de</label>
-      <select id="cfPers" onchange="document.getElementById('main').innerHTML=vConfirmarBloque(this.value)">
-        ${persOpts}
-      </select>
-    </div></div>`:''}
+
 
   ${pendientes.length===0
     ? '<div class="al ok"><span class="al-ico">✅</span><div class="al-txt"><strong>Sin bloques pendientes</strong>No hay bloques programados que necesiten confirmación.</div></div>'
@@ -2781,6 +2758,41 @@ function endTrayDrag(e) {
   setTimeout(()=>{ window._dragTaskId = null; }, 500);
 }
 
+
+function refreshTareasList() {
+  const q = document.getElementById('tarBusq')?.value?.toLowerCase()||'';
+  const me = SESSION.nombre;
+  const lista = TAREAS.filter(t=>t.nombre===me);
+  const act = lista.filter(t=>!['Listo','Cancelado'].includes(t.estado));
+  const cer = lista.filter(t=>['Listo','Cancelado'].includes(t.estado));
+  const filter = arr => q ? arr.filter(t=>t.tarea?.toLowerCase().includes(q)||String(t.id).includes(q)) : arr;
+  const actF = filter(act), cerF = filter(cer);
+  const rows = arr => arr.length===0
+    ? '<div class="emp"><span class="ei">📋</span>Sin tareas</div>'
+    : `<div class="tl">${arr.map(t=>`
+      <div class="ti2" onclick="abrirModal(${t.id})">
+        <span class="tid">#${t.id}</span>
+        <div class="tn2">
+          <div class="tna">${t.tarea}</div>
+          <div class="tme">${t.tipo||'—'} · ${t.area||'—'} · HHP:${t.hhPlan||'—'} HHR:${t.hhReal||'0'}${t.fechaComp?' · Límite:'+t.fechaComp:''}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+          <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+          ${!t.fechaEjecucion&&!['Listo','Cancelado'].includes(t.estado)?'<span class="badge bex">Sin prog.</span>':''}
+        </div>
+      </div>`).join('')}</div>`;
+  const list = document.getElementById('tarList');
+  if(list) list.innerHTML = `
+    <div class="card"><div class="cl"><div class="d"></div>Activas (${actF.length})</div>${rows(actF)}</div>
+    <div class="card">
+      <div class="cl"><div class="d"></div>Cerradas (${cerF.length})
+        <button class="btn sm ghost" style="margin-left:auto;padding:2px 8px"
+          onclick="const el=this.nextElementSibling;el.style.display=el.style.display==='none'?'block':'none';this.textContent=el.style.display==='none'?'Mostrar':'Ocultar'">Mostrar</button>
+      </div>
+      <div style="display:none">${rows(cerF)}</div>
+    </div>`;
+}
+
 // ── FILTER INIT ───────────────────────────────────────────
 // Auto-apply dashboard filters on load
 document.addEventListener('click',function(e){
@@ -2899,11 +2911,9 @@ function abrirModal(id) {
 
 
 function vTareas(filtroUsuario=null) {
-  const me = filtroUsuario || (VIEW_AS ? VIEW_AS.nombre : SESSION?.nombre) || '';
-  const isAdmin = activeRol()==='admin';
-  const persOpts2 = ['Todos',...PERSONAS].map(p=>
-    `<option value="${p}" ${p===me?'selected':''}>${p==='Todos'?'Todos':shortName(p)}</option>`).join('');
-  const lista = (isAdmin&&me==='Todos') ? TAREAS : TAREAS.filter(t=>t.nombre===me);
+  const me = SESSION.nombre; // ALWAYS own tasks
+  const isAdmin = SESSION.rol === 'admin';
+  const lista = TAREAS.filter(t=>t.nombre===me);
   const act = lista.filter(t=>!['Listo','Cancelado'].includes(t.estado));
   const cer = lista.filter(t=>['Listo','Cancelado'].includes(t.estado));
   const busqVal = document.getElementById('tarBusq')?.value?.toLowerCase()||'';
@@ -2928,11 +2938,9 @@ function vTareas(filtroUsuario=null) {
   return`
   <div class="ph"><div class="pt"><div class="rb"></div>${isAdmin?'Todas las Tareas':'Mis Tareas'}</div></div>
   <div class="fb" style="margin-bottom:12px">
-    ${isAdmin?`<div class="fb-f"><label>Persona</label>
-      <select id="tarPers" onchange="document.getElementById('main').innerHTML=vTareas(this.value)">${persOpts2}</select>
-    </div>`:''}
     <div class="fb-f" style="flex:1"><label>Buscar</label>
-      <input type="text" id="tarBusq" placeholder="Texto o #ID…" oninput="document.getElementById('tarList').innerHTML=vTareasContent()" style="width:100%"></div>
+      <input type="text" id="tarBusq" placeholder="Texto o #ID…" style="width:100%"
+        oninput="this.closest('#main')&&refreshTareasList()"></div>
   </div>
   <div id="tarList">
     <div class="card"><div class="cl"><div class="d"></div>Activas (${actF.length})</div>${rows(actF)}</div>
