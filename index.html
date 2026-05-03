@@ -788,9 +788,20 @@ async function loadData(forceRefresh=false) {
   ]);
   LISTAS=listas||{};
   TAREAS=Array.isArray(tRows)&&tRows.length>1?tRows.slice(1).map(r=>({
-    id:r[0],nombre:r[1],tarea:r[2],solicitante:r[3],area:r[4],tipo:r[5],
-    urgente:r[6],importante:r[7],hhPlan:r[8],fechaIngreso:r[9],fechaComp:r[10],
-    estado:r[11],comentario:r[12],hhReal:r[13],nSes:r[14],fechaEjecucion:r[15]
+    id:String(r[0]||'').trim(),
+    nombre:String(r[1]||'').trim(),
+    tarea:String(r[2]||'').trim(),
+    solicitante:String(r[3]||'').trim(),
+    area:String(r[4]||'').trim(),
+    tipo:String(r[5]||'').trim(),
+    urgente:String(r[6]||'').trim(),
+    importante:String(r[7]||'').trim(),
+    hhPlan:r[8],fechaIngreso:String(r[9]||'').substring(0,10),
+    fechaComp:String(r[10]||'').substring(0,10),
+    estado:String(r[11]||'').trim(),
+    comentario:String(r[12]||'').trim(),
+    hhReal:r[13],nSes:r[14],
+    fechaEjecucion:String(r[15]||'').substring(0,10)
   })):[];
   SESIONES=Array.isArray(sRows)&&sRows.length>1?sRows.slice(1).map(r=>{
     // Normalize fecha
@@ -811,9 +822,13 @@ async function loadData(forceRefresh=false) {
     ini = normTime(ini);
     ter = normTime(ter);
     return {
-      tareaId:r[0],tareaNombre:r[1],responsable:r[2],fecha,
-      inicio:ini,termino:ter,hh:parseFloat(r[6])||0,
-      comentario:r[7]||'',esExtra:r[8]||'No',motivoExtra:r[9]||''
+      tareaId:String(r[0]||'').trim(),
+      tareaNombre:String(r[1]||'').trim(),
+      responsable:String(r[2]||'').trim(),
+      fecha,inicio:ini,termino:ter,hh:parseFloat(r[6])||0,
+      comentario:String(r[7]||'').trim(),
+      esExtra:String(r[8]||'No').trim(),
+      motivoExtra:String(r[9]||'').trim()
     };
   }).filter(s=>s.fecha>='2020-01-01'):[];
   nextId=TAREAS.length>0?Math.max(...TAREAS.map(t=>parseInt(t.id)||0))+1:1;
@@ -1178,11 +1193,13 @@ function normTime(t) {
 
 // ── Get sessions for a specific person on a specific date ─────────
 function getSessionsForPersonOnDate(personName, dateStr) {
-  // Uses pre-normalized _dn from loadData for maximum speed
-  return SESIONES.filter(s =>
-    s.responsable === personName &&
-    (s._dn || normSessDate(s)) === dateStr
-  );
+  const pName = String(personName||'').trim();
+  return SESIONES.filter(s => {
+    const sName = String(s.responsable||'').trim();
+    if (sName !== pName) return false;
+    const sDate = s._dn || normSessDate(s);
+    return sDate === dateStr;
+  });
 }
 
 // ── Main render ───────────────────────────────────────────────────
@@ -3051,8 +3068,8 @@ function vNuevaTarea() {
       <div class="cl"><div class="d"></div>Programación ${tip('Opcional al crear. Tienes hasta 24 horas para programar. Si no lo haces, recibirás alerta.')}</div>
       <div class="g2">
         <div class="fi">
-          <label>Fecha de ejecución ${tip('Cuándo ejecutarás esta tarea.')}</label>
-          <input type="date" id="tFej" value="${hoy}" onchange="calcTerminoSimple()">
+          <label>Fecha de ejecución ${tip('Opcional. Si no defines fecha y hora, la tarea queda Sin Programar.')}</label>
+          <input type="date" id="tFej" placeholder="Opcional" onchange="calcTerminoSimple()">
         </div>
         <div class="fi">
           <label>Hora inicio ${tip('Hora en que comenzarás.')}</label>
@@ -3348,13 +3365,19 @@ async function guardarTarea() {
   const btn=document.getElementById('btnT');if(btn){btn.disabled=true;btn.classList.add('ld');}
   const fec=todayStr();
   const fej=document.getElementById('tFej')?.value||'';
-  const estado=taskType==='express'?'En Proceso':(fej&&fej>fec?'Programada':'Por Iniciar');
+  const estado=taskType==='express'?'En Proceso':(fechaEjec?'Programada':'Por Iniciar');
   const urg=eisUrgente===true?'Si':eisUrgente===false?'No':'';
   const imp=eisImportante===true?'Si':eisImportante===false?'No':'';
   // Determine fechaEjecucion based on task type
+  // For simple: only programmed if BOTH date AND start time are filled
   let fechaEjec='';
-  if(taskType==='simple') fechaEjec=document.getElementById('tFej')?.value||'';
-  else if(taskType==='compuesta'&&bloques.length>0) fechaEjec=bloques[0].fecha||'';
+  if(taskType==='simple') {
+    const _fd=document.getElementById('tFej')?.value||'';
+    const _fi=document.getElementById('tHini')?.value||'';
+    fechaEjec = (_fd&&_fi) ? _fd : ''; // requires both to count as programmed
+  } else if(taskType==='compuesta'&&bloques.length>0) {
+    fechaEjec=bloques[0].fecha||'';
+  }
   const comField = taskType==='compuesta'?document.getElementById('tComC')?.value:document.getElementById('tCom')?.value;
   const fila=[nextId,SESSION.nombre,
     document.getElementById('tTar').value.trim(),
@@ -3567,6 +3590,150 @@ function calcTerminoSimple() {
   const c=document.getElementById('alProgSimple');
   if(c&&fej&&ini&&tHter) c.innerHTML=renderAlerts(SESSION.nombre,fej,ini,tHter);
 }
+
+
+
+// ── Dashboard utilities ──
+function getDashFilter(id) {
+  const users=[...document.querySelectorAll(`#fb-${id} .uchk`)].filter(c=>c.checked).map(c=>c.value);
+  return{
+    users: users.length>0?users:['Luis Sanchez','Luis Diaz','Yamila Silva'],
+    area:  document.getElementById(`${id}-area`)?.value||'',
+    tipo:  document.getElementById(`${id}-tipo`)?.value||'',
+    est:   document.getElementById(`${id}-est`)?.value||'',
+    desde: document.getElementById(`${id}-d`)?.value||mondayStr(),
+    hasta: document.getElementById(`${id}-h`)?.value||todayStr(),
+  };
+}
+
+function dashPeriodo(id, p, btn) {
+  document.querySelectorAll(`#fb-${id} .tab`).forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  const libre=document.getElementById(`${id}-libre`);
+  if(p==='libre'){if(libre)libre.style.display='flex';return;}
+  if(libre)libre.style.display='none';
+  const hoy=todayStr();
+  let desde;
+  if(p==='hoy')desde=hoy;
+  else if(p==='semana')desde=mondayStr();
+  else desde=new Date().toISOString().slice(0,7)+'-01';
+  document.getElementById(`${id}-d`).value=desde;
+  document.getElementById(`${id}-h`).value=hoy;
+  applyDashFilter(id);
+}
+
+function filtrarTareas(f) {
+  return TAREAS.filter(t=>{
+    if(!f.users.includes(t.nombre))return false;
+    if(f.area&&t.area!==f.area)return false;
+    if(f.tipo&&t.tipo!==f.tipo)return false;
+    if(f.est&&t.estado!==f.est)return false;
+    const fi=dateStr(t.fechaIngreso);
+    if(f.desde&&fi<f.desde)return false;
+    if(f.hasta&&fi>f.hasta)return false;
+    return true;
+  });
+}
+
+function filtrarSesiones(f) {
+  return SESIONES.filter(s=>{
+    if(!f.users.includes(s.responsable))return false;
+    const fd=dateStr(s.fecha);
+    if(f.desde&&fd<f.desde)return false;
+    if(f.hasta&&fd>f.hasta)return false;
+    return true;
+  });
+}
+
+function bar(items, cls='', maxOverride=null) {
+  if(!items||!Object.keys(items).length)return'<div class="emp" style="padding:8px">Sin datos</div>';
+  const max=maxOverride||Math.max(...Object.values(items),1);
+  return Object.entries(items).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`
+    <div class="br">
+      <div class="bl2" title="${k}">${k}</div>
+      <div class="bt2"><div class="bf ${cls}" style="width:${Math.round(v/max*100)}%"></div></div>
+      <div class="bv">${fmtHH(v)}h</div>
+    </div>`).join('');
+}
+
+function toggleDrill(id){document.getElementById(id)?.classList.toggle('op');}
+
+function barClickable(items, field, tareas, sesiones, cls='') {
+  if(!items||!Object.keys(items).length) return '<div class="emp" style="padding:8px">Sin datos</div>';
+  const max=Math.max(...Object.values(items),1);
+  return Object.entries(items).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`
+    <div class="br" style="cursor:pointer" onclick="showBarDrill('${field}','${k.replace(/'/g,'').replace(/"/g,'')}')">
+      <div class="bl2" title="${k}">${k.length>14?k.substring(0,13)+'…':k}</div>
+      <div class="bt2"><div class="bf ${cls}" style="width:${Math.round(v/max*100)}%"></div></div>
+      <div class="bv">${fmtHH(v)}h</div>
+    </div>`).join('') +
+    '<div class="drill op" id="drill_'+field+'" style="display:none;margin-top:8px"></div>';
+}
+
+function showBarDrill(field, value) {
+  const drillId = 'drill_'+field;
+  const existing = document.getElementById(drillId);
+  // Close if clicking same
+  if(existing&&existing.getAttribute('data-val')===value&&existing.style.display==='block'){
+    existing.style.display='none';return;
+  }
+  const matchTareas = TAREAS.filter(t=>String(t[field]||'')===String(value));
+  const html2 = `<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">${value}</div>
+    <div class="tl">${matchTareas.slice(0,10).map(t=>`
+      <div class="ti2" onclick="abrirModal(${t.id})">
+        <span class="tid">#${t.id}</span>
+        <div class="tn2"><div class="tna">${t.tarea}</div>
+        <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'} HHR:${t.hhReal||'0'}</div></div>
+        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+      </div>`).join('')||'<div class="emp">Sin tareas</div>'}
+    </div>`;
+  // Re-render drill in a fixed location
+  let drill = document.getElementById(drillId);
+  if(!drill){
+    // Create global drill panel after the chart
+    drill=document.createElement('div');drill.id=drillId;drill.className='drill';
+    drill.style.marginTop='8px';
+  }
+  drill.innerHTML=html2;drill.style.display='block';
+  drill.setAttribute('data-val',value);
+  // Insert after closest .cw parent
+  const bar=event.currentTarget||event.target;
+  const cw=bar.closest('.cw');
+  if(cw&&!cw.querySelector('#'+drillId))cw.appendChild(drill);
+}
+
+function showEisDrill(cuadrante) {
+  const el=document.getElementById('drEisDist'); if(!el)return;
+  if(el.getAttribute('data-q')===cuadrante&&el.classList.contains('op')){el.classList.remove('op');return;}
+  el.setAttribute('data-q',cuadrante);
+  const map={'Urgente+Importante':t=>t.urgente==='Si'&&t.importante==='Si',
+    'Importante, no urgente':t=>t.urgente!=='Si'&&t.importante==='Si',
+    'Urgente, no importante':t=>t.urgente==='Si'&&t.importante!=='Si',
+    'Ni urgente ni importante':t=>t.urgente!=='Si'&&t.importante!=='Si'};
+  const fn=map[cuadrante]||map['Ni urgente ni importante'];
+  const items=TAREAS.filter(fn);
+  el.innerHTML=`<div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:6px">${cuadrante} (${items.length} tareas)</div>
+    <div class="tl">${items.slice(0,10).map(t=>`
+      <div class="ti2" onclick="abrirModal(${t.id})">
+        <span class="tid">#${t.id}</span>
+        <div class="tn2"><div class="tna">${t.tarea}</div>
+        <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'}</div></div>
+        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+      </div>`).join('')||'<div class="emp">Sin tareas</div>'}
+    </div>`;
+  el.classList.add('op');
+}
+
+function toggleCargaDetail(key) {
+  const btn=document.getElementById('btn_carga_'+key);
+  const det=btn?.nextElementSibling;
+  if(!det)return;
+  det.classList.toggle('op');
+  btn.textContent=det.classList.contains('op')?'▲ Ocultar':
+    '▼ Ver tareas ('+det.querySelectorAll('.br').length+')';
+}
+
+
 
 </script>
 </body>
