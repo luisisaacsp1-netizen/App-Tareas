@@ -509,7 +509,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 
 
 <!-- ══ AI ASSISTANT ══ -->
-<button class="ai-fab" id="aiFab" onclick="toggleAI()" title="Asistente IA">
+<button class="ai-fab" id="aiFab" onclick="toggleAI()" title="Asistente IA" style="display:none">
   🤖
 </button>
 
@@ -739,8 +739,8 @@ function renderAlerts(nombre,date,ini=null,ter=null){
   const gaps=checkGaps(nombre,date,ini,ter);
   if(gaps.length>0){
     const gl=gaps.map(([s,e])=>`<div class="gap-row"><div class="gap-dot"></div>${m2t(s)}–${m2t(e)} (${fmtHH((e-s)/60)} hrs)</div>`).join('');
-    html+=`<div class="al w"><span class="al-ico">🕐</span>
-      <div class="al-txt"><strong>Horario sin reportar</strong>${gl}</div></div>`;
+    html+=`<div class="al ok" style="background:#f0faf4;border-color:#b8ddc9;color:#155724"><span class="al-ico">🟢</span>
+      <div class="al-txt"><strong>Horario disponible</strong>${gl}</div></div>`;
   }
   return html;
 }
@@ -975,6 +975,10 @@ const SECS = {
 };
 
 function buildNav() {
+  // Show AI only for admin
+  const fab = document.getElementById('aiFab');
+  if (fab) fab.style.display = SESSION.rol==='admin' ? 'flex' : 'none';
+
   // Section tabs
   const secBar=document.getElementById('secBar');
   secBar.innerHTML=Object.entries(SECS).map(([k,s])=>{
@@ -1440,27 +1444,34 @@ function calRefreshTray(person) {
     !t.fechaEjecucion &&
     !['Listo','Cancelado'].includes(t.estado)
   );
+  const standby = TAREAS.filter(t =>
+    t.nombre === _p && t.estado === 'Standby'
+  );
+  const all = [...unscheduled.filter(t=>t.estado!=='Standby'), ...standby];
 
-  // Always show tray
   tray.style.display = 'block';
 
-  if (unscheduled.length === 0) {
+  if (all.length === 0) {
     list.innerHTML = `<div style="font-size:11px;color:rgba(255,255,255,.5);padding:4px 8px">
       ✅ Sin tareas pendientes de programar</div>`;
     return;
   }
 
-  list.innerHTML = unscheduled.map(t => `
-    <div draggable="true" id="trayTask_${t.id}"
+  list.innerHTML = all.map(t => {
+    const isStandby = t.estado === 'Standby';
+    const bg = isStandby ? 'var(--purple)' : 'var(--navy)';
+    const label = isStandby ? '⏸ Standby' : '';
+    return `<div draggable="true" id="trayTask_${t.id}"
       onclick="abrirModalProgramar('${t.id}')"
       ondragstart="calTrayDragStart(event,${t.id})"
       ondragend="this.style.opacity='1'"
-      style="background:var(--navy);color:#fff;border-radius:6px;padding:6px 10px;
-        cursor:pointer;user-select:none;transition:opacity .15s;border:1px solid rgba(255,255,255,.15)"
-      title="Clic para programar · Arrastra al calendario">
-      <div style="font-size:9px;opacity:.6">#${t.id} · ${t.hhPlan||'—'}h · ${t.tipo||'—'}</div>
+      style="background:${bg};color:#fff;border-radius:6px;padding:6px 10px;
+        cursor:pointer;user-select:none;border:1px solid rgba(255,255,255,.15)"
+      title="${isStandby?'En Standby - clic para retomar':'Clic para programar'}">
+      <div style="font-size:9px;opacity:.6">#${t.id} · ${t.hhPlan||'—'}h · ${t.tipo||'—'} ${label}</div>
       <div style="font-size:11px;font-weight:600">${t.tarea.substring(0,28)}${t.tarea.length>28?'…':''}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 // ── Drag & Drop ───────────────────────────────────────────────────
@@ -4256,6 +4267,53 @@ async function guardarCostos(){
 function initConfig(){
   const keys=Object.keys(LISTAS);
   if(keys.length>0){cambiarLista(keys[0]);}
+}
+
+
+async function ponerStandby(tid) {
+  const t = TAREAS.find(x=>String(x.id)===String(tid)); if(!t)return;
+  openModal(`
+    <div class="mt"><div class="rb"></div>Poner en Standby</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">#${t.id} · ${t.tarea}</div>
+    <div class="efi" style="margin-bottom:14px">
+      <label>Motivo del standby *</label>
+      <textarea id="standbyMotivo" rows="2" style="background:var(--inp);border:1.5px solid var(--border);
+        border-radius:6px;padding:8px;font-size:13px;width:100%" 
+        placeholder="Ej: Esperando respuesta del cliente..."></textarea>
+    </div>
+    <div class="ma">
+      <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>
+      <button class="btn" onclick="confirmarStandby('${tid}')">
+        <span class="st"></span><span class="bt">⏸ Confirmar Standby</span></button>
+    </div>`);
+}
+
+async function confirmarStandby(tid) {
+  const motivo = document.getElementById('standbyMotivo')?.value?.trim();
+  if(!motivo){toast('Escribe el motivo del standby','er');return;}
+  const t = TAREAS.find(x=>String(x.id)===String(tid)); if(!t)return;
+  const campos = {11:'Standby',12:(t.comentario?t.comentario+' | ':'')+'[Standby '+todayStr()+': '+motivo+']'};
+  await apiPost({accion:'actualizar',tabla:'Tareas',id:tid,campos});
+  const idx = TAREAS.findIndex(x=>String(x.id)===String(tid));
+  if(idx>-1){TAREAS[idx].estado='Standby';TAREAS[idx].comentario=campos[12];}
+  invalidateCache();
+  cerrarModal();
+  toast('Tarea en Standby','ok');
+  calRefreshTray(SESSION.nombre);
+}
+
+async function retomarStandby(tid) {
+  const t = TAREAS.find(x=>String(x.id)===String(tid)); if(!t)return;
+  const now = new Date().toISOString().slice(0,16).replace('T',' ');
+  const com = (t.comentario||'') + ' | [Retomada '+now+']';
+  const campos = {11:'Por Iniciar',15:'',12:com}; // clear fechaEjecucion too
+  await apiPost({accion:'actualizar',tabla:'Tareas',id:tid,campos});
+  const idx = TAREAS.findIndex(x=>String(x.id)===String(tid));
+  if(idx>-1){TAREAS[idx].estado='Por Iniciar';TAREAS[idx].fechaEjecucion='';TAREAS[idx].comentario=com;}
+  invalidateCache();
+  cerrarModal();
+  toast('Tarea retomada - ahora puedes programarla','ok');
+  calRefreshTray(SESSION.nombre);
 }
 
 </script>
