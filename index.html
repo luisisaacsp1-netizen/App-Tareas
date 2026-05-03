@@ -554,7 +554,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 // ══════════════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════════════
-const API = 'https://script.google.com/macros/s/AKfycbyG6gBeDTdJFujk5fqAH5t9qs-668ShmV3MlAf5kSVNmf_qRKIBUKfcLK3NuieG-uoS/exec';
+const API = 'https://script.google.com/macros/s/AKfycbxdCXpxn64-ODmyw1nYFxAUCykJZROYSMmdPLxk5-QTiqVnWg1dG40xzL6tV3j8U-sn/exec';
 if (API.includes('REPLACE')) console.warn('⚠️ API URL not configured - check index.html');
 const SCHEDULE = {1:[8,17,12,13],2:[8,18,12,13],3:[8,17,12,13],4:[8,18,12,13],5:[8,17,12,13]};
 
@@ -648,7 +648,7 @@ function validate(fields) {
 function clearErr(ids){ids.forEach(id=>document.getElementById(id)?.classList.remove('err'));}
 
 // Active user name (impersonation-aware)
-function SESSION.nombre { return VIEW_AS ? VIEW_AS.nombre : SESSION.nombre; }
+function activeUser() { return SESSION.nombre; }
 function activeRol()  { return SESSION.rol; } // always real role
 
 // ══════════════════════════════════════════════════════════
