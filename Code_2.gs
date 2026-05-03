@@ -40,9 +40,15 @@ const INIT_LISTAS = [
   ['Tipo',      'Ejecución'],
   ['Tipo',      'Informe'],
   ['Tipo',      'Vales'],
-  ['Prioridad', 'Alta'],
-  ['Prioridad', 'Media'],
-  ['Prioridad', 'Baja'],
+  ['MotivoReprog','Tarea urgente interrumpió'],
+  ['MotivoReprog','Cliente solicitó cambio'],
+  ['MotivoReprog','Error de estimación'],
+  ['MotivoReprog','Cambio de prioridad'],
+  ['MotivoReprog','Otro'],
+  ['MotivoExtra','Cumplir plazo comprometido'],
+  ['MotivoExtra','Urgencia de cliente'],
+  ['MotivoExtra','Retraso acumulado'],
+  ['MotivoExtra','Otro'],
   ['Estado',    'Por Iniciar'],
   ['Estado',    'En Proceso'],
   ['Estado',    'Listo'],
@@ -695,4 +701,3 @@ function jsonResponse(data) {
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
-
