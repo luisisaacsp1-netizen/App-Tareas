@@ -554,7 +554,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 // ══════════════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════════════
-const API = 'https://script.google.com/macros/s/AKfycbyG6gBeDTdJFujk5fqAH5t9qs-668ShmV3MlAf5kSVNmf_qRKIBUKfcLK3NuieG-uoS/exec';
+const API = 'https://script.google.com/macros/s/AKfycbzzG_9S6ltTfEm0d5J1k77OJYGTq4O_XaLjcn9amH3h6gX28zCPol5Gek-MpnynuRK3/exec';
 if (API.includes('REPLACE')) console.warn('⚠️ API URL not configured - check index.html');
 const SCHEDULE = {1:[8,17,12,13],2:[8,18,12,13],3:[8,17,12,13],4:[8,18,12,13],5:[8,17,12,13]};
 
@@ -3420,8 +3420,9 @@ async function guardarTarea() {
       }
     } else {toast('📋 Tarea guardada · '+estado,'ok');}
     nextId++;
-    await apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario});
+    apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario}); // non-blocking
     invalidateCache();
+    toast('✅ Tarea guardada','ok');
     taskType='';eisUrgente=null;eisImportante=null;
     goSub('A','nuevaTarea');
   }catch(e){toast('Error al guardar','er');}
@@ -3839,8 +3840,10 @@ function refreshUnscheduledTray() {
         style="background:var(--navy);color:#fff;border-radius:6px;padding:6px 10px;
           cursor:grab;font-size:11px;font-weight:600;display:flex;flex-direction:column;gap:2px;
           min-width:140px;max-width:200px;user-select:none"
+        onclick="abrirModalProgramar('${t.id}')"
         ondragstart="startTrayDrag(event,'${t.id}')"
-        ondragend="endTrayDrag(event)">
+        ondragend="endTrayDrag(event)"
+        title="Clic para programar">
         <span style="font-size:9px;opacity:.6">#${t.id} · ${t.hhPlan||'—'}h plan · ${t.tipo||'—'}</span>
         <span>${t.tarea.substring(0,28)}${t.tarea.length>28?'…':''}</span>
       </div>`).join('');
@@ -4000,6 +4003,7 @@ async function delT(id){
   const idx=TAREAS.findIndex(t=>String(t.id)===String(id));
   if(idx>-1)TAREAS.splice(idx,1);
   SESIONES=SESIONES.filter(s=>String(s.tareaId)!==String(id));
+  invalidateCache();
   toast('Tarea eliminada','ok');buscarReg();
 }
 
@@ -4014,7 +4018,7 @@ async function delS(i,tareaId,fecha,inicio,hh){
   await apiPost({accion:'eliminarSesion',tabla:'Sesiones',tareaId,fecha,inicio});
   const ti=TAREAS.findIndex(t=>String(t.id)===String(tareaId));
   if(ti>-1){const nH=Math.max(0,Math.round(((parseFloat(TAREAS[ti].hhReal)||0)-hh)*100)/100);const nN=Math.max(0,(parseInt(TAREAS[ti].nSes)||1)-1);await apiPost({accion:'actualizar',tabla:'Tareas',id:tareaId,campos:{13:nH,14:nN}});TAREAS[ti].hhReal=nH;TAREAS[ti].nSes=nN;}
-  SESIONES.splice(i,1);toast('Sesión eliminada','ok');buscarReg();
+  SESIONES.splice(i,1);invalidateCache();toast('Sesión eliminada','ok');buscarReg();
 }
 
 let regTab='t';
@@ -4070,6 +4074,86 @@ function dashFilterBar(id, defaultPeriodo='semana') {
     <button class="btn sm" style="align-self:flex-end;margin-left:auto" onclick="applyDashFilter('${id}')">
       <span class="bt">Actualizar</span></button>
   </div>`;
+}
+
+
+
+// ── Admin functions ──
+async function guardarUsuario(usuarioOrig){
+  const nombre=document.getElementById('eUN')?.value.trim();
+  const usuario=document.getElementById('eUU')?.value.trim();
+  const pass=document.getElementById('eUP')?.value;
+  const rol=document.getElementById('eUR')?.value;
+  if(!nombre||!usuario){toast('Nombre y usuario son obligatorios','er');return;}
+  if(!usuarioOrig&&!pass){toast('La contraseña es obligatoria para usuarios nuevos','er');return;}
+  await apiPost({accion:'gestionUsuario',usuarioOrig,nombre,usuario,pass:pass||null,rol});
+  cerrarModal();toast(usuarioOrig?'Usuario actualizado':'Usuario creado','ok');
+  const h=await vCUsuarios();document.getElementById('main').innerHTML=h;
+}
+
+function editarUsuario(usuario,nombre,rol){
+  openModal(`
+    <div class="mt"><div class="rb"></div>Editar Usuario</div>
+    <div class="eg">
+      <div class="efi fw"><label>Nombre completo</label><input type="text" id="eUN" value="${nombre}"></div>
+      <div class="efi"><label>Usuario (login)</label><input type="text" id="eUU" value="${usuario}"></div>
+      <div class="efi"><label>Nueva contraseña</label><input type="password" id="eUP" placeholder="Dejar vacío para no cambiar"></div>
+      <div class="efi"><label>Rol</label><select id="eUR">
+        <option value="user" ${rol==='user'?'selected':''}>Usuario</option>
+        <option value="admin" ${rol==='admin'?'selected':''}>Administrador</option>
+      </select></div>
+    </div>
+    <div class="ma">
+      <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>
+      <button class="btn" onclick="guardarUsuario('${usuario}')"><span class="st"></span><span class="bt">Guardar</span></button>
+    </div>`);
+}
+
+function nuevoUsuario(){
+  openModal(`
+    <div class="mt"><div class="rb"></div>Nuevo Usuario</div>
+    <div class="eg">
+      <div class="efi fw"><label class="rq">Nombre completo</label><input type="text" id="eUN" placeholder="Ej: Juan Pérez"></div>
+      <div class="efi"><label class="rq">Usuario (login)</label><input type="text" id="eUU" placeholder="Ej: jperez"></div>
+      <div class="efi"><label class="rq">Contraseña</label><input type="password" id="eUP" placeholder="Contraseña inicial"></div>
+      <div class="efi"><label>Rol</label><select id="eUR">
+        <option value="user">Usuario</option><option value="admin">Administrador</option>
+      </select></div>
+    </div>
+    <div class="ma">
+      <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>
+      <button class="btn" onclick="guardarUsuario(null)"><span class="st"></span><span class="bt">Crear usuario</span></button>
+    </div>`);
+}
+
+async function guardarListas(){const items=[];Object.entries(LISTAS).forEach(([t,vs])=>vs.forEach(v=>items.push({tipo:t,valor:v})));await apiPost({accion:'guardarLista',items});toast('Listas guardadas','ok');}
+
+function cambiarLista(t){listaTab=t;document.querySelectorAll('#lTabs .tab').forEach(b=>b.classList.toggle('on',b.id===`lpill-${t}`));renderListaEd(t);}
+
+function renderListaEd(t){const items=LISTAS[t]||[];const ed=document.getElementById('lEditor');if(!ed)return;
+  ed.innerHTML=items.map((v,i)=>`<div class="le-row"><input type="text" value="${v}" id="li_${t}_${i}"><button class="le-del" onclick="delLi('${t}',${i})">✕</button></div>`).join('')+
+  `<div class="le-add"><input type="text" id="liNew_${t}" placeholder="Agregar ${t}…"><button class="btn sm" onclick="addLi('${t}')"><span class="bt">+ Agregar</span></button></div>`;}
+
+function addLi(t){const inp=document.getElementById('liNew_'+t);const v=inp.value.trim();if(!v)return;if(!LISTAS[t])LISTAS[t]=[];LISTAS[t].push(v);inp.value='';renderListaEd(t);}
+
+function delLi(t,i){LISTAS[t].splice(i,1);renderListaEd(t);}
+
+async function guardarCostos(){
+  const personas=['Luis Sanchez','Luis Diaz','Yamila Silva'];
+  for(const p of personas){
+    const k=p.replace(' ','_');
+    const normal=parseInt(document.getElementById('cn_'+k)?.value)||0;
+    const extra=parseInt(document.getElementById('ce_'+k)?.value)||0;
+    COSTOS[p]={normal,extra};
+    await apiPost({accion:'insertar',tabla:'Config',fila:[`costo_${p}_normal`,normal]});
+    await apiPost({accion:'insertar',tabla:'Config',fila:[`costo_${p}_extra`,extra]});
+  }
+  toast('Costos guardados','ok');
+}
+
+function initConfig(){
+  const keys=Object.keys(LISTAS);
+  if(keys.length>0){cambiarLista(keys[0]);}
 }
 
 </script>
