@@ -1401,24 +1401,33 @@ function calRenderMes(dates, person, todayS) {
 }
 
 function calRefreshTray(person) {
-  const _p = SESSION.nombre; // always own tasks
+  const _p = SESSION.nombre;
+  const tray = document.getElementById('calTray');
+  const list = document.getElementById('calTrayList');
+  if (!tray || !list) return;
+
   const unscheduled = TAREAS.filter(t =>
     t.nombre === _p &&
     !t.fechaEjecucion &&
     !['Listo','Cancelado'].includes(t.estado)
   );
-  const tray = document.getElementById('calTray');
-  const list = document.getElementById('calTrayList');
-  if (!tray || !list) return;
-  if (unscheduled.length === 0) { tray.style.display='none'; return; }
+
+  // Always show tray
   tray.style.display = 'block';
+
+  if (unscheduled.length === 0) {
+    list.innerHTML = `<div style="font-size:11px;color:rgba(255,255,255,.5);padding:4px 8px">
+      ✅ Sin tareas pendientes de programar</div>`;
+    return;
+  }
+
   list.innerHTML = unscheduled.map(t => `
     <div draggable="true" id="trayTask_${t.id}"
+      onclick="abrirModalProgramar('${t.id}')"
       ondragstart="calTrayDragStart(event,${t.id})"
       ondragend="this.style.opacity='1'"
-      onclick="abrirModalProgramar(${t.id})"
-      style="background:var(--navy);color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer;
-        user-select:none;transition:opacity .15s"
+      style="background:var(--navy);color:#fff;border-radius:6px;padding:6px 10px;
+        cursor:pointer;user-select:none;transition:opacity .15s;border:1px solid rgba(255,255,255,.15)"
       title="Clic para programar · Arrastra al calendario">
       <div style="font-size:9px;opacity:.6">#${t.id} · ${t.hhPlan||'—'}h · ${t.tipo||'—'}</div>
       <div style="font-size:11px;font-weight:600">${t.tarea.substring(0,28)}${t.tarea.length>28?'…':''}</div>
@@ -3414,51 +3423,54 @@ async function guardarTarea() {
     fec,document.getElementById('tFco')?.value||'',estado,
     comField||'',0,0,
     fechaEjec];
+  // Capture DOM values BEFORE any async calls
+  const express_ini = taskType_saved==='express' ? (document.getElementById('tHinE')?.value||'') : '';
+  const express_ter = taskType_saved==='express' ? (document.getElementById('tHterE')?.value||'') : '';
+
   try {
-    // 1. Insert task (must wait - need to confirm it saved)
     await apiPost({accion:'insertar',tabla:'Tareas',fila});
 
-    // 2. Update local state immediately
     const newId = nextId;
     const nt={id:newId,nombre:SESSION.nombre,tarea:fila[2],solicitante:fila[3],area:fila[4],tipo:fila[5],
       urgente:fila[6],importante:fila[7],hhPlan:fila[8],fechaIngreso:fec,fechaComp:fila[10],
       estado,comentario:fila[12],hhReal:0,nSes:0,fechaEjecucion:fila[15]};
     TAREAS.push(nt);
     nextId++;
-    invalidateCache();
 
-    // 3. Show success and navigate IMMEDIATELY
-    if(taskType==='express') {
-      toast('⚡ Express guardada, registrando...','ok');
-    } else {
-      toast('✅ Tarea guardada','ok');
-    }
-    taskType='';eisUrgente=null;eisImportante=null;
-    goSub('A','agenda');
-
-    // 4. Fire background calls (non-blocking - user already sees result)
-    if(taskType_saved==='express'){
-      const ini=document.getElementById('tHinE')?.value,ter=document.getElementById('tHterE')?.value;
-      if(ini&&ter){
-        const hh=calcHHRaw(ini,ter);
-        apiPost({accion:'insertar',tabla:'Sesiones',fila:[newId,fila[2],SESSION.nombre,fec,ini,ter,hh,'Express',fec,'No','']});
-        apiPost({accion:'actualizar',tabla:'Tareas',id:newId,campos:{11:'Listo',13:hh,14:1}});
-        TAREAS[TAREAS.length-1].estado='Listo';TAREAS[TAREAS.length-1].hhReal=hh;TAREAS[TAREAS.length-1].nSes=1;
-        SESIONES.push({tareaId:newId,tareaNombre:fila[2],responsable:SESSION.nombre,fecha:fec,inicio:ini,termino:ter,hh,esExtra:'No',motivoExtra:''});
+    // Express: save session and close task
+    if(taskType_saved==='express' && express_ini && express_ter){
+      const hh=calcHHRaw(express_ini,express_ter);
+      if(hh>0){
+        await apiPost({accion:'insertar',tabla:'Sesiones',
+          fila:[newId,fila[2],SESSION.nombre,fec,express_ini,express_ter,hh,'Express',fec,'No','']});
+        await apiPost({accion:'actualizar',tabla:'Tareas',id:newId,campos:{11:'Listo',13:hh,14:1}});
+        TAREAS[TAREAS.length-1].estado='Listo';
+        TAREAS[TAREAS.length-1].hhReal=hh;
+        TAREAS[TAREAS.length-1].nSes=1;
+        SESIONES.push({tareaId:newId,tareaNombre:fila[2],responsable:SESSION.nombre,
+          fecha:fec,inicio:express_ini,termino:express_ter,hh,esExtra:'No',motivoExtra:''});
       }
     }
-    if(taskType_saved==='compuesta'&&bloques_saved.length>0) {
-      for(const b of bloques_saved) {
-        if(b.fecha&&b.inicio&&b.termino) {
+
+    // Compuesta: save planned blocks
+    if(taskType_saved==='compuesta'&&bloques_saved.length>0){
+      for(const b of bloques_saved){
+        if(b.fecha&&b.inicio&&b.termino){
           const hhB=calcHHRaw(b.inicio,b.termino);
-          apiPost({accion:'insertar',tabla:'Sesiones',
+          await apiPost({accion:'insertar',tabla:'Sesiones',
             fila:[newId,fila[2],SESSION.nombre,b.fecha,b.inicio,b.termino,hhB,'[Bloque planificado]',fec,'No','']});
           SESIONES.push({tareaId:newId,tareaNombre:fila[2],responsable:SESSION.nombre,
-            fecha:b.fecha,inicio:b.inicio,termino:b.termino,hh:hhB,comentario:'[Bloque planificado]',esExtra:'No',motivoExtra:''});
+            fecha:b.fecha,inicio:b.inicio,termino:b.termino,hh:hhB,
+            comentario:'[Bloque planificado]',esExtra:'No',motivoExtra:''});
         }
       }
     }
-    apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario})
+
+    invalidateCache();
+    apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario});
+    toast(taskType_saved==='express'?'⚡ Express registrada':'✅ Tarea guardada','ok');
+    taskType='';eisUrgente=null;eisImportante=null;
+    goSub('A','agenda')
   }catch(e){toast('Error al guardar','er');}
   if(btn){btn.disabled=false;btn.classList.remove('ld');}
 }
