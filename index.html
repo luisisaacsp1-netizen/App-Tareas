@@ -3374,7 +3374,8 @@ async function guardarTarea() {
   if(taskType==='simple') {
     const _fd=document.getElementById('tFej')?.value||'';
     const _fi=document.getElementById('tHini')?.value||'';
-    fechaEjec = (_fd&&_fi) ? _fd : ''; // requires both to count as programmed
+    const _ft=document.getElementById('tHter')?.value||'';
+    fechaEjec = (_fd&&_fi&&_ft) ? _fd : ''; // requires date+ini+tero count as programmed
   } else if(taskType==='compuesta'&&bloques.length>0) {
     fechaEjec=bloques[0].fecha||'';
   }
@@ -3420,7 +3421,7 @@ async function guardarTarea() {
     } else {toast('📋 Tarea guardada · '+estado,'ok');}
     nextId++;
     await apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario});
-    invalidateCache(); await loadData(true);
+    invalidateCache();
     taskType='';eisUrgente=null;eisImportante=null;
     goSub('A','nuevaTarea');
   }catch(e){toast('Error al guardar','er');}
@@ -3822,10 +3823,7 @@ function buildDashGlobal(f) {
 }
 
 function refreshUnscheduledTray() {
-  const calPersEl = document.getElementById('calPers');
-  const me = (activeRol()==='admin')
-    ? (calPersEl?.value || SESSION.nombre)
-    : (VIEW_AS ? VIEW_AS.nombre : SESSION.nombre);
+  const me = SESSION.nombre;
   const unscheduled = TAREAS.filter(t=>
     t.nombre===me &&
     !t.fechaEjecucion &&
@@ -3865,6 +3863,213 @@ function initRegistros(){
   (LISTAS['Tipo']||[]).forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;t?.appendChild(o);});
   (LISTAS['Area']||[]).forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;a?.appendChild(o);});
   buscarReg();
+}
+
+
+
+// ── Gestión Registros ──
+function buscarReg(){
+  const q=(document.getElementById('srQ')?.value||'').toLowerCase();
+  const p=document.getElementById('srP')?.value||'';
+  const e=document.getElementById('srE')?.value||'';
+  const t=document.getElementById('srT')?.value||'';
+  const a=document.getElementById('srA')?.value||'';
+  if(regTab==='t'){
+    let r=[...TAREAS];
+    if(q)r=r.filter(x=>x.tarea?.toLowerCase().includes(q)||String(x.id).includes(q)||x.solicitante?.toLowerCase().includes(q)||x.comentario?.toLowerCase().includes(q));
+    if(p)r=r.filter(x=>x.nombre===p);if(e)r=r.filter(x=>x.estado===e);
+    if(t)r=r.filter(x=>x.tipo===t);if(a)r=r.filter(x=>x.area===a);
+    const c=document.getElementById('srCnt');if(c)c.textContent=`${r.length} tarea${r.length!==1?'s':''} encontrada${r.length!==1?'s':''}`;
+    renderRegT(r);
+  } else {
+    let r=[...SESIONES];
+    if(q)r=r.filter(x=>x.tareaNombre?.toLowerCase().includes(q)||String(x.tareaId).includes(q));
+    if(p)r=r.filter(x=>x.responsable===p);
+    const c=document.getElementById('srCntS');if(c)c.textContent=`${r.length} sesión${r.length!==1?'es':''} encontrada${r.length!==1?'s':''}`;
+    renderRegS(r);
+  }
+}
+
+function renderRegT(lista){
+  const c=document.getElementById('srLT');if(!c)return;
+  if(!lista.length){c.innerHTML='<div class="emp"><span class="ei">🔍</span>Sin resultados</div>';return;}
+  c.innerHTML=lista.slice(0,60).map(t=>`
+    <div class="ri" id="ri-${t.id}">
+      <div class="ri-info">
+        <div class="ri-t">#${t.id} · ${t.tarea}</div>
+        <div class="ri-m">${t.nombre} · ${t.tipo||'—'} · ${t.area||'—'} · HHP:${t.hhPlan||'—'} HHR:${t.hhReal||'0'} · <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span></div>
+        <div class="ef" id="ef-${t.id}">
+          <div class="eg">
+            <div class="efi fw"><label>Descripción</label><textarea id="et_tar_${t.id}" rows="2">${t.tarea||''}</textarea></div>
+            <div class="efi"><label>Responsable</label><select id="et_nom_${t.id}">
+              ${['Luis Sanchez','Luis Diaz','Yamila Silva'].map(n=>`<option ${n===t.nombre?'selected':''}>${n}</option>`).join('')}</select></div>
+            <div class="efi"><label>Solicitante</label><select id="et_sol_${t.id}">
+              <option value="">—</option>${opts('Solicitante',t.solicitante)}</select></div>
+            <div class="efi"><label>Estado</label><select id="et_est_${t.id}">
+              ${(LISTAS['Estado']||['Por Iniciar','Programada','En Proceso','Listo','Standby','Cancelado']).map(e=>`<option ${e===t.estado?'selected':''}>${e}</option>`).join('')}</select></div>
+            <div class="efi"><label>Área</label><select id="et_are_${t.id}"><option value="">—</option>${opts('Area',t.area)}</select></div>
+            <div class="efi"><label>Tipo</label><select id="et_tip_${t.id}"><option value="">—</option>${opts('Tipo',t.tipo)}</select></div>
+            <div class="efi"><label>HH Plan</label><input type="number" id="et_hhp_${t.id}" value="${t.hhPlan||''}" step="0.25" min="0"></div>
+            <div class="efi"><label>F. Límite</label><input type="date" id="et_fco_${t.id}" value="${t.fechaComp||''}"></div>
+            <div class="efi fw"><label>Comentario</label><input type="text" id="et_com_${t.id}" value="${t.comentario||''}"></div>
+          </div>
+          <div class="eb">
+            <button class="btn ghost sm" onclick="cefT(${t.id})"><span class="bt">Cancelar</span></button>
+            <button class="btn sm" onclick="savEdT(${t.id})"><span class="st"></span><span class="bt">Guardar</span></button>
+          </div>
+        </div>
+        <div class="cd" id="cd-${t.id}">
+          <p>⚠️ ¿Eliminar tarea #${t.id} y todas sus sesiones?</p>
+          <div style="display:flex;gap:6px">
+            <button class="btn ghost sm" onclick="ccd('T',${t.id})"><span class="bt">Cancelar</span></button>
+            <button class="btn danger sm" onclick="delT(${t.id})"><span class="bt">Sí, eliminar</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="ri-acts">
+        <button class="be" onclick="togEf(${t.id})">Editar</button>
+        <button class="bd" onclick="togCd('T',${t.id})">Eliminar</button>
+      </div>
+    </div>`).join('');
+}
+
+function renderRegS(lista){
+  const c=document.getElementById('srLS');if(!c)return;
+  if(!lista.length){c.innerHTML='<div class="emp"><span class="ei">🔍</span>Sin sesiones</div>';return;}
+  c.innerHTML=lista.slice(0,60).map((s,i)=>`
+    <div class="ri" id="ris-${i}">
+      <div class="ri-info">
+        <div class="ri-t">Tarea #${s.tareaId} · ${(s.tareaNombre||'').substring(0,45)}${(s.tareaNombre||'').length>45?'…':''}</div>
+        <div class="ri-m">${s.responsable} · ${dateStr(s.fecha)} · ${s.inicio||''}–${s.termino||''} · ${s.hh||0}h${s.esExtra==='Sí'?' · ⏰ Extra':''}</div>
+        <div class="ef" id="efs-${i}">
+          <div class="eg">
+            <div class="efi"><label>Fecha</label><input type="date" id="es_fec_${i}" value="${dateStr(s.fecha)}"></div>
+            <div class="efi"><label>Responsable</label><select id="es_nom_${i}">
+              ${['Luis Sanchez','Luis Diaz','Yamila Silva'].map(n=>`<option ${n===s.responsable?'selected':''}>${n}</option>`).join('')}</select></div>
+            <div class="efi"><label>Inicio</label><input type="time" id="es_ini_${i}" value="${s.inicio||''}" oninput="rcS(${i})"></div>
+            <div class="efi"><label>Término</label><input type="time" id="es_ter_${i}" value="${s.termino||''}" oninput="rcS(${i})"></div>
+            <div class="efi"><label>HH</label><input type="number" id="es_hh_${i}" value="${s.hh||''}" step="0.25" min="0"></div>
+            <div class="efi fw"><label>Comentario</label><input type="text" id="es_com_${i}" value="${s.comentario||''}"></div>
+          </div>
+          <div class="eb">
+            <button class="btn ghost sm" onclick="cefS(${i})"><span class="bt">Cancelar</span></button>
+            <button class="btn sm" onclick="savEdS(${i},'${s.tareaId}','${dateStr(s.fecha)}','${s.inicio||''}')"><span class="st"></span><span class="bt">Guardar</span></button>
+          </div>
+        </div>
+        <div class="cd" id="cds-${i}">
+          <p>⚠️ ¿Eliminar sesión de ${s.hh}h del ${dateStr(s.fecha)}?</p>
+          <div style="display:flex;gap:6px">
+            <button class="btn ghost sm" onclick="ccd('S',${i})"><span class="bt">Cancelar</span></button>
+            <button class="btn danger sm" onclick="delS(${i},'${s.tareaId}','${dateStr(s.fecha)}','${s.inicio||''}',${s.hh||0})"><span class="bt">Sí</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="ri-acts">
+        <button class="be" onclick="togEfS(${i})">Editar</button>
+        <button class="bd" onclick="togCd('S',${i})">Eliminar</button>
+      </div>
+    </div>`).join('');
+}
+
+function togEf(id){const e=document.getElementById('ef-'+id),d=document.getElementById('cd-'+id);d?.classList.remove('op');e?.classList.toggle('op');}
+
+function cefT(id){document.getElementById('ef-'+id)?.classList.remove('op');}
+
+function togEfS(i){const e=document.getElementById('efs-'+i),d=document.getElementById('cds-'+i);d?.classList.remove('op');e?.classList.toggle('op');}
+
+function cefS(i){document.getElementById('efs-'+i)?.classList.remove('op');}
+
+function togCd(t,id){const key=t==='T'?`cd-${id}`:`cds-${id}`;const ef=t==='T'?`ef-${id}`:`efs-${id}`;document.getElementById(ef)?.classList.remove('op');document.getElementById(key)?.classList.toggle('op');}
+
+function ccd(t,id){document.getElementById(t==='T'?`cd-${id}`:`cds-${id}`)?.classList.remove('op');}
+
+function rcS(i){const a=document.getElementById('es_ini_'+i)?.value,b=document.getElementById('es_ter_'+i)?.value,h=document.getElementById('es_hh_'+i);if(a&&b&&h)h.value=calcHHRaw(a,b).toFixed(2);}
+
+async function savEdT(id){
+  const idx=TAREAS.findIndex(t=>String(t.id)===String(id));
+  const campos={1:document.getElementById('et_nom_'+id)?.value||'',2:document.getElementById('et_tar_'+id)?.value||'',3:document.getElementById('et_sol_'+id)?.value||'',4:document.getElementById('et_are_'+id)?.value||'',5:document.getElementById('et_tip_'+id)?.value||'',8:parseFloat(document.getElementById('et_hhp_'+id)?.value)||'',10:document.getElementById('et_fco_'+id)?.value||'',11:document.getElementById('et_est_'+id)?.value||'',12:document.getElementById('et_com_'+id)?.value||''};
+  await apiPost({accion:'actualizar',tabla:'Tareas',id,campos});
+  const m={'1':'nombre','2':'tarea','3':'solicitante','4':'area','5':'tipo','8':'hhPlan','10':'fechaComp','11':'estado','12':'comentario'};
+  if(idx>-1)Object.entries(campos).forEach(([c,v])=>{if(m[c])TAREAS[idx][m[c]]=v;});
+  cefT(id);toast('Tarea actualizada','ok');buscarReg();
+}
+
+async function delT(id){
+  await apiPost({accion:'eliminar',tabla:'Tareas',id});
+  await apiPost({accion:'eliminarPorTareaId',tabla:'Sesiones',id});
+  const idx=TAREAS.findIndex(t=>String(t.id)===String(id));
+  if(idx>-1)TAREAS.splice(idx,1);
+  SESIONES=SESIONES.filter(s=>String(s.tareaId)!==String(id));
+  toast('Tarea eliminada','ok');buscarReg();
+}
+
+async function savEdS(i,tareaId,fechaOrig,inicioOrig){
+  const campos={fecha:document.getElementById('es_fec_'+i)?.value||'',responsable:document.getElementById('es_nom_'+i)?.value||'',inicio:document.getElementById('es_ini_'+i)?.value||'',termino:document.getElementById('es_ter_'+i)?.value||'',hh:parseFloat(document.getElementById('es_hh_'+i)?.value)||0,comentario:document.getElementById('es_com_'+i)?.value||''};
+  await apiPost({accion:'actualizarSesion',tabla:'Sesiones',tareaId,fechaOrig,inicioOrig,campos});
+  if(SESIONES[i])Object.assign(SESIONES[i],campos);
+  cefS(i);toast('Sesión actualizada','ok');buscarReg();
+}
+
+async function delS(i,tareaId,fecha,inicio,hh){
+  await apiPost({accion:'eliminarSesion',tabla:'Sesiones',tareaId,fecha,inicio});
+  const ti=TAREAS.findIndex(t=>String(t.id)===String(tareaId));
+  if(ti>-1){const nH=Math.max(0,Math.round(((parseFloat(TAREAS[ti].hhReal)||0)-hh)*100)/100);const nN=Math.max(0,(parseInt(TAREAS[ti].nSes)||1)-1);await apiPost({accion:'actualizar',tabla:'Tareas',id:tareaId,campos:{13:nH,14:nN}});TAREAS[ti].hhReal=nH;TAREAS[ti].nSes=nN;}
+  SESIONES.splice(i,1);toast('Sesión eliminada','ok');buscarReg();
+}
+
+let regTab='t';
+function initRegistros(){
+  const t=document.getElementById('srT'),a=document.getElementById('srA');
+  (LISTAS['Tipo']||[]).forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;t?.appendChild(o);});
+  (LISTAS['Area']||[]).forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;a?.appendChild(o);});
+  buscarReg();
+}
+
+function switchRegTab(tab){
+  regTab=tab;
+  document.getElementById('sr-t').style.display=tab==='t'?'block':'none';
+  document.getElementById('sr-s').style.display=tab==='s'?'block':'none';
+  document.getElementById('rpT')?.classList.toggle('on',tab==='t');
+  document.getElementById('rpS')?.classList.toggle('on',tab==='s');
+  buscarReg();
+}
+
+
+
+function dashFilterBar(id, defaultPeriodo='semana') {
+  return`
+  <div class="fb" id="fb-${id}">
+    <div class="fb-f"><label>Usuarios ${tip('Selecciona uno o más usuarios para filtrar.')}</label>
+      <div class="user-checks">
+        <label><input type="checkbox" class="uchk" value="Luis Sanchez" checked> Luis S.</label>
+        <label><input type="checkbox" class="uchk" value="Luis Diaz" checked> Luis D.</label>
+        <label><input type="checkbox" class="uchk" value="Yamila Silva" checked> Yamila</label>
+      </div>
+    </div>
+    <div class="fb-f"><label>Área</label>
+      <select id="${id}-area"><option value="">Todas</option>${opts('Area')}</select></div>
+    <div class="fb-f"><label>Tipo</label>
+      <select id="${id}-tipo"><option value="">Todos</option>${opts('Tipo')}</select></div>
+    <div class="fb-f"><label>Estado</label>
+      <select id="${id}-est"><option value="">Todos</option>
+        <option>Por Iniciar</option><option>Programada</option><option>En Proceso</option>
+        <option>Listo</option><option>Standby</option><option>Cancelado</option></select></div>
+    <div class="fb-f"><label>Período</label>
+      <div class="tabs" style="margin-bottom:0">
+        <button class="tab ${defaultPeriodo==='hoy'?'on':''}" onclick="dashPeriodo('${id}','hoy',this)">Hoy</button>
+        <button class="tab ${defaultPeriodo==='semana'?'on':''}" onclick="dashPeriodo('${id}','semana',this)">Semana</button>
+        <button class="tab ${defaultPeriodo==='mes'?'on':''}" onclick="dashPeriodo('${id}','mes',this)">Mes</button>
+        <button class="tab" onclick="dashPeriodo('${id}','libre',this)">Libre</button>
+      </div>
+    </div>
+    <div id="${id}-libre" style="display:none;gap:6px;align-items:flex-end">
+      <div class="fb-f"><label>Desde</label><input type="date" id="${id}-d" value="${mondayStr()}"></div>
+      <div class="fb-f"><label>Hasta</label><input type="date" id="${id}-h" value="${todayStr()}"></div>
+      <button class="btn sm" onclick="applyDashFilter('${id}')"><span class="bt">Aplicar</span></button>
+    </div>
+    <button class="btn sm" style="align-self:flex-end;margin-left:auto" onclick="applyDashFilter('${id}')">
+      <span class="bt">Actualizar</span></button>
+  </div>`;
 }
 
 </script>
