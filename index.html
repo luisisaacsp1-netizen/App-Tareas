@@ -931,7 +931,7 @@ const SECS = {
     subs:[
       {id:'dPlan',    ico:'📅', lbl:'Planificación'},
       {id:'dRend',    ico:'⚡',  lbl:'Rendimiento'},
-      {id:'dCostos',  ico:'💰', lbl:'Costos'},
+      {id:'dCostos',  ico:'💰', lbl:'Costos', adminOnly:true},
       {id:'dGlobal',  ico:'🗂',  lbl:'Vista Global'},
     ]
   },
@@ -960,12 +960,14 @@ function buildNav() {
 function renderSubNav(sec) {
   const subBar=document.getElementById('subBar');
   const subs=SECS[sec]?.subs||[];
-  subBar.innerHTML=subs.map(s=>{
-    const alert=s.id==='nuevaTarea'&&alertasNoProgCount>0?`<span class="badge-alert">${alertasNoProgCount}</span>`:'';
-    return`<button class="snb ${s.id===currentSub?'on':''}" id="snb-${s.id}" onclick="goSub('${sec}','${s.id}')">
-      <span class="i">${s.ico}</span><span>${s.lbl}</span>${alert}
-    </button>`;
-  }).join('');
+  subBar.innerHTML=subs
+    .filter(s=>!s.adminOnly||SESSION.rol==='admin')
+    .map(s=>{
+      const alert=s.id==='nuevaTarea'&&alertasNoProgCount>0?`<span class="badge-alert">${alertasNoProgCount}</span>`:'';
+      return`<button class="snb ${s.id===currentSub?'on':''}" id="snb-${s.id}" onclick="goSub('${sec}','${s.id}')">
+        <span class="i">${s.ico}</span><span>${s.lbl}</span>${alert}
+      </button>`;
+    }).join('');
 }
 
 async function goSec(sec, defaultSub=null) {
@@ -2167,11 +2169,12 @@ async function vDashPlan() {
   <div class="ph"><div class="pt"><div class="rb"></div>Dashboard de Planificación</div>
     <div class="pd">Qué está programado, qué falta planificar y carga futura.</div></div>
   ${buildDashFilterBar('plan')}
+  ${SESSION.rol==='admin'?`
   <div class="tabs" style="margin-bottom:0">
     <button class="tab on" id="planL-op" onclick="switchDashLevel('plan','op')">⚡ Operativo</button>
     <button class="tab" id="planL-tac" onclick="switchDashLevel('plan','tac')">📊 Táctico</button>
     <button class="tab" id="planL-est" onclick="switchDashLevel('plan','est')">🎯 Estratégico</button>
-  </div>
+  </div>`:''}
   <div id="dash-content-plan"></div>`;
 }
 
@@ -2180,11 +2183,12 @@ async function vDashRend() {
   <div class="ph"><div class="pt"><div class="rb"></div>Dashboard de Rendimiento</div>
     <div class="pd">Ejecución + Productividad del equipo.</div></div>
   ${buildDashFilterBar('rend')}
+  ${SESSION.rol==='admin'?`
   <div class="tabs" style="margin-bottom:0">
     <button class="tab on" id="rendL-op" onclick="switchDashLevel('rend','op')">⚡ Operativo</button>
     <button class="tab" id="rendL-tac" onclick="switchDashLevel('rend','tac')">📊 Táctico</button>
     <button class="tab" id="rendL-est" onclick="switchDashLevel('rend','est')">🎯 Estratégico</button>
-  </div>
+  </div>`:''}
   <div id="dash-content-rend"></div>`;
 }
 
@@ -3381,6 +3385,8 @@ async function guardarTarea() {
     const cfx=checkOverlap(SESSION.nombre,todayStr(),ini,ter);
     if(cfx.length>0&&!document.getElementById('chkOvlp')?.checked){toast('Confirma el traslape en la alerta','er');return;}
   }
+  const taskType_saved=taskType;
+  const bloques_saved=[...bloques];
   const btn=document.getElementById('btnT');if(btn){btn.disabled=true;btn.classList.add('ld');}
   const fec=todayStr();
   const fej=document.getElementById('tFej')?.value||'';
@@ -3409,41 +3415,50 @@ async function guardarTarea() {
     comField||'',0,0,
     fechaEjec];
   try {
+    // 1. Insert task (must wait - need to confirm it saved)
     await apiPost({accion:'insertar',tabla:'Tareas',fila});
-    const nt={id:nextId,nombre:SESSION.nombre,tarea:fila[2],solicitante:fila[3],area:fila[4],tipo:fila[5],
+
+    // 2. Update local state immediately
+    const newId = nextId;
+    const nt={id:newId,nombre:SESSION.nombre,tarea:fila[2],solicitante:fila[3],area:fila[4],tipo:fila[5],
       urgente:fila[6],importante:fila[7],hhPlan:fila[8],fechaIngreso:fec,fechaComp:fila[10],
       estado,comentario:fila[12],hhReal:0,nSes:0,fechaEjecucion:fila[15]};
     TAREAS.push(nt);
-    // For compuesta: save each block as a planned session stub
-    if(taskType==='compuesta'&&bloques.length>0) {
-      for(const b of bloques) {
+    nextId++;
+    invalidateCache();
+
+    // 3. Show success and navigate IMMEDIATELY
+    if(taskType==='express') {
+      toast('⚡ Express guardada, registrando...','ok');
+    } else {
+      toast('✅ Tarea guardada','ok');
+    }
+    taskType='';eisUrgente=null;eisImportante=null;
+    goSub('A','agenda');
+
+    // 4. Fire background calls (non-blocking - user already sees result)
+    if(taskType_saved==='express'){
+      const ini=document.getElementById('tHinE')?.value,ter=document.getElementById('tHterE')?.value;
+      if(ini&&ter){
+        const hh=calcHHRaw(ini,ter);
+        apiPost({accion:'insertar',tabla:'Sesiones',fila:[newId,fila[2],SESSION.nombre,fec,ini,ter,hh,'Express',fec,'No','']});
+        apiPost({accion:'actualizar',tabla:'Tareas',id:newId,campos:{11:'Listo',13:hh,14:1}});
+        TAREAS[TAREAS.length-1].estado='Listo';TAREAS[TAREAS.length-1].hhReal=hh;TAREAS[TAREAS.length-1].nSes=1;
+        SESIONES.push({tareaId:newId,tareaNombre:fila[2],responsable:SESSION.nombre,fecha:fec,inicio:ini,termino:ter,hh,esExtra:'No',motivoExtra:''});
+      }
+    }
+    if(taskType_saved==='compuesta'&&bloques_saved.length>0) {
+      for(const b of bloques_saved) {
         if(b.fecha&&b.inicio&&b.termino) {
           const hhB=calcHHRaw(b.inicio,b.termino);
-          // Save as a planned marker - use comentario to mark as planned
-          await apiPost({accion:'insertar',tabla:'Sesiones',
-            fila:[nextId,fila[2],SESSION.nombre,b.fecha,b.inicio,b.termino,hhB,'[Bloque planificado]',fec,'No','']});
-          SESIONES.push({tareaId:nextId,tareaNombre:fila[2],responsable:SESSION.nombre,
+          apiPost({accion:'insertar',tabla:'Sesiones',
+            fila:[newId,fila[2],SESSION.nombre,b.fecha,b.inicio,b.termino,hhB,'[Bloque planificado]',fec,'No','']});
+          SESIONES.push({tareaId:newId,tareaNombre:fila[2],responsable:SESSION.nombre,
             fecha:b.fecha,inicio:b.inicio,termino:b.termino,hh:hhB,comentario:'[Bloque planificado]',esExtra:'No',motivoExtra:''});
         }
       }
     }
-    if(taskType==='express'){
-      const ini=document.getElementById('tHinE').value,ter=document.getElementById('tHterE').value;
-      const hh=calcHHRaw(ini,ter);
-      if(hh>0){
-        await apiPost({accion:'insertar',tabla:'Sesiones',fila:[nextId,fila[2],SESSION.nombre,fec,ini,ter,hh,'Express',fec,'No','']});
-        await apiPost({accion:'actualizar',tabla:'Tareas',id:nextId,campos:{11:'Listo',13:hh,14:1}});
-        TAREAS[TAREAS.length-1].estado='Listo';TAREAS[TAREAS.length-1].hhReal=hh;TAREAS[TAREAS.length-1].nSes=1;
-        SESIONES.push({tareaId:nextId,tareaNombre:fila[2],responsable:SESSION.nombre,fecha:fec,inicio:ini,termino:ter,hh,esExtra:'No',motivoExtra:''});
-        toast(`⚡ Express registrada · ${hh}h`,'ok');
-      }
-    } else {toast('📋 Tarea guardada · '+estado,'ok');}
-    nextId++;
-    apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario}); // non-blocking
-    invalidateCache();
-    toast('✅ Tarea guardada','ok');
-    taskType='';eisUrgente=null;eisImportante=null;
-    goSub('A','agenda'); // Go to agenda so user sees tray
+    apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario})
   }catch(e){toast('Error al guardar','er');}
   if(btn){btn.disabled=false;btn.classList.remove('ld');}
 }
@@ -3616,6 +3631,12 @@ function calcTerminoSimple() {
 
 // ── Dashboard utilities ──
 function getDashFilter(id) {
+  // Non-admin: always filter to own data only
+  if(SESSION.rol!=='admin') {
+    const desde=document.getElementById(`${id}-d`)?.value||mondayStr();
+    const hasta=document.getElementById(`${id}-h`)?.value||todayStr();
+    return{users:[SESSION.nombre],area:'',tipo:'',est:'',desde,hasta};
+  }
   const users=[...document.querySelectorAll(`#fb-${id} .uchk`)].filter(c=>c.checked).map(c=>c.value);
   return{
     users: users.length>0?users:['Luis Sanchez','Luis Diaz','Yamila Silva'],
@@ -4063,13 +4084,13 @@ function switchRegTab(tab){
 function dashFilterBar(id, defaultPeriodo='semana') {
   return`
   <div class="fb" id="fb-${id}">
-    <div class="fb-f"><label>Usuarios ${tip('Selecciona uno o más usuarios para filtrar.')}</label>
+    ${SESSION.rol==='admin'?`<div class="fb-f"><label>Usuarios</label>
       <div class="user-checks">
         <label><input type="checkbox" class="uchk" value="Luis Sanchez" checked> Luis S.</label>
         <label><input type="checkbox" class="uchk" value="Luis Diaz" checked> Luis D.</label>
         <label><input type="checkbox" class="uchk" value="Yamila Silva" checked> Yamila</label>
       </div>
-    </div>
+    </div>`:''}
     <div class="fb-f"><label>Área</label>
       <select id="${id}-area"><option value="">Todas</option>${opts('Area')}</select></div>
     <div class="fb-f"><label>Tipo</label>
