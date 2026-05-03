@@ -298,7 +298,7 @@ main{max-width:900px;margin:0 auto;padding:20px 16px 80px;}
 
 /* AGENDA CALENDAR */
 .cal-wrap{overflow-x:auto;background:#fff;border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--s1);}
-.cal-head{display:flex;background:var(--navy);border-radius:var(--r) var(--r) 0 0;}
+.cal-head{display:flex;background:var(--navy);border-radius:var(--r) var(--r) 0 0;position:sticky;top:0;z-index:10;}
 .cal-time-col{width:52px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.1);}
 .cal-days-head{flex:1;display:flex;}
 .cal-day-hdr{flex:1;padding:8px 4px;text-align:center;border-right:1px solid rgba(255,255,255,.08);min-width:80px;}
@@ -319,7 +319,12 @@ main{max-width:900px;margin:0 auto;padding:20px 16px 80px;}
 .cal-cell:hover{background:rgba(26,48,80,.04);}
 .cal-cell.half{border-bottom:1px dashed rgba(212,218,230,.5);}
 .cal-cell.work-hour{background:rgba(26,48,80,.015);}
-.cal-cell.lunch-hour{background:rgba(232,163,23,.06);}
+.cal-cell.lunch-hour{background:repeating-linear-gradient(
+  45deg,transparent,transparent 4px,
+  rgba(232,163,23,.06) 4px,rgba(232,163,23,.06) 8px);}
+/* Lunch label */
+.cal-lunch-lbl{position:absolute;right:2px;top:1px;font-size:8px;color:rgba(200,160,0,.6);
+  font-family:Montserrat,sans-serif;font-weight:600;pointer-events:none;}
 .cal-cell.off-hour{background:rgba(99,115,136,.04);}
 .cal-now-line{position:absolute;left:0;right:0;height:2px;background:var(--red);z-index:10;pointer-events:none;}
 .cal-now-line::before{content:'';width:8px;height:8px;background:var(--red);border-radius:50%;position:absolute;left:-4px;top:-3px;}
@@ -551,6 +556,17 @@ main{max-width:900px;margin:0 auto;padding:20px 16px 80px;}
 // ══════════════════════════════════════════════════════════
 const API = 'https://script.google.com/macros/s/AKfycbyaF_6ml36PzyOlidnmNBscHuSzZP-VYJWF4bqqzXQoQVlppVb3xiVwSukV-aT9bPaA/exec';
 const SCHEDULE = {1:[8,17,12,13],2:[8,18,12,13],3:[8,17,12,13],4:[8,18,12,13],5:[8,17,12,13]};
+
+// Per-person lunch defaults (start, end in hours) - can be overridden
+const LUNCH_DEFAULTS = {
+  'Luis Sanchez': {start:13.5, end:14.5},  // 13:30-14:30
+  'Luis Diaz':    {start:13,   end:14},     // 13:00-14:00
+  'Yamila Silva': {start:14,   end:15},     // 14:00-15:00
+};
+
+function getLunchFor(nombre) {
+  return LUNCH_DEFAULTS[nombre] || {start:13, end:14};
+}
 const BADGE = {'Por Iniciar':'bi','Programada':'bpr','En Proceso':'bp','Listo':'bl','Standby':'bs','Cancelado':'bc'};
 const ESTADO_COLS = {
   'Por Iniciar':'#d1ecf1;#0c5460','Programada':'#e0f2fe;#075985','En Proceso':'#fff3cd;#856404',
@@ -636,11 +652,19 @@ function activeRol()  { return SESSION.rol; } // always real role
 // ══════════════════════════════════════════════════════════
 // SCHEDULE / ALERTS
 // ══════════════════════════════════════════════════════════
-function getWorkBlocks(ds) {
+function getWorkBlocks(ds, nombre=null) {
   const dow=new Date(ds+'T12:00:00').getDay();
   if(!SCHEDULE[dow])return null;
-  const[s,e,ls,le]=SCHEDULE[dow];
-  return[{start:s*60,end:ls*60},{start:le*60,end:e*60}];
+  const[s,e]=SCHEDULE[dow];
+  const lunch = nombre ? getLunchFor(nombre) : {start:13,end:14};
+  const ls = Math.floor(lunch.start);
+  const lsMin = Math.round((lunch.start - ls)*60);
+  const le = Math.floor(lunch.end);
+  const leMin = Math.round((lunch.end - le)*60);
+  return[
+    {start:s*60,end:ls*60+lsMin},
+    {start:le*60+leMin,end:e*60}
+  ];
 }
 function overlaps(s1,e1,s2,e2){return s1<e2&&s2<e1;}
 function getSessOnDate(nombre,date){
@@ -660,7 +684,7 @@ function checkOverlap(nombre,date,ini,ter,skipIdx=-1){
   return conflicts;
 }
 function checkGaps(nombre,date,extraIni=null,extraTer=null){
-  const blocks=getWorkBlocks(date); if(!blocks)return[];
+  const blocks=getWorkBlocks(date, nombre); if(!blocks)return[];
   const sArr=getSessOnDate(nombre,date).filter(s=>s.inicio&&s.termino);
   const covered=sArr.map(s=>[t2m(s.inicio),t2m(s.termino)]);
   if(extraIni&&extraTer)covered.push([t2m(extraIni),t2m(extraTer)]);
@@ -988,8 +1012,10 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ── AGENDA CALENDAR ──────────────────────────────────────
 function vAgenda() {
   const isAdmin=activeRol()==='admin';
+  const calDefault = VIEW_AS ? VIEW_AS.nombre : SESSION.nombre;
   const persOpts=['Luis Sanchez','Luis Diaz','Yamila Silva'].map(p=>
-    `<option value="${p}" ${p===activeUser()?'selected':''}>${shortName(p)}</option>`).join('');
+    `<option value="${p}" ${p===calDefault?'selected':''}>${shortName(p)}</option>`).join('');
+  // Note: onchange also refreshes tray
   return`
   <div class="ph">
     <div class="pt"><div class="rb"></div>Agenda
@@ -1004,7 +1030,7 @@ function vAgenda() {
         <button class="tab" id="cvM" onclick="switchCal('mes')">Mes</button>
       </div>
     </div>
-    ${isAdmin?`<div class="fb-f"><label>Persona</label><select id="calPers" onchange="renderCal()">${persOpts}</select></div>`:''}
+    ${isAdmin?`<div class="fb-f"><label>Persona</label><select id="calPers" onchange="renderCal();refreshUnscheduledTray()">${persOpts}</select></div>`:''}
     <div style="margin-left:auto;display:flex;align-items:flex-end;gap:6px">
       <button class="btn sm ghost" onclick="calNav(-1)">◀</button>
       <button class="btn sm ghost" onclick="calNav(0)">Hoy</button>
@@ -1034,18 +1060,38 @@ function vAgenda() {
 
 function initCal() {
   calOffset=0; calView='semana'; renderCal();
-  // Load unscheduled tray
-  const me = document.getElementById('calPers')?.value || activeUser();
-  const unscheduled = TAREAS.filter(t=>t.nombre===me&&!t.fechaEjecucion&&!['Listo','Cancelado'].includes(t.estado));
+  refreshUnscheduledTray();
+}
+
+function refreshUnscheduledTray() {
+  const calPersEl = document.getElementById('calPers');
+  const me = (activeRol()==='admin')
+    ? (calPersEl?.value || SESSION.nombre)
+    : (VIEW_AS ? VIEW_AS.nombre : SESSION.nombre);
+  const unscheduled = TAREAS.filter(t=>
+    t.nombre===me &&
+    !t.fechaEjecucion &&
+    !['Listo','Cancelado'].includes(t.estado)
+  );
   const tray = document.getElementById('unscheduledTray');
   const list = document.getElementById('unscheduledList');
-  if(tray&&list&&unscheduled.length>0){
+  if(!tray||!list) return;
+  if(unscheduled.length>0){
     tray.style.display='block';
     list.innerHTML=unscheduled.map(t=>`
-      <div draggable="true" class="badge bpr" style="cursor:grab;padding:4px 8px;font-size:10px;font-weight:600"
-        ondragstart="event.dataTransfer.setData('taskId','${t.id}');event.dataTransfer.setData('taskName','${t.tarea.replace(/'/g,'')}')">
-        #${t.id} ${t.tarea.substring(0,20)}${t.tarea.length>20?'…':''}
+      <div draggable="true"
+        style="background:var(--navy);color:#fff;border-radius:6px;padding:6px 10px;
+          cursor:grab;font-size:11px;font-weight:600;display:flex;flex-direction:column;gap:2px;
+          min-width:140px;max-width:200px;user-select:none"
+        ondragstart="event.dataTransfer.setData('taskId','${t.id}');event.dataTransfer.effectAllowed='move'"
+        ondragend="this.style.opacity='1'"
+        onmousedown="this.style.cursor='grabbing'"
+        onmouseup="this.style.cursor='grab'">
+        <span style="font-size:9px;opacity:.6">#${t.id} · ${t.hhPlan||'—'}h plan · ${t.tipo||'—'}</span>
+        <span>${t.tarea.substring(0,28)}${t.tarea.length>28?'…':''}</span>
       </div>`).join('');
+  } else {
+    tray.style.display='none';
   }
 }
 
@@ -1108,7 +1154,7 @@ function renderCal() {
   // Saturation per day
   const satMap={};
   dateStrs.forEach(ds=>{
-    const blks=getWorkBlocks(ds);if(!blks)return;
+    const blks=getWorkBlocks(ds,nombre);if(!blks)return;
     const totalWork=blks.reduce((s,b)=>s+(b.end-b.start),0)/60;
     const covered=relevantSessions
       .filter(s=>(s._dateNorm||dateStr(s.fecha))===ds&&s.inicio&&s.termino&&s.inicio.length<=5&&s.termino.length<=5)
@@ -1137,12 +1183,15 @@ function renderCal() {
     const blks=getWorkBlocks(ds);
     const workStart=blks?blks[0].start/60:0;
     const workEnd=blks?blks[1].end/60:0;
-    const lunchStart=blks?blks[0].end/60:0;
-    const lunchEnd=blks?blks[1].start/60:0;
+    const lunch=getLunchFor(nombre);
+    const lunchStart=lunch.start;
+    const lunchEnd=lunch.end;
 
     const cells=Array.from({length:nHours},(_,i)=>{
       const h=hStart+i;
-      const cls=isSat?'off-hour':h>=workStart&&h<lunchStart?'work-hour':h>=lunchStart&&h<lunchEnd?'lunch-hour':h>=lunchEnd&&h<workEnd?'work-hour':'off-hour';
+      const hEnd2=h+1;
+      const isLunch=h<lunchEnd&&hEnd2>lunchStart; // overlaps lunch
+      const cls=isSat?'off-hour':blks&&h>=workStart&&h<workEnd?( isLunch?'lunch-hour':'work-hour'):'off-hour';
       return`<div class="cal-cell ${cls}" data-date="${ds}" data-hour="${h}"
         onclick="calCellClick('${ds}',${h})"
         ondragover="calDragOver(event,this)" ondragleave="this.style.background=''"
@@ -1196,8 +1245,9 @@ function renderCal() {
     const dow=d.getDay();
     const isSat=dow===0||dow===6;
     const sat=satMap[ds]||0;
-    const satTxt=sat>=80?`<div class="sat-warn">🔴 ${sat}% ocupado</div>`:sat>=60?`<div class="sat-warn" style="background:var(--amberl)">⚠ ${sat}%</div>`:'';
-    return`<div class="cal-day-hdr ${isToday?'today':''} ${isSat?'sat-col':''}">
+    const satColor=sat>=80?'#e63329':sat>=60?'#c97a00':sat>0?'#1a7a4a':'rgba(255,255,255,.2)';
+    const satTxt=sat>0?`<div style="font-size:9px;color:${satColor};font-weight:700;margin-top:2px">${sat}%</div>`:'';
+    return`<div class="cal-day-hdr ${isToday?'today':''} ${isSat?'sat-col':''}" style="${sat>=80?'border-bottom:3px solid #e63329':sat>=60?'border-bottom:3px solid #c97a00':''}">
       <div class="dn">${d.toLocaleDateString('es-CL',{weekday:'short'}).toUpperCase()}</div>
       <div class="dd">${d.getDate()}</div>
       ${satTxt}
@@ -1209,7 +1259,7 @@ function renderCal() {
     <div class="cal-time-col"></div>
     <div class="cal-days-head">${hdrCells}</div>
   </div>
-  <div class="cal-body" style="max-height:${nHours*HOUR_H+20}px;overflow-y:auto">
+  <div class="cal-body" style="max-height:600px;overflow-y:auto">
     <div class="cal-times">${hourLabels}</div>
     <div class="cal-grid">${cols}</div>
   </div>`;
@@ -1276,15 +1326,38 @@ function calDrop(e,cell,newDs,newHour){
     if(!t)return;
     const hh=parseFloat(t.hhPlan)||1;
     const newIni=String(newHour).padStart(2,'0')+':00';
-    const newTer=m2t(t2m(newIni)+Math.round(hh*60));
-    // Directly schedule it
-    apiPost({accion:'actualizar',tabla:'Tareas',id:trayTaskId,campos:{11:'Programada',15:newDs}}).then(()=>{
-      const idx=TAREAS.findIndex(x=>String(x.id)===trayTaskId);
-      if(idx>-1){TAREAS[idx].estado='Programada';TAREAS[idx].fechaEjecucion=newDs;}
-      invalidateCache();
-      toast(`#${trayTaskId} programada el ${newDs} a las ${newIni}`,'ok');
-      initCal();
-    });
+    const newTer=m2t((t2m(newIni)+Math.round(hh*60))%1440);
+    // Show scheduling modal with exact time picker
+    openModal(`
+      <div class="mt"><div class="rb"></div>Programar tarea</div>
+      <div class="al info" style="margin-bottom:12px">
+        <span class="al-ico">📋</span>
+        <div class="al-txt"><strong>#${t.id} · ${t.tarea}</strong>
+          HH Plan: ${t.hhPlan||'—'}h · ${t.tipo||'—'} · ${t.area||'—'}</div>
+      </div>
+      <div class="eg">
+        <div class="efi"><label>Fecha</label>
+          <input type="date" id="schFec" value="${newDs}"></div>
+        <div class="efi"><label>Hora inicio</label>
+          <input type="time" id="schIni" value="${newIni}" oninput="updSchTermino()"></div>
+        <div class="efi"><label>Hora término ${tip('Calculada con hora inicio + HH planificadas. Puedes ajustar.')}</label>
+          <input type="time" id="schTer" value="${newTer}"></div>
+        <div class="efi">
+          <label>HH planificadas</label>
+          <input type="number" id="schHH" value="${hh}" step="0.25" min="0.25" oninput="updSchTermino()">
+        </div>
+      </div>
+      <div id="schAlerts" style="margin-top:6px"></div>
+      <div class="ma">
+        <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>
+        <button class="btn" onclick="confirmarProgramacion('${t.id}')">
+          <span class="st"></span><span class="bt">📅 Programar</span></button>
+      </div>`);
+    // Show overlap alerts
+    setTimeout(()=>{
+      const c=document.getElementById('schAlerts');
+      if(c)c.innerHTML=renderAlerts(t.nombre,newDs,newIni,newTer);
+    },50);
     return;
   }
   if(!calDragTask)return;
@@ -2873,6 +2946,16 @@ function abrirModal(id) {
       <div class="efi"><label>HH Real (info)</label>
         <input type="text" value="${t.hhReal||'0'} hrs · ${t.nSes||'0'} bloque(s)" readonly style="background:#f0f0f0;color:var(--muted)"></div>
       <div class="efi fw"><label>Comentario</label><input type="text" id="mCom" value="${t.comentario||''}"></div>
+      <div class="efi" style="grid-column:1/-1">
+        <label>Info real ejecutada</label>
+        <div style="background:var(--off);border-radius:6px;padding:8px;font-size:11px">
+          ${SESIONES.filter(s=>String(s.tareaId)===String(t.id)&&s.comentario!=='[Bloque planificado]').map(b=>
+            `<div style="display:flex;justify-content:space-between;margin-bottom:3px">
+              <span>✅ ${dateStr(b.fecha)} ${b.inicio}–${b.termino}${b.esExtra==='Sí'?' ⏰':''}</span>
+              <span style="font-weight:600">${b.hh}h</span>
+            </div>`).join('')||'<span style="color:var(--muted)">Sin ejecuciones registradas</span>'}
+        </div>
+      </div>
     </div>
     <div class="ma">
       <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>
@@ -2880,20 +2963,55 @@ function abrirModal(id) {
       <button class="btn sm" style="background:var(--navy3)" onclick="goSub('A','confirmar');cerrarModal()"><span class="bt">✅ Confirmar</span></button>
     </div>`;
   } else {
+    // Find planned blocks for this task
+    const bloquesPlan = SESIONES.filter(s=>String(s.tareaId)===String(t.id)&&s.comentario==='[Bloque planificado]');
+    const bloquesConf = SESIONES.filter(s=>String(s.tareaId)===String(t.id)&&s.comentario!=='[Bloque planificado]');
+    const bloquesHTML = bloquesPlan.length>0 ? bloquesPlan.map(b=>`
+      <div style="display:flex;justify-content:space-between;padding:5px 8px;background:var(--off);border-radius:5px;margin-bottom:4px;font-size:11px">
+        <span>📅 ${dateStr(b.fecha)} ${b.inicio}–${b.termino}</span>
+        <span style="font-weight:600">${b.hh}h plan</span>
+      </div>`).join('') : '<div style="font-size:11px;color:var(--muted)">Sin bloques programados</div>';
+    const confHTML = bloquesConf.length>0 ? bloquesConf.map(b=>`
+      <div style="display:flex;justify-content:space-between;padding:5px 8px;background:var(--greenl);border-radius:5px;margin-bottom:4px;font-size:11px">
+        <span>✅ ${dateStr(b.fecha)} ${b.inicio}–${b.termino}${b.esExtra==='Sí'?' ⏰':''}</span>
+        <span style="font-weight:600">${b.hh}h real</span>
+      </div>`).join('') : '<div style="font-size:11px;color:var(--muted)">Sin bloques confirmados</div>';
     content=`
     <div class="mt"><div class="rb"></div>Tarea #${t.id}</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
+      <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+      ${!t.fechaEjecucion?'<span class="badge bex">Sin programar</span>':''}
+    </div>
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--navy)">${t.tarea}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:14px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;font-size:12px;margin-bottom:12px">
       <div><span style="color:var(--muted)">Tipo:</span> ${t.tipo||'—'}</div>
       <div><span style="color:var(--muted)">Área:</span> ${t.area||'—'}</div>
-      <div><span style="color:var(--muted)">HH Plan:</span> ${t.hhPlan||'—'}</div>
-      <div><span style="color:var(--muted)">HH Real:</span> ${t.hhReal||'0'}</div>
+      <div><span style="color:var(--muted)">HH Plan:</span> <strong>${t.hhPlan||'—'}h</strong></div>
+      <div><span style="color:var(--muted)">HH Real:</span> <strong>${t.hhReal||'0'}h</strong></div>
+      <div><span style="color:var(--muted)">F. Límite:</span> ${t.fechaComp||'—'}</div>
+      <div><span style="color:var(--muted)">F. Programada:</span> ${t.fechaEjecucion||'—'}</div>
+      <div><span style="color:var(--muted)">Urgente:</span> ${t.urgente==='Si'?'🔴 Sí':'🟢 No'}</div>
+      <div><span style="color:var(--muted)">Importante:</span> ${t.importante==='Si'?'⭐ Sí':'⬜ No'}</div>
     </div>
-    <div class="efi" style="margin-bottom:14px"><label>Cambiar estado</label><select id="mEst">${estOpts}</select></div>
+    <div style="margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Bloques programados</div>
+      ${bloquesHTML}
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Bloques ejecutados (${bloquesConf.length})</div>
+      ${confHTML}
+    </div>
+    <div class="efi" style="margin-bottom:12px"><label>Cambiar estado</label><select id="mEst">${estOpts}</select></div>
     <div class="ma">
       <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cerrar</span></button>
       <button class="btn" onclick="cambiarEstado(${t.id})"><span class="st"></span><span class="bt">Guardar estado</span></button>
-      <button class="btn sm" style="background:var(--navy3)" onclick="irSesion(${t.id});cerrarModal()"><span class="bt">⏱ Sesión</span></button>
+      <button class="btn sm" style="background:var(--green)" onclick="goSub('A','confirmar');cerrarModal()"><span class="bt">✅ Confirmar</span></button>
+    </div>
+    <div id="modalReprogArea" style="margin-top:10px">
+      <button class="btn sm ghost w" onclick="cargarReprogModal(${t.id})">
+        <span class="bt">📋 Ver historial de reprogramaciones</span>
+      </button>
+      <div id="modalReprogList" style="margin-top:6px"></div>
     </div>`;
   }
   openModal(content);
@@ -3733,6 +3851,81 @@ function aiAddMsg(text, type='ai', id=null) {
   msgs.scrollTop = msgs.scrollHeight;
 }
 
+
+
+function updSchTermino() {
+  const ini = document.getElementById('schIni')?.value;
+  const hh  = parseFloat(document.getElementById('schHH')?.value)||1;
+  const ter = document.getElementById('schTer');
+  if(ini&&hh&&ter) ter.value = m2t((t2m(ini)+Math.round(hh*60))%1440);
+  const fec = document.getElementById('schFec')?.value;
+  const c   = document.getElementById('schAlerts');
+  if(c&&ini&&ter?.value) c.innerHTML = renderAlerts(SESSION.nombre,fec||'',ini,ter.value);
+}
+
+async function confirmarProgramacion(tid) {
+  const fec = document.getElementById('schFec')?.value;
+  const ini = document.getElementById('schIni')?.value;
+  const ter = document.getElementById('schTer')?.value;
+  const hh  = parseFloat(document.getElementById('schHH')?.value)||null;
+  if(!fec||!ini||!ter){toast('Completa fecha y horario','er');return;}
+  const t = TAREAS.find(x=>String(x.id)===String(tid));
+  // Check overlap warning
+  const cfx = checkOverlap(t?.nombre||SESSION.nombre, fec, ini, ter);
+  if(cfx.length>0&&!document.getElementById('chkOvlp')?.checked){
+    toast('Confirma el traslape en la alerta','er');return;
+  }
+  const campos = {11:'Programada',15:fec};
+  if(hh) campos[8]=hh; // update hhPlan if changed
+  await apiPost({accion:'actualizar',tabla:'Tareas',id:tid,campos});
+  // Save as planned block session
+  await apiPost({accion:'insertar',tabla:'Sesiones',
+    fila:[tid,t?.tarea||'',t?.nombre||SESSION.nombre,fec,ini,ter,
+      hh||calcHHRaw(ini,ter),'[Bloque planificado]',todayStr(),'No','']});
+  const idx=TAREAS.findIndex(x=>String(x.id)===String(tid));
+  if(idx>-1){TAREAS[idx].estado='Programada';TAREAS[idx].fechaEjecucion=fec;if(hh)TAREAS[idx].hhPlan=hh;}
+  SESIONES.push({tareaId:tid,tareaNombre:t?.tarea||'',responsable:t?.nombre||SESSION.nombre,
+    fecha:fec,inicio:ini,termino:ter,hh:hh||calcHHRaw(ini,ter),
+    comentario:'[Bloque planificado]',esExtra:'No',motivoExtra:''});
+  invalidateCache();
+  cerrarModal();
+  toast(`✅ Tarea #${tid} programada: ${fec} ${ini}–${ter}`,'ok');
+  refreshUnscheduledTray();
+  renderCal();
+}
+
+
+async function cargarReprogModal(tid) {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.querySelector('.bt').textContent = 'Cargando…';
+  try {
+    const data = await apiGet({accion:'reprogramaciones',tareaId:String(tid)});
+    const cont = document.getElementById('modalReprogList');
+    if(!cont)return;
+    if(!Array.isArray(data)||data.length===0){
+      cont.innerHTML='<div style="font-size:11px;color:var(--muted);padding:6px">Sin reprogramaciones registradas.</div>';
+    } else {
+      cont.innerHTML=`<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:5px">
+        ${data.length} reprogramación(es)</div>`+
+        data.map(r=>`
+        <div style="background:var(--amberl);border-radius:5px;padding:7px 9px;margin-bottom:4px;font-size:11px">
+          <div style="display:flex;justify-content:space-between">
+            <span><strong>${r.fechaOrig||'—'}</strong> → <strong>${r.fechaNueva||'—'}</strong></span>
+            ${r.esUrgencia==='Sí'?'<span style="color:var(--red);font-weight:700">⚡ Urgencia</span>':''}
+          </div>
+          <div style="color:var(--muted);margin-top:2px">Motivo: ${r.motivo||'—'}</div>
+          <div style="color:var(--muted)">Por: ${shortName(r.reprogPor||'')} · ${r.fechaReg||''}</div>
+        </div>`).join('');
+    }
+    btn.style.display='none';
+  } catch(e) {
+    const cont=document.getElementById('modalReprogList');
+    if(cont)cont.innerHTML='<div style="font-size:11px;color:var(--red)">Error al cargar reprogramaciones.</div>';
+    btn.disabled=false;
+    btn.querySelector('.bt').textContent='📋 Ver historial de reprogramaciones';
+  }
+}
 
 // ── FILTER INIT ───────────────────────────────────────────
 // Auto-apply dashboard filters on load
