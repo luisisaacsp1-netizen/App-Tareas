@@ -25,6 +25,46 @@ html{font-size:14px;}
 body{font-family:"Open Sans",sans-serif;background:var(--off);color:var(--text);min-height:100vh;}
 
 
+
+/* ── AI CHAT ─────────────────────────────────────────────────────── */
+.ai-fab{position:fixed;bottom:24px;right:24px;width:52px;height:52px;background:var(--navy);
+  border-radius:50%;border:none;cursor:pointer;box-shadow:0 4px 16px rgba(13,27,46,.4);
+  display:flex;align-items:center;justify-content:center;font-size:22px;z-index:800;
+  transition:all .2s;}
+.ai-fab:hover{background:var(--navy3);transform:scale(1.08);}
+.ai-fab .ai-badge{position:absolute;top:-2px;right:-2px;width:14px;height:14px;
+  background:var(--red);border-radius:50%;border:2px solid #fff;}
+.ai-panel{position:fixed;bottom:86px;right:24px;width:360px;max-height:560px;
+  background:#fff;border-radius:12px;box-shadow:0 8px 40px rgba(13,27,46,.25);
+  z-index:800;display:none;flex-direction:column;overflow:hidden;
+  animation:up .22s ease;}
+.ai-panel.op{display:flex;}
+.ai-hdr{background:var(--navy);padding:14px 16px;display:flex;align-items:center;gap:10px;}
+.ai-hdr-ico{font-size:20px;}
+.ai-hdr-txt{flex:1;}
+.ai-hdr-txt .ai-name{font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;color:#fff;}
+.ai-hdr-txt .ai-sub{font-size:10px;color:rgba(255,255,255,.5);}
+.ai-close{background:none;border:none;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer;padding:2px;}
+.ai-close:hover{color:#fff;}
+.ai-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;min-height:200px;}
+.ai-msg{max-width:90%;padding:8px 11px;border-radius:8px;font-size:12px;line-height:1.5;}
+.ai-msg.user{background:var(--navy);color:#fff;align-self:flex-end;border-radius:8px 8px 2px 8px;}
+.ai-msg.ai{background:var(--off);color:var(--text);align-self:flex-start;border-radius:8px 8px 8px 2px;border:1px solid var(--border);}
+.ai-msg.typing{color:var(--muted);font-style:italic;}
+.ai-quick{padding:8px 12px;display:flex;gap:5px;flex-wrap:wrap;border-top:1px solid var(--border);}
+.ai-quick button{padding:4px 9px;border-radius:12px;border:1px solid var(--border);background:#fff;
+  font-size:10px;cursor:pointer;transition:all .15s;color:var(--text);font-family:"Open Sans",sans-serif;}
+.ai-quick button:hover{background:var(--navy);color:#fff;border-color:var(--navy);}
+.ai-input-row{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--border);}
+.ai-input{flex:1;background:var(--inp);border:1.5px solid var(--border);border-radius:20px;
+  padding:7px 13px;font-family:"Open Sans",sans-serif;font-size:12px;color:var(--text);}
+.ai-input:focus{outline:none;border-color:var(--navy3);}
+.ai-send{background:var(--navy);border:none;border-radius:50%;width:32px;height:32px;
+  cursor:pointer;color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;
+  transition:background .15s;flex-shrink:0;}
+.ai-send:hover{background:var(--navy3);}
+.ai-send:disabled{background:var(--border);}
+
 /* SKELETON LOADER */
 .skel{background:linear-gradient(90deg,#e8ecf4 25%,#f4f6f9 50%,#e8ecf4 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:6px;}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
@@ -462,6 +502,41 @@ main{max-width:900px;margin:0 auto;padding:20px 16px 80px;}
 
 </div>
 
+
+<!-- ══ AI ASSISTANT ══ -->
+<button class="ai-fab" id="aiFab" onclick="toggleAI()" title="Asistente IA">
+  🤖
+</button>
+
+<div class="ai-panel" id="aiPanel">
+  <div class="ai-hdr">
+    <span class="ai-hdr-ico">🤖</span>
+    <div class="ai-hdr-txt">
+      <div class="ai-name">Asistente OT</div>
+      <div class="ai-sub">Powered by Claude · Analiza tus datos</div>
+    </div>
+    <button class="ai-close" onclick="toggleAI()">✕</button>
+  </div>
+  <div class="ai-msgs" id="aiMsgs">
+    <div class="ai-msg ai">
+      Hola <strong id="aiGreetName"></strong> 👋 Soy tu asistente de la Oficina Técnica.
+      Puedo analizar tus tareas, sesiones y métricas. ¿En qué te ayudo?
+    </div>
+  </div>
+  <div class="ai-quick" id="aiQuick">
+    <button onclick="aiAsk('¿Cómo va la semana?')">📅 ¿Cómo va la semana?</button>
+    <button onclick="aiAsk('¿Qué tareas están en riesgo?')">⚠️ Tareas en riesgo</button>
+    <button onclick="aiAsk('¿Quién tiene más carga?')">📦 Carga del equipo</button>
+    <button onclick="aiAsk('Resumen de costos')">💰 Costos</button>
+  </div>
+  <div class="ai-input-row">
+    <input type="text" class="ai-input" id="aiInput"
+      placeholder="Pregunta algo sobre tus tareas…"
+      onkeydown="if(event.key==='Enter')aiSend()">
+    <button class="ai-send" id="aiSendBtn" onclick="aiSend()">➤</button>
+  </div>
+</div>
+
 <!-- ══ MODAL ══ -->
 <div class="mb" id="mb">
   <div class="mc" id="mc"></div>
@@ -896,7 +971,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 function vAgenda() {
   const isAdmin=activeRol()==='admin';
   const persOpts=['Luis Sanchez','Luis Diaz','Yamila Silva'].map(p=>
-    `<option value="${p}" ${p===activeUser()?'selected':''}>${p}</option>`).join('');
+    `<option value="${p}" ${p===activeUser()?'selected':''}>${shortName(p)}</option>`).join('');
   return`
   <div class="ph">
     <div class="pt"><div class="rb"></div>Agenda
@@ -918,6 +993,16 @@ function vAgenda() {
       <button class="btn sm ghost" onclick="calNav(1)">▶</button>
     </div>
   </div>
+  <!-- Unscheduled tasks tray -->
+  <div id="unscheduledTray" style="margin-bottom:8px;display:none">
+    <div class="card" style="padding:12px 14px">
+      <div class="cl" style="margin-bottom:8px"><div class="d"></div>
+        Tareas sin programar — arrastra al calendario
+        <button class="btn sm ghost" style="margin-left:auto;padding:2px 8px" onclick="document.getElementById('unscheduledTray').style.display='none'">✕</button>
+      </div>
+      <div id="unscheduledList" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+  </div>
   <div class="cal-wrap" id="calWrap"></div>
   <div class="cal-legend">
     <span style="font-size:10px;color:var(--muted);font-weight:600">LEYENDA:</span>
@@ -929,7 +1014,22 @@ function vAgenda() {
   </div>`;
 }
 
-function initCal() { calOffset=0; calView='semana'; renderCal(); }
+function initCal() {
+  calOffset=0; calView='semana'; renderCal();
+  // Load unscheduled tray
+  const me = document.getElementById('calPers')?.value || activeUser();
+  const unscheduled = TAREAS.filter(t=>t.nombre===me&&!t.fechaEjecucion&&!['Listo','Cancelado'].includes(t.estado));
+  const tray = document.getElementById('unscheduledTray');
+  const list = document.getElementById('unscheduledList');
+  if(tray&&list&&unscheduled.length>0){
+    tray.style.display='block';
+    list.innerHTML=unscheduled.map(t=>`
+      <div draggable="true" class="badge bpr" style="cursor:grab;padding:4px 8px;font-size:10px;font-weight:600"
+        ondragstart="event.dataTransfer.setData('taskId','${t.id}');event.dataTransfer.setData('taskName','${t.tarea.replace(/'/g,'')}')">
+        #${t.id} ${t.tarea.substring(0,20)}${t.tarea.length>20?'…':''}
+      </div>`).join('');
+  }
+}
 
 function switchCal(v) {
   calView=v; calOffset=0;
@@ -971,7 +1071,8 @@ function getCalEndHour()   { return 20; }
 function renderCal() {
   const wrap=document.getElementById('calWrap'); if(!wrap)return;
   const dates=getCalDates();
-  const nombre=activeRol()==='admin'?(document.getElementById('calPers')?.value||activeUser()):activeUser();
+  const calPersEl = document.getElementById('calPers');
+  const nombre = calPersEl ? calPersEl.value || activeUser() : activeUser();
   const todayS=todayStr();
   const hStart=getCalStartHour(), hEnd=getCalEndHour();
   const nHours=hEnd-hStart;
@@ -1143,6 +1244,24 @@ function calDragOver(e,cell){
 }
 function calDrop(e,cell,newDs,newHour){
   e.preventDefault();cell.style.background='';
+  // Handle drag from unscheduled tray
+  const trayTaskId = e.dataTransfer.getData('taskId');
+  if(trayTaskId&&!calDragTask){
+    const t=TAREAS.find(x=>String(x.id)===trayTaskId);
+    if(!t)return;
+    const hh=parseFloat(t.hhPlan)||1;
+    const newIni=String(newHour).padStart(2,'0')+':00';
+    const newTer=m2t(t2m(newIni)+Math.round(hh*60));
+    // Directly schedule it
+    apiPost({accion:'actualizar',tabla:'Tareas',id:trayTaskId,campos:{11:'Programada',15:newDs}}).then(()=>{
+      const idx=TAREAS.findIndex(x=>String(x.id)===trayTaskId);
+      if(idx>-1){TAREAS[idx].estado='Programada';TAREAS[idx].fechaEjecucion=newDs;}
+      invalidateCache();
+      toast(`#${trayTaskId} programada el ${newDs} a las ${newIni}`,'ok');
+      initCal();
+    });
+    return;
+  }
   if(!calDragTask)return;
   const{taskId,ds:origDs,ini,ter}=calDragTask;
   const hh=calcHHRaw(ini,ter);
@@ -1199,29 +1318,55 @@ async function confirmarReprogSesion(taskId,origDs,origIni,newDs,newIni,newTer){
 }
 
 // ── MIS TAREAS ────────────────────────────────────────────
-function vTareas() {
-  const me=activeUser();
-  const isAdmin=activeRol()==='admin'&&!VIEW_AS;
-  const lista=isAdmin?TAREAS:TAREAS.filter(t=>t.nombre===me);
-  const act=lista.filter(t=>!['Listo','Cancelado'].includes(t.estado));
-  const cer=lista.filter(t=>['Listo','Cancelado'].includes(t.estado)).slice(0,30);
-  const rows=arr=>arr.length===0?'<div class="emp"><span class="ei">📋</span>Sin tareas</div>'
-    :`<div class="tl">${arr.map(t=>`
+function vTareas(filtroUsuario=null) {
+  const me = filtroUsuario || activeUser();
+  const isAdmin = activeRol()==='admin';
+  const persOpts2 = ['Todos',...PERSONAS].map(p=>
+    `<option value="${p}" ${p===me?'selected':''}>${p==='Todos'?'Todos':shortName(p)}</option>`).join('');
+  const lista = (isAdmin&&me==='Todos') ? TAREAS : TAREAS.filter(t=>t.nombre===me);
+  const act = lista.filter(t=>!['Listo','Cancelado'].includes(t.estado));
+  const cer = lista.filter(t=>['Listo','Cancelado'].includes(t.estado));
+  const busqVal = document.getElementById('tarBusq')?.value?.toLowerCase()||'';
+  const actF = busqVal ? act.filter(t=>t.tarea?.toLowerCase().includes(busqVal)||String(t.id).includes(busqVal)) : act;
+  const cerF = busqVal ? cer.filter(t=>t.tarea?.toLowerCase().includes(busqVal)||String(t.id).includes(busqVal)) : cer;
+
+  const rows = arr => arr.length===0
+    ? '<div class="emp"><span class="ei">📋</span>Sin tareas</div>'
+    : `<div class="tl">${arr.map(t=>`
       <div class="ti2" onclick="abrirModal(${t.id})">
         <span class="tid">#${t.id}</span>
         <div class="tn2">
           <div class="tna">${t.tarea}</div>
-          <div class="tme">${t.nombre} · ${t.tipo||'—'} · ${t.area||'—'} · HHP:${t.hhPlan||'—'} HHR:${t.hhReal||'0'}</div>
+          <div class="tme">${shortName(t.nombre)} · ${t.tipo||'—'} · ${t.area||'—'} · HHP:${t.hhPlan||'—'} HHR:${t.hhReal||'0'}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
           <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
-          ${!t.fechaEjecucion&&!['Listo','Cancelado'].includes(t.estado)?'<span class="badge bex">Sin programar</span>':''}
+          ${!t.fechaEjecucion&&!['Listo','Cancelado'].includes(t.estado)?'<span class="badge bex">Sin prog.</span>':''}
         </div>
       </div>`).join('')}</div>`;
+
   return`
   <div class="ph"><div class="pt"><div class="rb"></div>${isAdmin?'Todas las Tareas':'Mis Tareas'}</div></div>
-  <div class="card"><div class="cl"><div class="d"></div>Activas (${act.length})</div>${rows(act)}</div>
-  <div class="card"><div class="cl"><div class="d"></div>Cerradas recientes (${cer.length})</div>${rows(cer)}</div>`;
+  <div class="fb" style="margin-bottom:12px">
+    ${isAdmin?`<div class="fb-f"><label>Persona</label>
+      <select id="tarPers" onchange="document.getElementById('main').innerHTML=vTareas(this.value)">${persOpts2}</select>
+    </div>`:''}
+    <div class="fb-f" style="flex:1"><label>Buscar</label>
+      <input type="text" id="tarBusq" placeholder="Texto o #ID…" oninput="document.getElementById('tarList').innerHTML=vTareasContent()" style="width:100%"></div>
+  </div>
+  <div id="tarList">
+    <div class="card"><div class="cl"><div class="d"></div>Activas (${actF.length})</div>${rows(actF)}</div>
+    <div class="card">
+      <div class="cl"><div class="d"></div>
+        Cerradas (${cerF.length})
+        <button class="btn sm ghost" style="margin-left:auto;padding:3px 8px" onclick="
+          const el=document.getElementById('tarCerradas');
+          el.style.display=el.style.display==='none'?'block':'none';
+          this.textContent=el.style.display==='none'?'Mostrar':'Ocultar';">Mostrar</button>
+      </div>
+      <div id="tarCerradas" style="display:none">${rows(cerF)}</div>
+    </div>
+  </div>`;
 }
 
 // ── NUEVA TAREA ───────────────────────────────────────────
@@ -1743,6 +1888,11 @@ async function vDashPlan() {
   <div class="ph"><div class="pt"><div class="rb"></div>Dashboard de Planificación</div>
     <div class="pd">Qué está programado, qué falta planificar y carga futura.</div></div>
   ${dashFilterBar('plan')}
+  <div class="tabs" style="margin-bottom:0">
+    <button class="tab on" id="planL-op" onclick="switchDashLevel('plan','op')">⚡ Operativo</button>
+    <button class="tab" id="planL-tac" onclick="switchDashLevel('plan','tac')">📊 Táctico</button>
+    <button class="tab" id="planL-est" onclick="switchDashLevel('plan','est')">🎯 Estratégico</button>
+  </div>
   <div id="dash-content-plan"></div>`;
 }
 
@@ -1791,7 +1941,7 @@ function buildDashPlan(f) {
         <div class="carga-pct ${cls}">${pct}%</div>
       </div>
       <div class="carga-bar"><div class="carga-fill ${cls}" style="width:${Math.min(pct,100)}%"></div></div>
-      <button class="btn sm ghost" style="margin-top:6px" onclick="this.nextElementSibling.classList.toggle('op');this.textContent=this.nextElementSibling.classList.contains('op')?'▲ Ocultar':'▼ Ver tareas'">▼ Ver tareas</button>
+      <button class="btn sm ghost" style="margin-top:6px" id="btn_carga_${p.replace(' ','_')}" onclick="toggleCargaDetail('${p.replace(' ','_')}')" >▼ Ver tareas (${pT.filter(t=>((parseFloat(t.hhPlan)||0)-(parseFloat(t.hhReal)||0))>0).length})</button>
       <div class="carga-detail"><div style="margin-top:6px">${pT.filter(t=>((parseFloat(t.hhPlan)||0)-(parseFloat(t.hhReal)||0))>0).map(t=>`
         <div class="br"><div class="bl2" title="${t.tarea}">#${t.id} ${t.tarea.substring(0,20)}…</div>
           <div class="bt2"><div class="bf a" style="width:${Math.min(100,Math.round(Math.max(0,(parseFloat(t.hhPlan)||0)-(parseFloat(t.hhReal)||0))/(Math.max(parseFloat(t.hhPlan)||1,1))*100))}%"></div></div>
@@ -1806,11 +1956,17 @@ function buildDashPlan(f) {
     <div class="kpi cl2" onclick="toggleDrill('drSinProg')">
       <div class="kv ${sinProg.length>0?'neg':''}">${sinProg.length}</div>
       <div class="kl">Sin programar (>1 día) ${tip('Tareas creadas hace más de 1 día sin fecha de ejecución asignada.')}</div>
-      <div class="drill" id="drSinProg"><div class="tl">${sinProg.slice(0,10).map(t=>`
+      <div class="drill" id="drSinProg">
+        <div style="font-size:11px;font-weight:600;color:var(--amber);margin-bottom:6px">
+          Total HH plan sin programar: ${sinProg.reduce((s,t)=>s+(parseFloat(t.hhPlan)||0),0).toFixed(1)}h
+        </div>
+        <div class="tl">${sinProg.slice(0,10).map(t=>`
         <div class="ti2" onclick="abrirModal(${t.id})">
           <span class="tid">#${t.id}</span><div class="tn2"><div class="tna">${t.tarea}</div>
-          <div class="tme">${t.nombre} · Ingresada: ${dateStr(t.fechaIngreso)}</div></div>
-        </div>`).join('')||'<div class="emp">Sin pendientes</div>'}</div></div>
+          <div class="tme">${shortName(t.nombre)} · Ingresada: ${dateStr(t.fechaIngreso)} · HHP: ${t.hhPlan||'—'}h</div></div>
+          <span style="font-size:11px;font-weight:700;color:var(--amber)">${t.hhPlan||'—'}h</span>
+        </div>`).join('')||'<div class="emp">Sin pendientes</div>'}</div>
+      </div>
     </div>
     <div class="kpi cl2" onclick="toggleDrill('drProxVenc')">
       <div class="kv ${proxVenc.length>0?'warn':''}">${proxVenc.length}</div>
@@ -1824,12 +1980,22 @@ function buildDashPlan(f) {
     </div>
     <div class="kpi">
       <div class="kv">${tasaPlan}%</div>
-      <div class="kl">Tasa de planificación ${tip('% de tareas que tienen fecha de ejecución asignada vs total. Mide qué tan proactivo es el equipo.')}</div>
+      <div class="kl">Tasa de programación ${tip('% de tareas activas que tienen fecha y bloque horario asignados vs total. Mide qué tan proactivo es el equipo.')}</div>
       <div class="ks ${tasaPlan>=70?'pos':'neg'}">${tasaPlan>=70?'✅ Buena planificación':'⚠ Mejorar programación'}</div>
     </div>
-    <div class="kpi">
+    <div class="kpi cl2" onclick="toggleDrill('drProgramadas')">
       <div class="kv">${planificadas.length}</div>
-      <div class="kl">Tareas programadas ${tip('Tareas con fecha de ejecución asignada.')}</div>
+      <div class="kl">Tareas programadas ${tip('Tareas con fecha y bloque horario asignado. Clic para ver detalle con HH comprometidas.')}</div>
+      <div class="ks">${planificadas.reduce((s,t)=>s+(parseFloat(t.hhPlan)||0),0).toFixed(1)}h comprometidas</div>
+      <div class="drill" id="drProgramadas">
+        <div class="tl">${planificadas.slice(0,10).map(t=>`
+          <div class="ti2" onclick="abrirModal(${t.id})">
+            <span class="tid">#${t.id}</span><div class="tn2"><div class="tna">${t.tarea}</div>
+            <div class="tme">${shortName(t.nombre)} · ${t.fechaEjecucion} · HHP:${t.hhPlan||'—'}h</div></div>
+            <span class="badge bpr">${t.hhPlan||'—'}h</span>
+          </div>`).join('')||'<div class="emp">Sin programadas</div>'}
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1837,7 +2003,36 @@ function buildDashPlan(f) {
     <div class="cug">${cumplHTML}</div></div>
 
   <div class="ph" style="margin-top:12px"><div class="pt"><div class="rb"></div>Carga de trabajo futura</div></div>
-  ${cargaCards}`;
+  ${cargaCards}
+
+  <!-- Criticidad Eisenhower -->
+  ${(()=>{
+    const criticos=tareas.filter(t=>t.urgente==='Si'&&t.importante==='Si'&&!['Listo','Cancelado'].includes(t.estado));
+    const total=tareas.filter(t=>!['Listo','Cancelado'].includes(t.estado)).length;
+    const pct=total>0?Math.round(criticos.length/total*100):0;
+    const color=pct>50?'var(--red)':pct>30?'var(--amber)':'var(--green)';
+    return `<div class="kg2">
+      <div class="kpi cl2" onclick="toggleDrill('drCritico')">
+        <div class="kv" style="color:${color}">${criticos.length}</div>
+        <div class="kl">⚡ Urgente + Importante ${tip('Tareas activas en el cuadrante crítico de Eisenhower. Si este número es alto, el equipo está en modo reactivo.')}</div>
+        <div class="ks" style="color:${color}">${pct}% del trabajo activo es crítico</div>
+        <div class="drill" id="drCritico">
+          <div class="tl">${criticos.slice(0,10).map(t=>`
+            <div class="ti2" onclick="abrirModal(${t.id})">
+              <span class="tid">#${t.id}</span>
+              <div class="tn2"><div class="tna">${t.tarea}</div>
+              <div class="tme">${shortName(t.nombre)} · ${t.area||'—'} · HHP:${t.hhPlan||'—'}h</div></div>
+              <span class="badge" style="background:#fee2e2;color:#991b1b">⚡ Crítico</span>
+            </div>`).join('')||'<div class="emp">Sin tareas críticas ✅</div>'}
+          </div>
+        </div>
+      </div>
+      <div class="kpi">
+        <div class="kv">${tareas.filter(t=>t.urgente!=='Si'&&t.importante==='Si'&&!['Listo','Cancelado'].includes(t.estado)).length}</div>
+        <div class="kl">📅 Importante no urgente ${tip('Tareas que deberían estar planificadas. Si este número es bajo, el equipo no está planificando trabajo estratégico.')}</div>
+      </div>
+    </div>`;
+  })()}`;
 }
 
 // Trigger initial load for planificación
@@ -1851,6 +2046,11 @@ async function vDashRend() {
   <div class="ph"><div class="pt"><div class="rb"></div>Dashboard de Rendimiento</div>
     <div class="pd">Ejecución + Productividad del equipo.</div></div>
   ${dashFilterBar('rend')}
+  <div class="tabs" style="margin-bottom:0">
+    <button class="tab on" id="rendL-op" onclick="switchDashLevel('rend','op')">⚡ Operativo</button>
+    <button class="tab" id="rendL-tac" onclick="switchDashLevel('rend','tac')">📊 Táctico</button>
+    <button class="tab" id="rendL-est" onclick="switchDashLevel('rend','est')">🎯 Estratégico</button>
+  </div>
   <div id="dash-content-rend"></div>`;
 }
 
@@ -1903,7 +2103,7 @@ async function buildDashRend(f) {
     return`<div class="prod-card">
       <div class="prod-name">${p}</div>
       <div class="prod-row"><span class="prod-kl">Completadas ${tip('Tareas cerradas / total en el período.')}</span><span class="prod-kv">${done}/${pT.length} (${pT.length>0?Math.round(done/pT.length*100):0}%)</span></div>
-      <div class="prod-row"><span class="prod-kl">HH Real / Plan ${tip('Horas reales ejecutadas vs planificadas.')}</span><span class="prod-kv ${effCls}">${Math.round(hhR*10)/10}h / ${Math.round(hhP*10)/10}h (${eff}%)</span></div>
+      <div class="prod-row"><span class="prod-kl">Tasa de ejecución ${tip('HH Real / HH Plan × 100. Mide qué % de lo planificado se ejecutó. 100% = ejecutó exactamente lo planeado. >100% = tardó más de lo estimado.')}</span><span class="prod-kv ${effCls}">${Math.round(hhR*10)/10}h / ${Math.round(hhP*10)/10}h (${eff}%)</span></div>
       <div class="prod-row"><span class="prod-kl">Horas extra ${tip('Total de horas registradas fuera del horario laboral normal.')}</span><span class="prod-kv ${hhE>4?'neg':''}">${Math.round(hhE*10)/10}h</span></div>
     </div>`;
   }).join('');
@@ -1920,6 +2120,20 @@ async function buildDashRend(f) {
 
   return`
   <div class="kg4">
+    <div class="kpi cl2" onclick="toggleDrill('drListos')">
+      <div class="kv pos">${listas}</div>
+      <div class="kl">Tareas completadas ${tip('Tareas cerradas en el período con estado Listo.')}</div>
+      <div class="ks">${sesiones.filter(s=>tareas.filter(t=>t.estado==='Listo').some(t=>String(t.id)===String(s.tareaId))).reduce((sum,s)=>sum+(parseFloat(s.hh)||0),0).toFixed(1)}h ejecutadas</div>
+      <div class="drill" id="drListos">
+        <div class="tl">${tareas.filter(t=>t.estado==='Listo').slice(0,10).map(t=>`
+          <div class="ti2" onclick="abrirModal(${t.id})">
+            <span class="tid">#${t.id}</span><div class="tn2"><div class="tna">${t.tarea}</div>
+            <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'} HHR:${t.hhReal||'0'}</div></div>
+            <span class="badge bl">✓</span>
+          </div>`).join('')||'<div class="emp">Sin completadas</div>'}
+        </div>
+      </div>
+    </div>
     <div class="kpi cl2" onclick="toggleDrill('drTotales')">
       <div class="kv">${totalTar}</div>
       <div class="kl">Tareas en el período ${tip('Total de tareas con fecha de ingreso en el período seleccionado.')}</div>
@@ -1957,10 +2171,13 @@ async function buildDashRend(f) {
   <div class="prod-grid">${prodCards}</div>
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-    <div class="cw"><div class="ct">HH Reales por Área ${tip('Total horas reales ejecutadas agrupadas por área solicitante.')}</div>${bar(hhArea)}</div>
-    <div class="cw"><div class="ct">HH Reales por Tipo ${tip('Total horas reales agrupadas por tipo de tarea.')}</div>${bar(hhTipo,'r')}</div>
+    <div class="cw"><div class="ct">HH Reales por Área ${tip('Clic en cada barra para ver las tareas de esa área.')}</div>
+      ${barClickable(hhArea,'area',tareas,sesiones)}</div>
+    <div class="cw"><div class="ct">HH Reales por Tipo ${tip('Clic en cada barra para ver las tareas de ese tipo.')}</div>
+      ${barClickable(hhTipo,'tipo',tareas,sesiones,'r')}</div>
   </div>
-  <div class="cw"><div class="ct">HH Reales por Persona ${tip('Total horas reales ejecutadas por cada integrante.')}</div>${bar(hhPers,'t')}</div>
+  <div class="cw"><div class="ct">HH Reales por Persona ${tip('Clic en cada barra para ver las tareas de esa persona.')}</div>
+    ${barClickable(hhPers,'nombre',tareas,sesiones,'t')}</div>
 
   <div class="card"><div class="cl"><div class="d"></div>Top 10 desviaciones HH ${tip('Tareas con mayor diferencia entre HH planificadas y reales.')}</div>
     <div class="tw"><table class="dt">
@@ -1975,23 +2192,28 @@ async function buildDashRend(f) {
     </table></div>
   </div>
 
-  <div class="card"><div class="cl"><div class="d"></div>Promedio HH real por tipo — calibración ${tip('Usa estos valores para mejorar futuras estimaciones de cada tipo de tarea.')}</div>
+  <div class="card"><div class="cl"><div class="d"></div>Promedio HH real por tipo — calibración ${tip('Clic en cada fila para ver las tareas de ese tipo. Usa estos promedios para estimar mejor.')}</div>
     <div class="tw"><table class="dt">
       <thead><tr><th>Tipo</th><th>N° Tareas</th><th>Prom. HH Real</th></tr></thead>
       <tbody>${Object.entries(promTipo).sort((a,b)=>b[1]-a[1]).map(([t,h])=>`
-        <tr><td>${t}</td><td style="text-align:center">${cntTipo[t]}</td>
-        <td style="text-align:center;font-weight:600">${Math.round(h/cntTipo[t]*10)/10}h</td></tr>`).join('')||
+        <tr onclick="showBarDrill('tipo','${t}')" style="cursor:pointer">
+          <td>${t}</td><td style="text-align:center">${cntTipo[t]}</td>
+          <td style="text-align:center;font-weight:600">${Math.round(h/cntTipo[t]*10)/10}h</td>
+        </tr>`).join('')||
         '<tr><td colspan="3" style="text-align:center;color:var(--muted)">Sin datos</td></tr>'}
       </tbody>
     </table></div>
+    <div class="drill" id="drill_tipo" style="margin-top:8px"></div>
   </div>
 
-  <div class="card"><div class="cl"><div class="d"></div>Distribución Eisenhower ${tip('Muestra qué % del trabajo es reactivo (urgente) vs planificado (importante, no urgente).')}</div>
+  <div class="card"><div class="cl"><div class="d"></div>Distribución Eisenhower ${tip('Clic en cada cuadrante para ver las tareas. Muestra qué % del trabajo es reactivo vs planificado.')}</div>
     ${Object.entries(eisDist).map(([k,v])=>`
-    <div class="br"><div class="bl2" title="${k}">${k}</div>
+    <div class="br" style="cursor:pointer" onclick="showEisDrill('${k}')">
+      <div class="bl2" title="${k}">${k.length>18?k.substring(0,17)+'…':k}</div>
       <div class="bt2"><div class="bf" style="width:${totalTar>0?Math.round(v/totalTar*100):0}%"></div></div>
       <div class="bv">${v}</div>
     </div>`).join('')}
+    <div class="drill" id="drEisDist" style="margin-top:8px"></div>
   </div>`;
 }
 
@@ -2012,8 +2234,13 @@ async function vDashCostos() {
   }catch(e){}
   return`
   <div class="ph"><div class="pt"><div class="rb"></div>Dashboard de Costos</div>
-    <div class="pd">Costo estimado en HH del trabajo realizado. Solo visible para administradores.</div></div>
+    <div class="pd">Análisis de costos en HH. Solo visible para administradores.</div></div>
   ${dashFilterBar('costos')}
+  <div class="tabs" style="margin-bottom:0">
+    <button class="tab on" id="costosL-op" onclick="switchDashLevel('costos','op')">⚡ Operativo</button>
+    <button class="tab" id="costosL-tac" onclick="switchDashLevel('costos','tac')">📊 Táctico</button>
+    <button class="tab" id="costosL-est" onclick="switchDashLevel('costos','est')">🎯 Estratégico</button>
+  </div>
   <div id="dash-content-costos"></div>`;
 }
 
@@ -2596,24 +2823,36 @@ function abrirModal(id) {
     .map(e=>`<option value="${e}" ${e===t.estado?'selected':''}>${e}</option>`).join('');
   let content;
   if(isAdmin){
+    const eisU = t.urgente==='Si'?'🔴 Sí':t.urgente==='No'?'🟢 No':'—';
+    const eisI = t.importante==='Si'?'⭐ Sí':t.importante==='No'?'⬜ No':'—';
     content=`
-    <div class="mt"><div class="rb"></div>Tarea #${t.id}</div>
+    <div class="mt"><div class="rb"></div>Tarea #${t.id} — ${shortName(t.nombre)}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+      <span class="badge bpr" style="font-size:9px">Urgente: ${eisU}</span>
+      <span class="badge bpr" style="font-size:9px">Importante: ${eisI}</span>
+      ${t.fechaEjecucion?`<span class="badge bi">Prog: ${t.fechaEjecucion}</span>`:'<span class="badge bex">Sin programar</span>'}
+    </div>
     <div class="eg">
       <div class="efi fw"><label>Descripción</label><textarea id="mTar" rows="2">${t.tarea||''}</textarea></div>
       <div class="efi"><label>Estado</label><select id="mEst">${estOpts}</select></div>
       <div class="efi"><label>Responsable</label><select id="mNom">
-        ${['Luis Sanchez','Luis Diaz','Yamila Silva'].map(n=>`<option ${n===t.nombre?'selected':''}>${n}</option>`).join('')}</select></div>
+        ${PERSONAS.map(n=>`<option value="${n}" ${n===t.nombre?'selected':''}>${shortName(n)}</option>`).join('')}
+      </select></div>
       <div class="efi"><label>Solicitante</label><select id="mSol"><option value="">—</option>${opts('Solicitante',t.solicitante)}</select></div>
       <div class="efi"><label>Área</label><select id="mAre"><option value="">—</option>${opts('Area',t.area)}</select></div>
       <div class="efi"><label>Tipo</label><select id="mTip"><option value="">—</option>${opts('Tipo',t.tipo)}</select></div>
       <div class="efi"><label>HH Plan</label><input type="number" id="mHHp" value="${t.hhPlan||''}" step="0.25" min="0"></div>
       <div class="efi"><label>F. Límite</label><input type="date" id="mFco" value="${t.fechaComp||''}"></div>
+      <div class="efi"><label>F. Programada</label><input type="date" id="mFej" value="${t.fechaEjecucion||''}"></div>
+      <div class="efi"><label>HH Real (info)</label>
+        <input type="text" value="${t.hhReal||'0'} hrs · ${t.nSes||'0'} bloque(s)" readonly style="background:#f0f0f0;color:var(--muted)"></div>
       <div class="efi fw"><label>Comentario</label><input type="text" id="mCom" value="${t.comentario||''}"></div>
     </div>
     <div class="ma">
       <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>
       <button class="btn" onclick="guardarModal(${t.id})"><span class="st"></span><span class="bt">Guardar todo</span></button>
-      <button class="btn sm" style="background:var(--navy3)" onclick="irSesion(${t.id});cerrarModal()"><span class="bt">⏱ Sesión</span></button>
+      <button class="btn sm" style="background:var(--navy3)" onclick="goSub('A','confirmar');cerrarModal()"><span class="bt">✅ Confirmar</span></button>
     </div>`;
   } else {
     content=`
@@ -2637,9 +2876,9 @@ function abrirModal(id) {
 
 async function guardarModal(id){
   const idx=TAREAS.findIndex(t=>String(t.id)===String(id));
-  const campos={1:document.getElementById('mNom')?.value||'',2:document.getElementById('mTar')?.value||'',3:document.getElementById('mSol')?.value||'',4:document.getElementById('mAre')?.value||'',5:document.getElementById('mTip')?.value||'',8:parseFloat(document.getElementById('mHHp')?.value)||'',10:document.getElementById('mFco')?.value||'',11:document.getElementById('mEst')?.value||'',12:document.getElementById('mCom')?.value||''};
+  const campos={1:document.getElementById('mNom')?.value||'',2:document.getElementById('mTar')?.value||'',3:document.getElementById('mSol')?.value||'',4:document.getElementById('mAre')?.value||'',5:document.getElementById('mTip')?.value||'',8:parseFloat(document.getElementById('mHHp')?.value)||'',10:document.getElementById('mFco')?.value||'',11:document.getElementById('mEst')?.value||'',12:document.getElementById('mCom')?.value||'',15:document.getElementById('mFej')?.value||''};
   await apiPost({accion:'actualizar',tabla:'Tareas',id,campos});
-  const m={'1':'nombre','2':'tarea','3':'solicitante','4':'area','5':'tipo','8':'hhPlan','10':'fechaComp','11':'estado','12':'comentario'};
+  const m={'1':'nombre','2':'tarea','3':'solicitante','4':'area','5':'tipo','8':'hhPlan','10':'fechaComp','11':'estado','12':'comentario','15':'fechaEjecucion'};
   if(idx>-1)Object.entries(campos).forEach(([c,v])=>{if(m[c])TAREAS[idx][m[c]]=v;});
   cerrarModal();toast('Tarea actualizada','ok');
 }
@@ -2661,12 +2900,12 @@ function irSesion(id){
 // ══════════════════════════════════════════════════════════
 // CONFIRMAR BLOQUE (replaces vSesion)
 // ══════════════════════════════════════════════════════════
-function vConfirmarBloque() {
+function vConfirmarBloque(overridePers=null) {
   const hoy=todayStr();
-  const me=activeUser();
+  const me=overridePers||activeUser();
   // Get programmed blocks: sessions with no confirmation yet
   // Also get tasks with fechaEjecucion today or past that aren't Listo
-  const pendientes=(activeRol()==='admin'&&!VIEW_AS?TAREAS:TAREAS.filter(t=>t.nombre===me))
+  const pendientes=TAREAS.filter(t=>t.nombre===me)
     .filter(t=>!['Listo','Cancelado'].includes(t.estado)&&t.fechaEjecucion)
     .sort((a,b)=>(a.fechaEjecucion>b.fechaEjecucion?1:-1));
 
@@ -2728,6 +2967,13 @@ function vConfirmarBloque() {
   return `
   <div class="ph"><div class="pt"><div class="rb"></div>Confirmar Bloques</div>
     <div class="pd">Confirma los bloques programados con tu tiempo real ejecutado.</div></div>
+  ${activeRol()==='admin'?`<div class="fb" style="margin-bottom:8px">
+    <div class="fb-f"><label>Ver bloques de</label>
+      <select onchange="document.getElementById('main').innerHTML=vConfirmarBloque(this.value)"
+        style="padding:6px 22px 6px 9px;font-size:12px">
+        ${PERSONAS.map(p=>`<option value="${p}">${shortName(p)}</option>`).join('')}
+      </select>
+    </div></div>`:''}
 
   ${pasadas.length>0?`
   <div class="card">
@@ -2871,6 +3117,597 @@ function vSesion() {
     <div class="sp"></div><div class="st"></div><span class="bt">Registrar</span>
   </button>`;
 }
+
+
+// ── Name display helpers ─────────────────────────────────
+function shortName(n) {
+  if (!n) return '—';
+  const p = n.split(' ');
+  return p.length >= 2 ? p[0] + ' ' + p[1][0] + '.' : n;
+}
+const PERSONAS = ['Luis Sanchez','Luis Diaz','Yamila Silva'];
+const PERSONAS_OPTS = PERSONAS.map(p =>
+  `<option value="${p}">${shortName(p)}</option>`).join('');
+
+
+function barClickable(items, field, tareas, sesiones, cls='') {
+  if(!items||!Object.keys(items).length) return '<div class="emp" style="padding:8px">Sin datos</div>';
+  const max=Math.max(...Object.values(items),1);
+  return Object.entries(items).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`
+    <div class="br" style="cursor:pointer" onclick="showBarDrill('${field}','${k.replace(/'/g,'').replace(/"/g,'')}')">
+      <div class="bl2" title="${k}">${k.length>14?k.substring(0,13)+'…':k}</div>
+      <div class="bt2"><div class="bf ${cls}" style="width:${Math.round(v/max*100)}%"></div></div>
+      <div class="bv">${fmtHH(v)}h</div>
+    </div>`).join('') +
+    '<div class="drill op" id="drill_'+field+'" style="display:none;margin-top:8px"></div>';
+}
+
+function showBarDrill(field, value) {
+  const drillId = 'drill_'+field;
+  const existing = document.getElementById(drillId);
+  // Close if clicking same
+  if(existing&&existing.getAttribute('data-val')===value&&existing.style.display==='block'){
+    existing.style.display='none';return;
+  }
+  const matchTareas = TAREAS.filter(t=>String(t[field]||'')===String(value));
+  const html2 = `<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">${value}</div>
+    <div class="tl">${matchTareas.slice(0,10).map(t=>`
+      <div class="ti2" onclick="abrirModal(${t.id})">
+        <span class="tid">#${t.id}</span>
+        <div class="tn2"><div class="tna">${t.tarea}</div>
+        <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'} HHR:${t.hhReal||'0'}</div></div>
+        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+      </div>`).join('')||'<div class="emp">Sin tareas</div>'}
+    </div>`;
+  // Re-render drill in a fixed location
+  let drill = document.getElementById(drillId);
+  if(!drill){
+    // Create global drill panel after the chart
+    drill=document.createElement('div');drill.id=drillId;drill.className='drill';
+    drill.style.marginTop='8px';
+  }
+  drill.innerHTML=html2;drill.style.display='block';
+  drill.setAttribute('data-val',value);
+  // Insert after closest .cw parent
+  const bar=event.currentTarget||event.target;
+  const cw=bar.closest('.cw');
+  if(cw&&!cw.querySelector('#'+drillId))cw.appendChild(drill);
+}
+
+
+function toggleCargaDetail(key) {
+  const btn=document.getElementById('btn_carga_'+key);
+  const det=btn?.nextElementSibling;
+  if(!det)return;
+  det.classList.toggle('op');
+  btn.textContent=det.classList.contains('op')?'▲ Ocultar':
+    '▼ Ver tareas ('+det.querySelectorAll('.br').length+')';
+}
+
+function showEisDrill(cuadrante) {
+  const el=document.getElementById('drEisDist'); if(!el)return;
+  if(el.getAttribute('data-q')===cuadrante&&el.classList.contains('op')){el.classList.remove('op');return;}
+  el.setAttribute('data-q',cuadrante);
+  const map={'Urgente+Importante':t=>t.urgente==='Si'&&t.importante==='Si',
+    'Importante, no urgente':t=>t.urgente!=='Si'&&t.importante==='Si',
+    'Urgente, no importante':t=>t.urgente==='Si'&&t.importante!=='Si',
+    'Ni urgente ni importante':t=>t.urgente!=='Si'&&t.importante!=='Si'};
+  const fn=map[cuadrante]||map['Ni urgente ni importante'];
+  const items=TAREAS.filter(fn);
+  el.innerHTML=`<div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:6px">${cuadrante} (${items.length} tareas)</div>
+    <div class="tl">${items.slice(0,10).map(t=>`
+      <div class="ti2" onclick="abrirModal(${t.id})">
+        <span class="tid">#${t.id}</span>
+        <div class="tn2"><div class="tna">${t.tarea}</div>
+        <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'}</div></div>
+        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+      </div>`).join('')||'<div class="emp">Sin tareas</div>'}
+    </div>`;
+  el.classList.add('op');
+}
+
+// ════════════════════════════════════════════════════════
+// DASHBOARD LEVEL SWITCHER
+// ════════════════════════════════════════════════════════
+const DASH_LEVELS = { plan:'op', rend:'op', costos:'op', global:'op' };
+
+function switchDashLevel(dash, level) {
+  DASH_LEVELS[dash] = level;
+  // Update tab pills
+  ['op','tac','est'].forEach(l => {
+    document.getElementById(`${dash}L-${l}`)?.classList.toggle('on', l===level);
+  });
+  applyDashFilter(dash);
+}
+
+// Override applyDashFilter to be level-aware
+const _origApplyDash = applyDashFilter;
+async function applyDashFilter(id) {
+  const f = getDashFilter(id);
+  const cont = document.getElementById(`dash-content-${id}`);
+  if (!cont) return;
+  cont.innerHTML = `<div class="skel-card"><div class="skel skel-line" style="width:40%;height:18px;margin-bottom:14px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div class="skel" style="height:80px;border-radius:8px"></div>
+      <div class="skel" style="height:80px;border-radius:8px"></div>
+      <div class="skel" style="height:80px;border-radius:8px"></div>
+    </div></div>`;
+  const level = DASH_LEVELS[id] || 'op';
+  switch(id) {
+    case 'plan':   cont.innerHTML = buildDashPlanLevel(f, level); break;
+    case 'rend':   cont.innerHTML = await buildDashRendLevel(f, level); break;
+    case 'costos': cont.innerHTML = buildDashCostosLevel(f, level); break;
+    case 'global': cont.innerHTML = buildDashGlobal(f); break;
+  }
+}
+
+// ── PLANIFICACIÓN LEVELS ──────────────────────────────────────────────────
+function buildDashPlanLevel(f, level) {
+  if (level === 'op')  return buildDashPlan(f);
+  if (level === 'tac') return buildDashPlanTactico(f);
+  return buildDashPlanEstrategico(f);
+}
+
+function buildDashPlanTactico(f) {
+  const tareas = filtrarTareas(f);
+  const hoy = todayStr();
+  const ayer = new Date(); ayer.setDate(ayer.getDate()-1);
+  const ayerStr = ayer.toISOString().split('T')[0];
+
+  // Tasa de programación mensual
+  const conFecha = tareas.filter(t => t.fechaEjecucion).length;
+  const tasaProg  = tareas.length > 0 ? Math.round(conFecha/tareas.length*100) : 0;
+
+  // Lead time promedio ingreso → programación
+  const conAmbas = tareas.filter(t => t.fechaIngreso && t.fechaEjecucion);
+  let leadTime = 0;
+  if (conAmbas.length > 0) {
+    const totalDays = conAmbas.reduce((s,t) => {
+      const d1 = new Date(t.fechaIngreso+'T12:00:00');
+      const d2 = new Date(t.fechaEjecucion+'T12:00:00');
+      return s + Math.max(0, Math.round((d2-d1)/86400000));
+    }, 0);
+    leadTime = Math.round(totalDays / conAmbas.length * 10) / 10;
+  }
+
+  // Reprogramaciones del mes
+  const reprogs = SESIONES.filter(s => s.comentario?.includes('[Reprog]') || s.motivoExtra?.length > 0).length;
+
+  // Distribución Eisenhower del mes
+  const urgImp  = tareas.filter(t=>t.urgente==='Si'&&t.importante==='Si').length;
+  const impNurg = tareas.filter(t=>t.urgente!=='Si'&&t.importante==='Si').length;
+  const urgNimp = tareas.filter(t=>t.urgente==='Si'&&t.importante!=='Si').length;
+  const ninguno = tareas.filter(t=>t.urgente!=='Si'&&t.importante!=='Si').length;
+  const tot = tareas.length || 1;
+
+  return `
+  <div class="kg4">
+    <div class="kpi">
+      <div class="kv ${tasaProg>=70?'pos':'neg'}">${tasaProg}%</div>
+      <div class="kl">Tasa de programación mensual ${tip('% de tareas que tienen bloque horario asignado. >70% es saludable.')}</div>
+    </div>
+    <div class="kpi">
+      <div class="kv ${leadTime<=1?'pos':leadTime<=2?'warn':'neg'}">${leadTime} días</div>
+      <div class="kl">Lead time ingreso→programación ${tip('Días promedio entre que se ingresa una tarea y se le asigna un bloque horario.')}</div>
+    </div>
+    <div class="kpi"><div class="kv">${reprogs}</div>
+      <div class="kl">Reprogramaciones del período ${tip('Cantidad de veces que se movió trabajo ya planificado.')}</div></div>
+    <div class="kpi"><div class="kv warn">${tareas.filter(t=>!t.fechaEjecucion&&!['Listo','Cancelado'].includes(t.estado)).length}</div>
+      <div class="kl">Sin programar acumuladas</div></div>
+  </div>
+  <div class="cw">
+    <div class="ct">Distribución Eisenhower del período ${tip('Qué % del tiempo está el equipo en modo reactivo vs planificado. Lo ideal: Importante no urgente > 50%.')}</div>
+    ${[['⚡ Urgente + Importante',urgImp,'var(--red)'],['📅 Importante, no urgente',impNurg,'var(--green)'],['👥 Urgente, no importante',urgNimp,'var(--amber)'],['🗑 Ni urgente ni importante',ninguno,'var(--muted)']].map(([l,v,c])=>`
+    <div class="br"><div class="bl2" title="${l}">${l.substring(0,22)}…</div>
+      <div class="bt2"><div class="bf" style="width:${Math.round(v/tot*100)}%;background:${c}"></div></div>
+      <div class="bv">${v} (${Math.round(v/tot*100)}%)</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function buildDashPlanEstrategico(f) {
+  const tareas = filtrarTareas(f);
+  // Group by month
+  const byMonth = {};
+  tareas.forEach(t => {
+    const m = (t.fechaIngreso||'').substring(0,7);
+    if (!m) return;
+    if (!byMonth[m]) byMonth[m] = { total:0, prog:0, urgImp:0 };
+    byMonth[m].total++;
+    if (t.fechaEjecucion) byMonth[m].prog++;
+    if (t.urgente==='Si' && t.importante==='Si') byMonth[m].urgImp++;
+  });
+  const meses = Object.keys(byMonth).sort();
+
+  return `
+  <div class="cw">
+    <div class="ct">Tendencia tasa de programación mensual ${tip('Evolución mes a mes. Una curva ascendente indica que el equipo mejora su planificación.')}</div>
+    ${meses.length === 0
+      ? '<div class="emp">Sin datos históricos suficientes aún</div>'
+      : `<div class="tw"><table class="dt">
+        <thead><tr><th>Mes</th><th>Tareas</th><th>Programadas</th><th>Tasa</th><th>% Críticas</th></tr></thead>
+        <tbody>${meses.map(m => {
+          const d = byMonth[m];
+          const tasa = d.total > 0 ? Math.round(d.prog/d.total*100) : 0;
+          const pctCrit = d.total > 0 ? Math.round(d.urgImp/d.total*100) : 0;
+          return `<tr><td>${m}</td><td>${d.total}</td><td>${d.prog}</td>
+            <td style="font-weight:700;color:${tasa>=70?'var(--green)':tasa>=50?'var(--amber)':'var(--red)'}">${tasa}%</td>
+            <td style="color:${pctCrit>50?'var(--red)':pctCrit>30?'var(--amber)':'var(--green)'}">${pctCrit}%</td></tr>`;
+        }).join('')}</tbody>
+      </table></div>`
+    }
+  </div>
+  <div class="al info"><span class="al-ico">📊</span>
+    <div class="al-txt"><strong>Vista estratégica</strong>
+    Empezaste a registrar hace 1 día. En 30-90 días tendrás tendencias significativas para análisis estratégico.</div>
+  </div>`;
+}
+
+// ── RENDIMIENTO LEVELS ────────────────────────────────────────────────────
+async function buildDashRendLevel(f, level) {
+  if (level === 'op')  return buildDashRendOp(f);
+  if (level === 'tac') return await buildDashRend(f); // existing = táctico
+  return buildDashRendEstrategico(f);
+}
+
+function buildDashRendOp(f) {
+  const hoy = todayStr();
+  const sesHoy = SESIONES.filter(s => f.users.includes(s.responsable) && dateStr(s.fecha)===hoy && s.comentario!=='[Bloque planificado]');
+  const tarHoy = TAREAS.filter(t => f.users.includes(t.nombre) && t.fechaEjecucion===hoy && !['Listo','Cancelado'].includes(t.estado));
+  const hhHoy  = sesHoy.reduce((s,se)=>s+(parseFloat(se.hh)||0),0);
+  const hhPlanHoy = tarHoy.reduce((s,t)=>s+(parseFloat(t.hhPlan)||0),0);
+  const tasaHoy = hhPlanHoy > 0 ? Math.round(hhHoy/hhPlanHoy*100) : 0;
+
+  // Bloques confirmados vs programados hoy
+  const confHoy    = tarHoy.filter(t=>sesHoy.some(s=>String(s.tareaId)===String(t.id))).length;
+  const progHoy    = tarHoy.length;
+  const pendHoy    = tarHar => tarHoy.filter(t=>!sesHoy.some(s=>String(s.tareaId)===String(t.id)));
+
+  const cumplRows = f.users.map(p => {
+    const dow = new Date(hoy+'T12:00:00').getDay();
+    if (!SCHEDULE[dow]) return `<div class="cuc" style="background:var(--off);border-color:var(--border)">
+      <div class="cud" style="background:var(--muted)"></div>
+      <div><div class="cun">${shortName(p)}</div><div class="cuf">📅 No laborable</div></div></div>`;
+    const pSes = sesHoy.filter(s=>s.responsable===p);
+    const pTar = tarHoy.filter(t=>t.nombre===p);
+    const pConf = pTar.filter(t=>pSes.some(s=>String(s.tareaId)===String(t.id))).length;
+    const gaps  = checkGaps(p, hoy);
+    const cls   = pConf===pTar.length&&gaps.length===0?'cu-v':gaps.length>0?'cu-r':'cu-a';
+    return `<div class="cuc ${cls}"><div class="cud"></div>
+      <div><div class="cun">${shortName(p)}</div>
+      <div class="cuf">${pConf}/${pTar.length} bloq. confirmados · ${pSes.reduce((s,se)=>s+(parseFloat(se.hh)||0),0).toFixed(1)}h ejecutadas</div></div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="kg4">
+    <div class="kpi"><div class="kv">${hhHoy.toFixed(1)}h</div><div class="kl">HH ejecutadas hoy ${tip('Total de horas reales confirmadas en bloques de hoy.')}</div></div>
+    <div class="kpi"><div class="kv ${tasaHoy>=80?'pos':tasaHoy>=50?'warn':'neg'}">${tasaHoy}%</div>
+      <div class="kl">Tasa de ejecución hoy ${tip('HH ejecutadas / HH planificadas para hoy × 100.')}</div></div>
+    <div class="kpi"><div class="kv">${confHoy}/${progHoy}</div><div class="kl">Bloques confirmados hoy</div></div>
+    <div class="kpi"><div class="kv">${sesHoy.filter(s=>s.esExtra==='Sí').reduce((s,se)=>s+(parseFloat(se.hh)||0),0).toFixed(1)}h</div>
+      <div class="kl">HH extra hoy</div></div>
+  </div>
+  <div class="card"><div class="cl"><div class="d"></div>Estado de ejecución — Hoy</div>
+    <div class="cug">${cumplRows}</div></div>
+  <div class="card"><div class="cl"><div class="d"></div>Bloques pendientes de confirmar hoy</div>
+    ${tarHoy.filter(t=>!sesHoy.some(s=>String(s.tareaId)===String(t.id))).length===0
+      ? '<div class="emp">✅ Todos los bloques de hoy están confirmados</div>'
+      : `<div class="tl">${tarHoy.filter(t=>!sesHoy.some(s=>String(s.tareaId)===String(t.id))).map(t=>`
+        <div class="ti2" onclick="goSub('A','confirmar')">
+          <span class="tid">#${t.id}</span>
+          <div class="tn2"><div class="tna">${t.tarea}</div>
+          <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'}h</div></div>
+          <span class="badge bp">Pendiente</span>
+        </div>`).join('')}</div>`}
+  </div>`;
+}
+
+function buildDashRendEstrategico(f) {
+  const tareas = filtrarTareas(f);
+  const byMonth = {};
+  tareas.forEach(t => {
+    const m = (t.fechaIngreso||'').substring(0,7); if(!m)return;
+    if(!byMonth[m]) byMonth[m]={plan:0,real:0,done:0,total:0,extra:0};
+    byMonth[m].total++;
+    byMonth[m].plan += parseFloat(t.hhPlan)||0;
+    byMonth[m].real += parseFloat(t.hhReal)||0;
+    if(t.estado==='Listo') byMonth[m].done++;
+  });
+  SESIONES.filter(s=>f.users.includes(s.responsable)&&s.esExtra==='Sí').forEach(s=>{
+    const m=(dateStr(s.fecha)||'').substring(0,7); if(!m)return;
+    if(!byMonth[m]) byMonth[m]={plan:0,real:0,done:0,total:0,extra:0};
+    byMonth[m].extra += parseFloat(s.hh)||0;
+  });
+  const meses = Object.keys(byMonth).sort();
+
+  return `
+  <div class="cw">
+    <div class="ct">Rendimiento mensual histórico ${tip('Evolución de HH plan vs real, completitud y horas extra mes a mes.')}</div>
+    ${meses.length===0
+      ? '<div class="emp">Sin datos históricos suficientes aún — los datos crecerán con el uso</div>'
+      : `<div class="tw"><table class="dt">
+        <thead><tr><th>Mes</th><th>Tareas</th><th>Completadas</th><th>HHP</th><th>HHR</th><th>Exactitud</th><th>HH Extra</th></tr></thead>
+        <tbody>${meses.map(m=>{
+          const d=byMonth[m];
+          const pct=d.plan>0?Math.round(d.real/d.plan*100):0;
+          return `<tr><td>${m}</td><td>${d.total}</td>
+            <td style="color:var(--green);font-weight:600">${d.done}</td>
+            <td>${Math.round(d.plan*10)/10}h</td><td>${Math.round(d.real*10)/10}h</td>
+            <td style="font-weight:700;color:${pct<=110&&pct>=90?'var(--green)':pct<=130&&pct>=70?'var(--amber)':'var(--red)'}">${pct}%</td>
+            <td style="color:${d.extra>4?'var(--red)':'inherit'}">${Math.round(d.extra*10)/10}h</td></tr>`;
+        }).join('')}</tbody>
+      </table></div>`}
+  </div>
+  <div class="al info"><span class="al-ico">📊</span>
+    <div class="al-txt"><strong>Vista estratégica en construcción</strong>
+    Con 30+ días de datos verás tendencias de exactitud de estimaciones, evolución de horas extra y tiempo de ciclo por tipo de tarea.</div>
+  </div>`;
+}
+
+// ── COSTOS LEVELS ─────────────────────────────────────────────────────────
+function buildDashCostosLevel(f, level) {
+  if (level === 'op')  return buildDashCostosOp(f);
+  if (level === 'tac') return buildDashCostos(f); // existing = táctico
+  return buildDashCostosEstrategico(f);
+}
+
+function buildDashCostosOp(f) {
+  const sesiones = filtrarSesiones(f);
+  const tareas   = filtrarTareas(f);
+  const defC = {'Luis Sanchez':{normal:12000,extra:16000},'Luis Diaz':{normal:10000,extra:14000},'Yamila Silva':{normal:8000,extra:11000}};
+  const costos = {...defC,...COSTOS};
+  const fmt = v => '$'+Math.round(v).toLocaleString('es-CL');
+
+  let totalN=0,totalE=0;
+  const byCosto = {};
+  sesiones.forEach(s=>{
+    const hh=parseFloat(s.hh)||0;
+    const c=costos[s.responsable]||{normal:10000,extra:14000};
+    const isE=s.esExtra==='Sí';
+    const costo=hh*(isE?c.extra:c.normal);
+    if(isE)totalE+=costo;else totalN+=costo;
+    if(!byCosto[s.responsable])byCosto[s.responsable]={normal:0,extra:0};
+    if(isE)byCosto[s.responsable].extra+=costo;else byCosto[s.responsable].normal+=costo;
+  });
+
+  // Costo urgencias vs planificado
+  const sesUrg = sesiones.filter(s=>{
+    const t=TAREAS.find(x=>String(x.id)===String(s.tareaId));
+    return t?.urgente==='Si'&&t?.importante==='Si';
+  });
+  const costoUrg = sesUrg.reduce((sum,s)=>{
+    const c=costos[s.responsable]||{normal:10000,extra:14000};
+    return sum+(parseFloat(s.hh)||0)*c.normal;
+  },0);
+  const pctUrg = (totalN+totalE)>0?Math.round(costoUrg/(totalN+totalE)*100):0;
+
+  const persRows = Object.entries(byCosto).map(([p,c])=>`
+    <tr><td>${shortName(p)}</td>
+      <td style="text-align:right">${fmt(c.normal)}</td>
+      <td style="text-align:right;color:${c.extra>0?'var(--amber)':'inherit'}">${fmt(c.extra)}</td>
+      <td style="text-align:right;font-weight:700">${fmt(c.normal+c.extra)}</td>
+    </tr>`).join('');
+
+  return `
+  <div class="kg4">
+    <div class="kpi"><div class="kv" style="font-size:16px">${fmt(totalN+totalE)}</div><div class="kl">Costo total período ${tip('Suma del costo de todas las HH trabajadas.')}</div></div>
+    <div class="kpi"><div class="kv" style="font-size:16px">${fmt(totalN)}</div><div class="kl">Costo HH normales</div></div>
+    <div class="kpi"><div class="kv ${totalE>0?'neg':''}" style="font-size:16px">${fmt(totalE)}</div><div class="kl">Costo HH extra ${tip('Horas trabajadas fuera de horario normal, a tarifa superior.')}</div></div>
+    <div class="kpi">
+      <div class="kv ${pctUrg>40?'neg':pctUrg>20?'warn':'pos'}">${pctUrg}%</div>
+      <div class="kl">% Costo en urgencias ${tip('Qué porcentaje del costo total corresponde a tareas Urgente+Importante. >40% indica alto costo reactivo.')}</div>
+      <div class="ks">${fmt(costoUrg)} en modo urgente</div>
+    </div>
+  </div>
+  <div class="card"><div class="cl"><div class="d"></div>Costo por persona — período</div>
+    <div class="tw"><table class="dt">
+      <thead><tr><th>Persona</th><th style="text-align:right">Costo Normal</th><th style="text-align:right">Costo Extra</th><th style="text-align:right">Total</th></tr></thead>
+      <tbody>${persRows||'<tr><td colspan="4" style="text-align:center;color:var(--muted)">Sin datos</td></tr>'}</tbody>
+    </table></div>
+  </div>
+  <div class="card"><div class="cl"><div class="d"></div>Tareas con mayor costo en el período</div>
+    <div class="tw"><table class="dt">
+      <thead><tr><th>#</th><th>Tarea</th><th>Resp.</th><th style="text-align:right">HH</th><th style="text-align:right">Costo est.</th></tr></thead>
+      <tbody>${tareas.filter(t=>parseFloat(t.hhReal)>0).sort((a,b)=>(parseFloat(b.hhReal)||0)-(parseFloat(a.hhReal)||0)).slice(0,8).map(t=>{
+        const c=costos[t.nombre]||{normal:10000,extra:14000};
+        const costo=(parseFloat(t.hhReal)||0)*c.normal;
+        return `<tr onclick="abrirModal(${t.id})" style="cursor:pointer">
+          <td>${t.id}</td>
+          <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.tarea}">${t.tarea}</td>
+          <td>${shortName(t.nombre)}</td>
+          <td style="text-align:right">${t.hhReal}h</td>
+          <td style="text-align:right;font-weight:600">${fmt(costo)}</td>
+        </tr>`;
+      }).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--muted)">Sin datos</td></tr>'}
+      </tbody>
+    </table></div>
+  </div>`;
+}
+
+function buildDashCostosEstrategico(f) {
+  const tareas   = filtrarTareas(f);
+  const defC = {'Luis Sanchez':{normal:12000,extra:16000},'Luis Diaz':{normal:10000,extra:14000},'Yamila Silva':{normal:8000,extra:11000}};
+  const costos = {...defC,...COSTOS};
+  const fmt = v => '$'+Math.round(v).toLocaleString('es-CL');
+
+  // Cost by month
+  const byMonth = {};
+  SESIONES.filter(s=>f.users.includes(s.responsable)).forEach(s=>{
+    const m=(dateStr(s.fecha)||'').substring(0,7); if(!m)return;
+    if(!byMonth[m]) byMonth[m]={normal:0,extra:0,urgs:0};
+    const c=costos[s.responsable]||{normal:10000,extra:14000};
+    const hh=parseFloat(s.hh)||0;
+    const isE=s.esExtra==='Sí';
+    const costo=hh*(isE?c.extra:c.normal);
+    if(isE)byMonth[m].extra+=costo;else byMonth[m].normal+=costo;
+    const t=TAREAS.find(x=>String(x.id)===String(s.tareaId));
+    if(t?.urgente==='Si'&&t?.importante==='Si') byMonth[m].urgs+=costo;
+  });
+  const meses=Object.keys(byMonth).sort();
+
+  return `
+  <div class="cw">
+    <div class="ct">Tendencia de costos mensual ${tip('Evolución del costo total, extra y urgencias mes a mes. El costo de urgencias debe tender a bajar si se mejora la planificación.')}</div>
+    ${meses.length===0
+      ? '<div class="emp">Sin datos históricos suficientes</div>'
+      : `<div class="tw"><table class="dt">
+        <thead><tr><th>Mes</th><th style="text-align:right">Costo Normal</th><th style="text-align:right">Costo Extra</th><th style="text-align:right">Costo Urgencias</th><th style="text-align:right">Total</th></tr></thead>
+        <tbody>${meses.map(m=>{
+          const d=byMonth[m];
+          const tot=d.normal+d.extra;
+          const pctU=tot>0?Math.round(d.urgs/tot*100):0;
+          return`<tr><td>${m}</td>
+            <td style="text-align:right">${fmt(d.normal)}</td>
+            <td style="text-align:right;color:${d.extra>0?'var(--amber)':'inherit'}">${fmt(d.extra)}</td>
+            <td style="text-align:right;color:${pctU>40?'var(--red)':'inherit'}">${fmt(d.urgs)} (${pctU}%)</td>
+            <td style="text-align:right;font-weight:700">${fmt(tot)}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>`}
+  </div>
+  <div class="al info" style="margin-top:8px"><span class="al-ico">💡</span>
+    <div class="al-txt"><strong>ROI de planificación</strong>
+    Si el % de costo en urgencias baja mes a mes, significa que la app está generando valor real. Con 3+ meses de datos podrás demostrar cuánto dinero ahorra planificar vs ser reactivo.</div>
+  </div>`;
+}
+
+
+// ════════════════════════════════════════════════════════
+// AI ASSISTANT — Claude-powered
+// ════════════════════════════════════════════════════════
+let aiOpen = false;
+let aiHistory = [];
+
+function toggleAI() {
+  aiOpen = !aiOpen;
+  document.getElementById('aiPanel').classList.toggle('op', aiOpen);
+  if (aiOpen) {
+    document.getElementById('aiGreetName').textContent = SESSION?.nombre?.split(' ')[0] || '';
+    document.getElementById('aiInput').focus();
+  }
+}
+
+function aiAsk(text) {
+  document.getElementById('aiInput').value = text;
+  aiSend();
+}
+
+async function aiSend() {
+  const input = document.getElementById('aiInput');
+  const msg   = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+
+  // Show user message
+  aiAddMsg(msg, 'user');
+  // Remove quick buttons after first message
+  const quick = document.getElementById('aiQuick');
+  if (quick) quick.style.display = 'none';
+
+  // Show typing
+  const typingId = 'aiTyping_' + Date.now();
+  aiAddMsg('Analizando tus datos…', 'ai typing', typingId);
+  document.getElementById('aiSendBtn').disabled = true;
+
+  // Build context from current data
+  const hoy = todayStr();
+  const lunes = mondayStr();
+  const misTareas = TAREAS.filter(t => t.nombre === SESSION?.nombre);
+  const semSes = SESIONES.filter(s =>
+    s.responsable === SESSION?.nombre && dateStr(s.fecha) >= lunes
+  );
+  const hhSem = semSes.reduce((s, se) => s + (parseFloat(se.hh)||0), 0);
+
+  // Team summary
+  const teamSummary = ['Luis Sanchez','Luis Diaz','Yamila Silva'].map(p => {
+    const pT = TAREAS.filter(t => t.nombre === p);
+    const act = pT.filter(t => !['Listo','Cancelado'].includes(t.estado));
+    const listo = pT.filter(t => t.estado === 'Listo').length;
+    const sinProg = act.filter(t => !t.fechaEjecucion).length;
+    const hhReal = SESIONES.filter(s => s.responsable === p && dateStr(s.fecha) >= lunes)
+      .reduce((s,se) => s+(parseFloat(se.hh)||0), 0);
+    return `${p}: ${act.length} activas, ${listo} completadas, ${sinProg} sin programar, ${hhReal.toFixed(1)}h esta semana`;
+  }).join('\n');
+
+  const urgentes = TAREAS.filter(t =>
+    t.urgente==='Si' && t.importante==='Si' && !['Listo','Cancelado'].includes(t.estado)
+  ).length;
+  const vencidas = TAREAS.filter(t =>
+    t.fechaComp && dateStr(t.fechaComp) < hoy && !['Listo','Cancelado'].includes(t.estado)
+  ).length;
+  const sinProgramar = TAREAS.filter(t => {
+    const ayer = new Date(); ayer.setDate(ayer.getDate()-1);
+    return !t.fechaEjecucion && !['Listo','Cancelado'].includes(t.estado) &&
+           t.fechaIngreso <= ayer.toISOString().split('T')[0];
+  }).length;
+
+  const context = `
+Eres el asistente de gestión de la Oficina Técnica de Contenedores Patagonia SpA.
+El usuario es: ${SESSION?.nombre} (${SESSION?.rol === 'admin' ? 'Administrador' : 'Usuario'})
+Fecha actual: ${hoy}
+
+RESUMEN DEL EQUIPO (semana actual):
+${teamSummary}
+
+ALERTAS GENERALES:
+- Tareas urgentes+importantes activas: ${urgentes}
+- Tareas vencidas: ${vencidas}
+- Tareas sin programar (>1 día): ${sinProgramar}
+- Total tareas activas: ${TAREAS.filter(t=>!['Listo','Cancelado'].includes(t.estado)).length}
+
+MIS TAREAS (${SESSION?.nombre}):
+- Activas: ${misTareas.filter(t=>!['Listo','Cancelado'].includes(t.estado)).length}
+- Completadas total: ${misTareas.filter(t=>t.estado==='Listo').length}
+- HH ejecutadas esta semana: ${hhSem.toFixed(1)}h
+
+Responde de forma concisa, directa y en español. Máximo 150 palabras.
+Usa bullet points cuando ayude a la claridad. No inventes datos que no estén en el contexto.
+`;
+
+  // Add to history
+  aiHistory.push({ role: 'user', content: msg });
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 400,
+        system: context,
+        messages: aiHistory.slice(-6), // last 3 turns
+      })
+    });
+    const data = await response.json();
+    const reply = data.content?.[0]?.text || 'No pude obtener respuesta. Verifica tu conexión.';
+
+    // Remove typing, add real response
+    document.getElementById(typingId)?.remove();
+    aiAddMsg(reply, 'ai');
+    aiHistory.push({ role: 'assistant', content: reply });
+
+  } catch(e) {
+    document.getElementById(typingId)?.remove();
+    aiAddMsg('Error de conexión con la IA. Verifica que la API esté configurada.', 'ai');
+  }
+
+  document.getElementById('aiSendBtn').disabled = false;
+  document.getElementById('aiInput').focus();
+}
+
+function aiAddMsg(text, type='ai', id=null) {
+  const msgs = document.getElementById('aiMsgs');
+  if (!msgs) return;
+  const div = document.createElement('div');
+  div.className = 'ai-msg ' + type;
+  if (id) div.id = id;
+  // Simple markdown: **bold**
+  div.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
 
 // ── FILTER INIT ───────────────────────────────────────────
 // Auto-apply dashboard filters on load
