@@ -589,6 +589,7 @@ let currentSec = 'A';
 let currentSub = '';
 let eisUrgente = null, eisImportante = null;
 let taskType = '';
+let bloques = []; // blocks for compuesta task
 let esExtra = false;
 let vgView = 'kanban';
 let calOffset = 0;
@@ -647,7 +648,7 @@ function validate(fields) {
 function clearErr(ids){ids.forEach(id=>document.getElementById(id)?.classList.remove('err'));}
 
 // Active user name (impersonation-aware)
-function activeUser() { return VIEW_AS ? VIEW_AS.nombre : SESSION.nombre; }
+function SESSION.nombre { return VIEW_AS ? VIEW_AS.nombre : SESSION.nombre; }
 function activeRol()  { return SESSION.rol; } // always real role
 
 // ══════════════════════════════════════════════════════════
@@ -833,7 +834,7 @@ async function loadData(forceRefresh=false) {
 function _updateAlertCount() {
   const ayer=new Date(); ayer.setDate(ayer.getDate()-1);
   const ayerStr=ayer.toISOString().split('T')[0];
-  const myName=activeUser();
+  const myName=SESSION.nombre;
   alertasNoProgCount=TAREAS.filter(t=>
     t.nombre===myName&&!['Listo','Cancelado'].includes(t.estado)&&
     !t.fechaEjecucion&&t.fechaIngreso<=ayerStr
@@ -1915,7 +1916,7 @@ function updAlCF(tid) {
   const f=document.getElementById('cf_ter_'+tid)?.value;
   const fec=document.getElementById('cf_fec_'+tid)?.value;
   const c=document.getElementById('cf_al_'+tid);
-  if(c)c.innerHTML=renderAlerts(activeUser(),fec||'',i||null,f||null);
+  if(c)c.innerHTML=renderAlerts(SESSION.nombre,fec||'',i||null,f||null);
 }
 function toggleExtraCF(tid) {
   const chk=document.getElementById('cf_ex_'+tid)?.checked;
@@ -1928,7 +1929,7 @@ async function confirmarBloque(tid, cerrar=false) {
   const ter=document.getElementById('cf_ter_'+tid)?.value;
   const fec=document.getElementById('cf_fec_'+tid)?.value||todayStr();
   if(!ini||!ter){toast('Ingresa hora inicio y término','er');return;}
-  const cfx=checkOverlap(activeUser(),fec,ini,ter);
+  const cfx=checkOverlap(SESSION.nombre,fec,ini,ter);
   if(cfx.length>0&&!document.getElementById('chkOvlp')?.checked){
     toast('Confirma el traslape en la alerta','er');return;
   }
@@ -1940,7 +1941,7 @@ async function confirmarBloque(tid, cerrar=false) {
   const t=TAREAS.find(x=>String(x.id)===String(tid));
   const hoy=todayStr();
   await apiPost({accion:'insertar',tabla:'Sesiones',
-    fila:[tid,t?.tarea||'',activeUser(),fec,ini,ter,hh,com,hoy,esEx?'Sí':'No',motEx]});
+    fila:[tid,t?.tarea||'',SESSION.nombre,fec,ini,ter,hh,com,hoy,esEx?'Sí':'No',motEx]});
   if(t){
     const idx=TAREAS.findIndex(x=>String(x.id)===String(tid));
     const nHH=Math.round(((parseFloat(t.hhReal)||0)+hh)*100)/100;
@@ -1948,7 +1949,7 @@ async function confirmarBloque(tid, cerrar=false) {
     const nuevoCampos=cerrar?{13:nHH,14:nN,11:'Listo'}:{13:nHH,14:nN};
     await apiPost({accion:'actualizar',tabla:'Tareas',id:tid,campos:nuevoCampos});
     if(idx>-1){TAREAS[idx].hhReal=nHH;TAREAS[idx].nSes=nN;if(cerrar)TAREAS[idx].estado='Listo';}
-    SESIONES.push({tareaId:tid,tareaNombre:t.tarea,responsable:activeUser(),fecha:fec,inicio:ini,termino:ter,hh,esExtra:esEx?'Sí':'No',motivoExtra:motEx});
+    SESIONES.push({tareaId:tid,tareaNombre:t.tarea,responsable:SESSION.nombre,fecha:fec,inicio:ini,termino:ter,hh,esExtra:esEx?'Sí':'No',motivoExtra:motEx});
   }
   await apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario});
   invalidateCache();
@@ -1960,7 +1961,7 @@ async function confirmarBloque(tid, cerrar=false) {
 // Sesión libre (sin bloque programado)
 function vSesion() {
   const hoy=todayStr();
-  const act=(activeRol()==='admin'&&!VIEW_AS?TAREAS:TAREAS.filter(t=>t.nombre===activeUser()))
+  const act=(activeRol()==='admin'&&!VIEW_AS?TAREAS:TAREAS.filter(t=>t.nombre===SESSION.nombre))
     .filter(t=>!['Listo','Cancelado'].includes(t.estado))
     .sort((a,b)=>(parseInt(b.id)||0)-(parseInt(a.id)||0));
   const ddOpts=act.length===0?'<option value="">— sin tareas activas —</option>'
@@ -1981,7 +1982,7 @@ function vSesion() {
       <div class="fi"><label class="rq">Fecha</label>
         <input type="date" id="sFec" value="${hoy}" onchange="updAlSes()"></div>
       <div class="fi"><label>Responsable</label>
-        <input id="sNom" value="${activeUser()}" readonly style="background:#f0f0f0;color:var(--muted)"></div>
+        <input id="sNom" value="${SESSION.nombre}" readonly style="background:#f0f0f0;color:var(--muted)"></div>
     </div>
   </div>
   <div class="card">
@@ -2989,7 +2990,7 @@ function vNuevaTarea() {
       <div class="g2">
         <div class="fi">
           <label class="rq">Responsable ${tip('Se asigna automáticamente desde tu sesión.')}</label>
-          <input id="tNom" value="${activeUser()}" readonly style="background:#f0f0f0;color:var(--muted)">
+          <input id="tNom" value="${SESSION.nombre}" readonly style="background:#f0f0f0;color:var(--muted)">
         </div>
         <div class="fi">
           <label>Solicitante ${tip('Persona o área que solicitó este trabajo.')}</label>
@@ -3332,6 +3333,241 @@ function vCConfig() {
     <button class="btn sm" style="margin-top:10px" onclick="guardarListas()"><span class="bt">Guardar listas</span></button>
   </div>`;
 }
+
+
+async function guardarTarea() {
+  if(!taskType){toast('Elige el tipo de tarea primero','er');return;}
+  const miss=validate([{id:'tTar',label:'Descripción'},{id:'tAre',label:'Área'},{id:'tTip',label:'Tipo'},{id:'tHHp',label:'HH Planificadas'}]);
+  if(miss.length>0){toast('Falta: '+miss.join(', '),'er');return;}
+  if(taskType==='express'){
+    const ini=document.getElementById('tHinE')?.value,ter=document.getElementById('tHterE')?.value;
+    if(!ini||!ter){toast('Ingresa hora inicio y término','er');return;}
+    const cfx=checkOverlap(SESSION.nombre,todayStr(),ini,ter);
+    if(cfx.length>0&&!document.getElementById('chkOvlp')?.checked){toast('Confirma el traslape en la alerta','er');return;}
+  }
+  const btn=document.getElementById('btnT');if(btn){btn.disabled=true;btn.classList.add('ld');}
+  const fec=todayStr();
+  const fej=document.getElementById('tFej')?.value||'';
+  const estado=taskType==='express'?'En Proceso':(fej&&fej>fec?'Programada':'Por Iniciar');
+  const urg=eisUrgente===true?'Si':eisUrgente===false?'No':'';
+  const imp=eisImportante===true?'Si':eisImportante===false?'No':'';
+  // Determine fechaEjecucion based on task type
+  let fechaEjec='';
+  if(taskType==='simple') fechaEjec=document.getElementById('tFej')?.value||'';
+  else if(taskType==='compuesta'&&bloques.length>0) fechaEjec=bloques[0].fecha||'';
+  const comField = taskType==='compuesta'?document.getElementById('tComC')?.value:document.getElementById('tCom')?.value;
+  const fila=[nextId,SESSION.nombre,
+    document.getElementById('tTar').value.trim(),
+    document.getElementById('tSol')?.value||'',
+    document.getElementById('tAre').value,document.getElementById('tTip').value,
+    urg,imp,
+    parseFloat(document.getElementById('tHHp').value)||'',
+    fec,document.getElementById('tFco')?.value||'',estado,
+    comField||'',0,0,
+    fechaEjec];
+  try {
+    await apiPost({accion:'insertar',tabla:'Tareas',fila});
+    const nt={id:nextId,nombre:SESSION.nombre,tarea:fila[2],solicitante:fila[3],area:fila[4],tipo:fila[5],
+      urgente:fila[6],importante:fila[7],hhPlan:fila[8],fechaIngreso:fec,fechaComp:fila[10],
+      estado,comentario:fila[12],hhReal:0,nSes:0,fechaEjecucion:fila[15]};
+    TAREAS.push(nt);
+    // For compuesta: save each block as a planned session stub
+    if(taskType==='compuesta'&&bloques.length>0) {
+      for(const b of bloques) {
+        if(b.fecha&&b.inicio&&b.termino) {
+          const hhB=calcHHRaw(b.inicio,b.termino);
+          // Save as a planned marker - use comentario to mark as planned
+          await apiPost({accion:'insertar',tabla:'Sesiones',
+            fila:[nextId,fila[2],SESSION.nombre,b.fecha,b.inicio,b.termino,hhB,'[Bloque planificado]',fec,'No','']});
+          SESIONES.push({tareaId:nextId,tareaNombre:fila[2],responsable:SESSION.nombre,
+            fecha:b.fecha,inicio:b.inicio,termino:b.termino,hh:hhB,comentario:'[Bloque planificado]',esExtra:'No',motivoExtra:''});
+        }
+      }
+    }
+    if(taskType==='express'){
+      const ini=document.getElementById('tHinE').value,ter=document.getElementById('tHterE').value;
+      const hh=calcHHRaw(ini,ter);
+      if(hh>0){
+        await apiPost({accion:'insertar',tabla:'Sesiones',fila:[nextId,fila[2],SESSION.nombre,fec,ini,ter,hh,'Express',fec,'No','']});
+        await apiPost({accion:'actualizar',tabla:'Tareas',id:nextId,campos:{11:'Listo',13:hh,14:1}});
+        TAREAS[TAREAS.length-1].estado='Listo';TAREAS[TAREAS.length-1].hhReal=hh;TAREAS[TAREAS.length-1].nSes=1;
+        SESIONES.push({tareaId:nextId,tareaNombre:fila[2],responsable:SESSION.nombre,fecha:fec,inicio:ini,termino:ter,hh,esExtra:'No',motivoExtra:''});
+        toast(`⚡ Express registrada · ${hh}h`,'ok');
+      }
+    } else {toast('📋 Tarea guardada · '+estado,'ok');}
+    nextId++;
+    await apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario});
+    invalidateCache(); await loadData(true);
+    taskType='';eisUrgente=null;eisImportante=null;
+    goSub('A','nuevaTarea');
+  }catch(e){toast('Error al guardar','er');}
+  if(btn){btn.disabled=false;btn.classList.remove('ld');}
+}
+
+async function guardarSesion() {
+  const miss=validate([{id:'sTid',label:'Tarea'},{id:'sFec',label:'Fecha'},{id:'sIni',label:'Hora inicio'},{id:'sTer',label:'Hora término'}]);
+  if(miss.length>0){toast('Falta: '+miss.join(', '),'er');return;}
+  const tid=document.getElementById('sTid').value,fec=document.getElementById('sFec').value;
+  const ini=document.getElementById('sIni').value,ter=document.getElementById('sTer').value;
+  const hh=calcHHRaw(ini,ter);
+  if(!hh||hh<=0){toast('Verifica los horarios','er');return;}
+  const cfx=checkOverlap(SESSION.nombre,fec,ini,ter);
+  if(cfx.length>0&&!document.getElementById('chkOvlp')?.checked){toast('Confirma el traslape en la alerta','er');return;}
+  const btn=document.getElementById('btnS');if(btn){btn.disabled=true;btn.classList.add('ld');}
+  const t=TAREAS.find(x=>String(x.id)===String(tid));
+  const hoy=todayStr();
+  const motExtra=esExtra?(document.getElementById('sMotExtra')?.value||''):'';
+  try {
+    await apiPost({accion:'insertar',tabla:'Sesiones',fila:[tid,t?.tarea||'',SESSION.nombre,fec,ini,ter,hh,document.getElementById('sCom')?.value||'',hoy,esExtra?'Sí':'No',motExtra]});
+    if(t){
+      const idx=TAREAS.findIndex(x=>String(x.id)===String(tid));
+      const nHH=Math.round(((parseFloat(t.hhReal)||0)+hh)*100)/100;
+      const nN=(parseInt(t.nSes)||0)+1;
+      await apiPost({accion:'actualizar',tabla:'Tareas',id:tid,campos:{13:nHH,14:nN}});
+      if(idx>-1){TAREAS[idx].hhReal=nHH;TAREAS[idx].nSes=nN;}
+      SESIONES.push({tareaId:tid,tareaNombre:t.tarea,responsable:SESSION.nombre,fecha:fec,inicio:ini,termino:ter,hh,esExtra:esExtra?'Sí':'No',motivoExtra:motExtra});
+    }
+    await apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario});
+    invalidateCache();
+    esExtra=false;toast(`Sesión registrada: ${hh}h`,'ok');goSub('A','sesion');
+  }catch(e){toast('Error al guardar','er');}
+  if(btn){btn.disabled=false;btn.classList.remove('ld');}
+}
+
+
+
+function setTT(type) {
+  taskType=type;
+  document.getElementById('ttE')?.classList.toggle('on', type==='express');
+  document.getElementById('ttS')?.classList.toggle('on', type==='simple');
+  document.getElementById('ttC')?.classList.toggle('on', type==='compuesta');
+  document.getElementById('fmTarea').style.display='block';
+  document.getElementById('cardExp').style.display         = type==='express'   ?'block':'none';
+  document.getElementById('cardProgSimple').style.display  = type==='simple'    ?'block':'none';
+  document.getElementById('cardProgComp').style.display    = type==='compuesta' ?'block':'none';
+  const lbl = type==='express'?'⚡ Guardar y cerrar':type==='simple'?'📋 Guardar tarea simple':'📦 Guardar tarea compuesta';
+  document.getElementById('btnTTxt').textContent=lbl;
+  if(type==='express') { setEis('u',true); setEis('i',true); }
+  if(type==='compuesta') { bloques=[]; renderBloques(); }
+}
+
+function setEis(dim,val) {
+  if(dim==='u')eisUrgente=val; else eisImportante=val;
+  document.getElementById('eisUS')?.classList.toggle('on-yes',eisUrgente===true);
+  document.getElementById('eisUN')?.classList.toggle('on-no',eisUrgente===false);
+  document.getElementById('eisIS')?.classList.toggle('on-yes',eisImportante===true);
+  document.getElementById('eisIN')?.classList.toggle('on-no',eisImportante===false);
+  const el=document.getElementById('eisQuad'); if(!el)return;
+  const u=eisUrgente!==false,i=eisImportante!==false;
+  const q=[[true,true,'eq-1','⚡ Hacer ahora'],[false,true,'eq-2','📅 Programar — Importante, no urgente'],
+           [true,false,'eq-3','👥 Delegar'],[false,false,'eq-4','🗑 Reconsiderar']];
+  const m=q.find(([qu,qi])=>qu===u&&qi===i);
+  if(m){el.style.display='block';el.className='eis-quad '+m[2];el.textContent=m[3];}
+}
+
+function calcFechaTermino() {
+  const ini=document.getElementById('tHini')?.value;
+  const hhp=parseFloat(document.getElementById('tHHp')?.value)||0;
+  const ter=document.getElementById('tHter');
+  if(ini&&hhp&&ter){
+    const endMin=t2m(ini)+Math.round(hhp*60);
+    ter.value=m2t(endMin%1440);
+  }
+}
+
+function calcHHN(){
+  const i=document.getElementById('tHinE')?.value,f=document.getElementById('tHterE')?.value;
+  const el=document.getElementById('hhN');if(!el)return;
+  if(!i||!f){el.innerHTML='--';el.className='hhv e';return;}
+  const h=calcHHRaw(i,f);el.innerHTML=`${h.toFixed(2)}<span>hrs</span>`;el.className='hhv';
+}
+
+function updAlExp(){
+  const ini=document.getElementById('tHinE')?.value,ter=document.getElementById('tHterE')?.value;
+  const c=document.getElementById('alExp');
+  if(c)c.innerHTML=renderAlerts(SESSION.nombre,todayStr(),ini||null,ter||null);
+}
+
+function calcHHS(){
+  const i=document.getElementById('sIni')?.value,f=document.getElementById('sTer')?.value;
+  const el=document.getElementById('hhS');if(!el)return;
+  if(!i||!f){el.innerHTML='--';el.className='hhv e';return;}
+  const h=calcHHRaw(i,f);el.innerHTML=`${h.toFixed(2)}<span>hrs</span>`;el.className='hhv';
+}
+
+function updAlSes(){
+  const ini=document.getElementById('sIni')?.value,ter=document.getElementById('sTer')?.value;
+  const fec=document.getElementById('sFec')?.value;
+  const c=document.getElementById('alSes');
+  if(c)c.innerHTML=renderAlerts(SESSION.nombre,fec||'',ini||null,ter||null);
+}
+
+function setExtra(val){
+  esExtra=val;
+  const mot=document.getElementById('sMotExtra');
+  if(mot)mot.style.display=val?'block':'none';
+}
+
+function prevTarea(){
+  const id=document.getElementById('sTid')?.value;
+  const el=document.getElementById('tPrev');if(!el)return;
+  const t=TAREAS.find(x=>String(x.id)===String(id));
+  if(t){el.textContent=`${t.tarea}  ·  ${t.tipo||'—'}  ·  ${t.area||'—'}  ·  HHP:${t.hhPlan||'—'}`;el.className='prev on';}
+  else{el.textContent='Selecciona una tarea';el.className='prev';}
+}
+
+function renderBloques() {
+  const cont=document.getElementById('bloquesContainer'); if(!cont)return;
+  if(bloques.length===0){
+    cont.innerHTML=`<div style="font-size:12px;color:var(--muted);padding:8px;text-align:center">
+      Sin bloques. Agrega bloques aquí o arrastra desde la Agenda después de guardar.</div>`;
+    return;
+  }
+  cont.innerHTML=bloques.map((b,i)=>`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:flex-end;margin-bottom:8px;padding:10px;background:var(--inp);border-radius:6px;border:1px solid var(--border)">
+      <div class="fi"><label>Fecha</label>
+        <input type="date" value="${b.fecha}" onchange="bloques[${i}].fecha=this.value;updBloque(${i})"></div>
+      <div class="fi"><label>Hora inicio</label>
+        <input type="time" value="${b.inicio}" onchange="bloques[${i}].inicio=this.value;updBloque(${i})"></div>
+      <div class="fi"><label>Hora término</label>
+        <input type="time" value="${b.termino}" onchange="bloques[${i}].termino=this.value"></div>
+      <button class="btn danger sm" style="margin-bottom:0;align-self:flex-end" onclick="bloques.splice(${i},1);renderBloques()">✕</button>
+    </div>`).join('');
+}
+
+function agregarBloque() {
+  const hoy=todayStr(), hora=new Date().toTimeString().slice(0,5);
+  const hhp=parseFloat(document.getElementById('tHHp')?.value)||1;
+  const termino=m2t((t2m(hora)+Math.round(hhp*60))%1440);
+  bloques.push({fecha:hoy, inicio:hora, termino});
+  renderBloques();
+}
+
+function updBloque(i) {
+  const b=bloques[i];
+  if(b.inicio&&b.fecha){
+    const hhp=parseFloat(document.getElementById('tHHp')?.value)||1;
+    const endMin=t2m(b.inicio)+Math.round(hhp*60);
+    bloques[i].termino=m2t(endMin%1440);
+    renderBloques();
+  }
+}
+
+function calcTerminoSimple() {
+  const ini=document.getElementById('tHini')?.value;
+  const hhp=parseFloat(document.getElementById('tHHp')?.value)||0;
+  const ter=document.getElementById('tHter');
+  if(ini&&hhp&&ter){
+    const endMin=t2m(ini)+Math.round(hhp*60);
+    ter.value=m2t(endMin%1440);
+  }
+  // Show overlap/gap alerts
+  const fej=document.getElementById('tFej')?.value;
+  const tHter=document.getElementById('tHter')?.value;
+  const c=document.getElementById('alProgSimple');
+  if(c&&fej&&ini&&tHter) c.innerHTML=renderAlerts(SESSION.nombre,fej,ini,tHter);
+}
+
 </script>
 </body>
 </html>
