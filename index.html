@@ -554,7 +554,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 // ══════════════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════════════
-const API = 'https://script.google.com/macros/s/AKfycbzzG_9S6ltTfEm0d5J1k77OJYGTq4O_XaLjcn9amH3h6gX28zCPol5Gek-MpnynuRK3/exec';
+const API = 'https://script.google.com/macros/s/AKfycbwEC7B-7bQ9YqzB_5t2MKY-EDfvXbQrap2dMp86OFyMCh2IP0KjlLDBYCTqfvz1nxwZ/exec';
 if (API.includes('REPLACE')) console.warn('⚠️ API URL not configured - check index.html');
 const SCHEDULE = {1:[8,17,12,13],2:[8,18,12,13],3:[8,17,12,13],4:[8,18,12,13],5:[8,17,12,13]};
 
@@ -603,12 +603,31 @@ let alertasNoProgCount = 0;
 // ══════════════════════════════════════════════════════════
 async function apiGet(p) {
   const qs = Object.entries(p).map(([k,v])=>`${k}=${encodeURIComponent(v)}`).join('&');
-  const r = await fetch(`${API}?${qs}`);
-  return r.json();
+  const ctrl = new AbortController();
+  const tid = setTimeout(()=>ctrl.abort(), 30000);
+  try {
+    const r = await fetch(`${API}?${qs}`, {signal:ctrl.signal});
+    clearTimeout(tid);
+    return r.json();
+  } catch(e) {
+    clearTimeout(tid);
+    if(e.name==='AbortError') throw new Error('Timeout');
+    throw e;
+  }
 }
 async function apiPost(d) {
-  const r = await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(d)});
-  return r.json();
+  const ctrl = new AbortController();
+  const tid = setTimeout(()=>ctrl.abort(), 30000);
+  try {
+    const r = await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify(d), signal:ctrl.signal});
+    clearTimeout(tid);
+    return r.json();
+  } catch(e) {
+    clearTimeout(tid);
+    if(e.name==='AbortError') throw new Error('Timeout: el servidor tardó demasiado');
+    throw e;
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1121,9 +1140,9 @@ function calGetPerson() {
 function initCal() {
   _calView = 'semana';
   _calOffset = 0;
-  // Set active view button
   ['D','S','M'].forEach(x => document.getElementById('cv'+x)?.classList.toggle('on', x==='S'));
   calRender();
+  calRefreshTray(SESSION.nombre);
 }
 
 function calSwitchView(v) {
@@ -3424,7 +3443,7 @@ async function guardarTarea() {
     invalidateCache();
     toast('✅ Tarea guardada','ok');
     taskType='';eisUrgente=null;eisImportante=null;
-    goSub('A','nuevaTarea');
+    goSub('A','agenda'); // Go to agenda so user sees tray
   }catch(e){toast('Error al guardar','er');}
   if(btn){btn.disabled=false;btn.classList.remove('ld');}
 }
@@ -3830,8 +3849,9 @@ function refreshUnscheduledTray() {
     !t.fechaEjecucion &&
     !['Listo','Cancelado'].includes(t.estado)
   );
-  const tray = document.getElementById('unscheduledTray');
-  const list = document.getElementById('unscheduledList');
+  // Try both IDs (calTray is the current one in vAgenda)
+  const tray = document.getElementById('calTray') || document.getElementById('unscheduledTray');
+  const list = document.getElementById('calTrayList') || document.getElementById('unscheduledList');
   if(!tray||!list) return;
   if(unscheduled.length>0){
     tray.style.display='block';
