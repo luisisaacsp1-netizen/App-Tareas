@@ -325,7 +325,7 @@ main{max-width:900px;margin:0 auto;padding:20px 16px 80px;}
 .cal-now-line::before{content:'';width:8px;height:8px;background:var(--red);border-radius:50%;position:absolute;left:-4px;top:-3px;}
 .cal-event{position:absolute;left:2px;right:2px;border-radius:4px;padding:3px 5px;font-size:10px;font-weight:600;cursor:pointer;overflow:hidden;z-index:5;transition:opacity .15s,box-shadow .15s;border-left:3px solid;}
 .cal-event:hover{opacity:.85;box-shadow:0 2px 8px rgba(0,0,0,.2);}
-.cal-event.planned{background:#e0f2fe;border-color:#075985;color:#075985;}
+.cal-event.planned{background:#e0f2fe;border-color:#075985;color:#075985;} /* Programado */
 .cal-event.done{background:var(--greenl);border-color:var(--green);color:#155724;}
 .cal-event.inprogress{background:#fff3cd;border-color:#856404;color:#856404;}
 .cal-event.overdue{background:var(--redl);border-color:#c0392b;color:#721c24;}
@@ -644,7 +644,11 @@ function getWorkBlocks(ds) {
 }
 function overlaps(s1,e1,s2,e2){return s1<e2&&s2<e1;}
 function getSessOnDate(nombre,date){
-  return SESIONES.filter(s=>s.responsable===nombre&&dateStr(s.fecha)===date);
+  return SESIONES.filter(s=>{
+    if(s.responsable!==nombre) return false;
+    const fd = s._dateNorm || dateStr(s.fecha);
+    return fd === date;
+  });
 }
 function checkOverlap(nombre,date,ini,ter,skipIdx=-1){
   const ns=t2m(ini),ne=t2m(ter),conflicts=[];
@@ -744,10 +748,24 @@ async function loadData(forceRefresh=false) {
     urgente:r[6],importante:r[7],hhPlan:r[8],fechaIngreso:r[9],fechaComp:r[10],
     estado:r[11],comentario:r[12],hhReal:r[13],nSes:r[14],fechaEjecucion:r[15]
   })):[];
-  SESIONES=Array.isArray(sRows)&&sRows.length>1?sRows.slice(1).map(r=>({
-    tareaId:r[0],tareaNombre:r[1],responsable:r[2],fecha:r[3],
-    inicio:r[4],termino:r[5],hh:r[6],comentario:r[7],esExtra:r[8]||'No',motivoExtra:r[9]||''
-  })):[];
+  SESIONES=Array.isArray(sRows)&&sRows.length>1?sRows.slice(1).map(r=>{
+    // Normalize fecha
+    let fecha = r[3];
+    if(fecha instanceof Date) fecha = fecha.toISOString().split('T')[0];
+    else if(typeof fecha === 'string') fecha = fecha.substring(0,10);
+    else fecha = String(fecha||'').substring(0,10);
+    // Normalize inicio/termino - extract HH:MM from datetime strings
+    let ini = r[4]||'', ter = r[5]||'';
+    if(typeof ini==='string'&&ini.includes('T')) ini=ini.split('T')[1]?.substring(0,5)||ini;
+    if(typeof ter==='string'&&ter.includes('T')) ter=ter.split('T')[1]?.substring(0,5)||ter;
+    if(ini instanceof Date) ini=ini.toTimeString().substring(0,5);
+    if(ter instanceof Date) ter=ter.toTimeString().substring(0,5);
+    return {
+      tareaId:r[0],tareaNombre:r[1],responsable:r[2],fecha,
+      inicio:ini,termino:ter,hh:parseFloat(r[6])||0,
+      comentario:r[7]||'',esExtra:r[8]||'No',motivoExtra:r[9]||''
+    };
+  }).filter(s=>s.fecha>='2020-01-01'):[];
   nextId=TAREAS.length>0?Math.max(...TAREAS.map(t=>parseInt(t.id)||0))+1:1;
   // Save to cache
   try {
@@ -1006,7 +1024,7 @@ function vAgenda() {
   <div class="cal-wrap" id="calWrap"></div>
   <div class="cal-legend">
     <span style="font-size:10px;color:var(--muted);font-weight:600">LEYENDA:</span>
-    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#e0f2fe;border-left:3px solid #075985"></div><span>Programada</span></div>
+    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#e0f2fe;border-left:3px solid #075985"></div><span>Programado</span></div>
     <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fff3cd;border-left:3px solid #856404"></div><span>En Proceso</span></div>
     <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#d4edda;border-left:3px solid #1a7a4a"></div><span>Completada</span></div>
     <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#f8d7da;border-left:3px solid #c0392b"></div><span>Vencida</span></div>
@@ -1092,8 +1110,9 @@ function renderCal() {
   dateStrs.forEach(ds=>{
     const blks=getWorkBlocks(ds);if(!blks)return;
     const totalWork=blks.reduce((s,b)=>s+(b.end-b.start),0)/60;
-    const covered=relevantSessions.filter(s=>dateStr(s.fecha)===ds&&s.inicio&&s.termino)
-      .reduce((s,se)=>s+calcHHRaw(se.inicio,se.termino),0);
+    const covered=relevantSessions
+      .filter(s=>(s._dateNorm||dateStr(s.fecha))===ds&&s.inicio&&s.termino&&s.inicio.length<=5&&s.termino.length<=5)
+      .reduce((s,se)=>{ try{return s+calcHHRaw(se.inicio,se.termino);}catch(e){return s;} },0);
     satMap[ds]=totalWork>0?Math.round(covered/totalWork*100):0;
   });
 
@@ -1135,15 +1154,21 @@ function renderCal() {
     const eventEls=dayEvents.map(s=>{
       const top=Math.max(0,(t2m(s.inicio)/60-hStart)*HOUR_H);
       const height=Math.max(22,calcHHRaw(s.inicio,s.termino)*HOUR_H);
-      const hoy=todayS;
-      const cls=s.esExtra==='Sí'?'express':'done';
       const t=TAREAS.find(x=>String(x.id)===String(s.tareaId));
+      // Color by task estado, not esExtra
+      let cls='planned';
+      if(s.comentario==='[Bloque planificado]') cls='planned';
+      else if(s.esExtra==='Sí') cls='express';
+      else if(t?.estado==='Listo') cls='done';
+      else if(t?.estado==='En Proceso') cls='inprogress';
+      else if(t?.fechaComp&&dateStr(t.fechaComp)<todayS&&t?.estado!=='Listo') cls='overdue';
+      else cls='done'; // confirmed block
       return`<div class="cal-event ${cls}" draggable="true" title="#${s.tareaId} ${s.tareaNombre}"
         style="top:${top}px;height:${height}px"
         ondragstart="calEvtDragStart(event,'${s.tareaId}','${ds}','${s.inicio}','${s.termino}')"
         onclick="event.stopPropagation();abrirModal(${s.tareaId})">
         <div class="cal-event-title">#${s.tareaId} ${(s.tareaNombre||'').substring(0,18)}</div>
-        <div class="cal-event-time">${s.inicio}–${s.termino} · ${s.hh}h</div>
+        <div class="cal-event-time">${s.inicio&&s.inicio.length<=5?s.inicio:'??:??'}–${s.termino&&s.termino.length<=5?s.termino:'??:??'} · ${typeof s.hh==='number'?s.hh.toFixed(1):s.hh}h</div>
       </div>`;
     }).join('');
 
@@ -1319,7 +1344,7 @@ async function confirmarReprogSesion(taskId,origDs,origIni,newDs,newIni,newTer){
 
 // ── MIS TAREAS ────────────────────────────────────────────
 function vTareas(filtroUsuario=null) {
-  const me = filtroUsuario || activeUser();
+  const me = filtroUsuario || (VIEW_AS ? VIEW_AS.nombre : SESSION?.nombre) || '';
   const isAdmin = activeRol()==='admin';
   const persOpts2 = ['Todos',...PERSONAS].map(p=>
     `<option value="${p}" ${p===me?'selected':''}>${p==='Todos'?'Todos':shortName(p)}</option>`).join('');
@@ -2837,7 +2862,7 @@ function abrirModal(id) {
       <div class="efi fw"><label>Descripción</label><textarea id="mTar" rows="2">${t.tarea||''}</textarea></div>
       <div class="efi"><label>Estado</label><select id="mEst">${estOpts}</select></div>
       <div class="efi"><label>Responsable</label><select id="mNom">
-        ${PERSONAS.map(n=>`<option value="${n}" ${n===t.nombre?'selected':''}>${shortName(n)}</option>`).join('')}
+        ${PERSONAS.map(n=>`<option value="${n}" ${n===t.nombre?'selected':''}>${shortName(n)} (${n.split(' ')[1]||''})</option>`).join('')}
       </select></div>
       <div class="efi"><label>Solicitante</label><select id="mSol"><option value="">—</option>${opts('Solicitante',t.solicitante)}</select></div>
       <div class="efi"><label>Área</label><select id="mAre"><option value="">—</option>${opts('Area',t.area)}</select></div>
