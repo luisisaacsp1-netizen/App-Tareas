@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>OT · Contenedores Patagonia</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d1b2e">
@@ -21,7 +21,7 @@
   --r:8px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html{font-size:14px;}
+html{font-size:14px;}@media(max-width:1280px){html{font-size:13px;}}@media(min-width:1600px){html{font-size:15px;}}
 body{font-family:"Open Sans",sans-serif;background:var(--off);color:var(--text);min-height:100vh;}
 
 
@@ -74,7 +74,7 @@ body{font-family:"Open Sans",sans-serif;background:var(--off);color:var(--text);
 /* LOGIN */
 #loginScreen{position:fixed;inset:0;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000;padding:20px;}
 .login-logo{height:58px;object-fit:contain;margin-bottom:32px;}
-.login-card{background:#fff;border-radius:10px;padding:30px 34px;width:100%;max-width:360px;box-shadow:0 8px 40px rgba(0,0,0,.35);}
+.login-card{background:#fff;border-radius:10px;padding:28px 32px;width:100%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,.35);}
 .login-title{font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;text-align:center;margin-bottom:20px;}
 .lf{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;}
 .lf label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
@@ -112,7 +112,7 @@ header{background:var(--navy);height:54px;display:flex;align-items:center;justif
 .snb .badge-alert{background:var(--red);color:#fff;border-radius:8px;font-size:9px;padding:1px 5px;font-weight:700;margin-left:2px;}
 
 /* MAIN */
-main{max-width:860px;margin:0 auto;padding:16px 14px 70px;}
+main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .ph{margin-bottom:14px;}
 .pt{font-family:Montserrat,sans-serif;font-size:14px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px;}
 .rb{width:4px;height:16px;background:var(--red);border-radius:2px;flex-shrink:0;}
@@ -555,6 +555,7 @@ main{max-width:860px;margin:0 auto;padding:16px 14px 70px;}
 // CONFIG
 // ══════════════════════════════════════════════════════════
 const API = 'https://script.google.com/macros/s/AKfycbySbmnDdyn8nQbgbC6mojrLHT4bKqInnPrQ3MfokpFJ0q3O9Atpr1yt4QA51XcGKhIB/exec';
+if (API.includes('REPLACE')) console.warn('⚠️ API URL not configured - check index.html');
 const SCHEDULE = {1:[8,17,12,13],2:[8,18,12,13],3:[8,17,12,13],4:[8,18,12,13],5:[8,17,12,13]};
 
 // Per-person lunch defaults (start, end in hours) - can be overridden
@@ -745,8 +746,20 @@ async function doLogin() {
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('appShell').style.display='block';
     document.getElementById('hName').textContent=r.nombre;
-    await loadData();
+    // Show nav immediately, load data in background
     buildNav();
+    // Show skeleton while loading
+    document.getElementById('main').innerHTML=`<div style="padding:20px">
+      <div class="skel skel-line" style="width:200px;height:22px;margin-bottom:20px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+        <div class="skel" style="height:80px;border-radius:8px"></div>
+        <div class="skel" style="height:80px;border-radius:8px"></div>
+        <div class="skel" style="height:80px;border-radius:8px"></div>
+      </div>
+      <div class="skel" style="height:300px;border-radius:8px"></div>
+      <div style="text-align:center;margin-top:16px;font-size:12px;color:var(--muted)">Cargando datos...</div>
+    </div>`;
+    await loadData();
     goSec('A','agenda');
   } catch(e){err.textContent='Error de conexión. Intenta nuevamente.';}
 }
@@ -757,7 +770,7 @@ async function loadData(forceRefresh=false) {
     try {
       const cached = sessionStorage.getItem('ot_cache');
       const cachedTime = parseInt(sessionStorage.getItem('ot_cache_time')||'0');
-      if (cached && Date.now() - cachedTime < 180000) {
+      if (cached && Date.now() - cachedTime < 600000) { // 10 min cache
         const d = JSON.parse(cached);
         TAREAS = d.tareas; SESIONES = d.sesiones; LISTAS = d.listas;
         nextId = TAREAS.length>0 ? Math.max(...TAREAS.map(t=>parseInt(t.id)||0))+1 : 1;
@@ -803,6 +816,12 @@ async function loadData(forceRefresh=false) {
     };
   }).filter(s=>s.fecha>='2020-01-01'):[];
   nextId=TAREAS.length>0?Math.max(...TAREAS.map(t=>parseInt(t.id)||0))+1:1;
+  // Pre-normalize all session dates/times once on load (makes calRender instant)
+  SESIONES.forEach(s => {
+    normSessDate(s); // sets s._dn
+    if (s.inicio)  s.inicio  = normTime(s.inicio);
+    if (s.termino) s.termino = normTime(s.termino);
+  });
   // Save to cache
   try {
     sessionStorage.setItem('ot_cache', JSON.stringify({tareas:TAREAS,sesiones:SESIONES,listas:LISTAS}));
@@ -1097,6 +1116,14 @@ function calGetPerson() {
   return (el && el.value) ? el.value : SESSION.nombre;
 }
 
+function initCal() {
+  _calView = 'semana';
+  _calOffset = 0;
+  // Set active view button
+  ['D','S','M'].forEach(x => document.getElementById('cv'+x)?.classList.toggle('on', x==='S'));
+  calRender();
+}
+
 function calSwitchView(v) {
   _calView = v; _calOffset = 0;
   ['D','S','M'].forEach(x => document.getElementById('cv'+x)?.classList.toggle('on',
@@ -1135,7 +1162,7 @@ function calGetDates() {
 
 // ── Core: normalize a session date to YYYY-MM-DD string ───────────
 function normSessDate(s) {
-  if (s._dn) return s._dn; // cached
+  if (s && s._dn !== undefined) return s._dn; // cached
   let d = s.fecha;
   if (d instanceof Date) {
     // Use local date to avoid timezone issues
@@ -1153,20 +1180,22 @@ function normSessDate(s) {
 // ── Core: normalize time to HH:MM ─────────────────────────────────
 function normTime(t) {
   if (!t) return '';
+  if (typeof t === 'string') {
+    if (t.length === 5) return t; // already HH:MM
+    if (t.includes('T')) return t.split('T')[1]?.substring(0,5)||'';
+    return t.substring(0,5);
+  }
   if (t instanceof Date) return t.toTimeString().substring(0,5);
-  const s = String(t);
-  if (s.includes('T')) return s.split('T')[1]?.substring(0,5)||'';
-  return s.substring(0,5);
+  return String(t).substring(0,5);
 }
 
 // ── Get sessions for a specific person on a specific date ─────────
 function getSessionsForPersonOnDate(personName, dateStr) {
-  return SESIONES.filter(s => {
-    const sName = String(s.responsable||'').trim();
-    if (sName !== personName) return false;
-    const sDate = normSessDate(s);
-    return sDate === dateStr;
-  });
+  // Uses pre-normalized _dn from loadData for maximum speed
+  return SESIONES.filter(s =>
+    s.responsable === personName &&
+    (s._dn || normSessDate(s)) === dateStr
+  );
 }
 
 // ── Main render ───────────────────────────────────────────────────
@@ -1231,21 +1260,26 @@ function calRender() {
       .map(s => ({...s, inicio: normTime(s.inicio), termino: normTime(s.termino)}))
       .filter(s => s.inicio && s.termino && s.inicio.length===5 && s.termino.length===5);
 
-    // Grid cells
-    const cells = Array.from({length: nHours*2}, (_,i) => {
-      const h = hStart + i*0.5;
-      const hInt = Math.floor(h);
-      const isHalfHour = i%2===1;
-      const isWork = blks && blks.some(b => h*60>=b.start && h*60<b.end);
+    // Grid cells - hourly for performance (click snaps to nearest 30min anyway)
+    const cells = Array.from({length: nHours}, (_,i) => {
+      const h = hStart + i;
+      const isWork = blks && blks.some(b => h*60>=b.start && (h+1)*60<=b.end+60);
       const isLunch = h >= lunch.start && h < lunch.end;
       const cls = isSat?'off-hour':isLunch?'lunch-hour':isWork?'work-hour':'off-hour';
-      return `<div class="cal-cell ${cls} ${isHalfHour?'half':''}"
-        style="height:${HOUR_H/2}px"
+      return `<div class="cal-cell ${cls}"
+        style="height:${HOUR_H}px"
         data-date="${ds}" data-hour="${h}"
         onclick="calCellClick('${ds}',${h})"
         ondragover="calCellDragOver(event,this)"
         ondragleave="calCellDragLeave(this)"
-        ondrop="calCellDrop(event,this,'${ds}',${h})"></div>`;
+        ondrop="calCellDrop(event,this,'${ds}',${h})">
+        <div class="cal-cell-half" style="height:50%;border-bottom:1px dashed rgba(212,218,230,.4)"
+          data-date="${ds}" data-hour="${h+0.5}"
+          onclick="event.stopPropagation();calCellClick('${ds}',${h+0.5})"
+          ondragover="calCellDragOver(event,this)"
+          ondragleave="calCellDragLeave(this)"
+          ondrop="calCellDrop(event,this,'${ds}',${h+0.5})"></div>
+      </div>`;
     }).join('');
 
     // Events
@@ -2112,6 +2146,95 @@ function switchDashLevel(dash, level) {
 
 // Override applyDashFilter to be level-aware
 const _origApplyDash = applyDashFilter;
+
+// ── Dashboard wrapper functions (required by goSub) ──────────────
+async function vDashPlan() {
+  return `
+  <div class="ph"><div class="pt"><div class="rb"></div>Dashboard de Planificación</div>
+    <div class="pd">Qué está programado, qué falta planificar y carga futura.</div></div>
+  ${buildDashFilterBar('plan')}
+  <div class="tabs" style="margin-bottom:0">
+    <button class="tab on" id="planL-op" onclick="switchDashLevel('plan','op')">⚡ Operativo</button>
+    <button class="tab" id="planL-tac" onclick="switchDashLevel('plan','tac')">📊 Táctico</button>
+    <button class="tab" id="planL-est" onclick="switchDashLevel('plan','est')">🎯 Estratégico</button>
+  </div>
+  <div id="dash-content-plan"></div>`;
+}
+
+async function vDashRend() {
+  return `
+  <div class="ph"><div class="pt"><div class="rb"></div>Dashboard de Rendimiento</div>
+    <div class="pd">Ejecución + Productividad del equipo.</div></div>
+  ${buildDashFilterBar('rend')}
+  <div class="tabs" style="margin-bottom:0">
+    <button class="tab on" id="rendL-op" onclick="switchDashLevel('rend','op')">⚡ Operativo</button>
+    <button class="tab" id="rendL-tac" onclick="switchDashLevel('rend','tac')">📊 Táctico</button>
+    <button class="tab" id="rendL-est" onclick="switchDashLevel('rend','est')">🎯 Estratégico</button>
+  </div>
+  <div id="dash-content-rend"></div>`;
+}
+
+async function vDashCostos() {
+  try {
+    const cfg = await apiGet({accion:'leer',tabla:'Config'});
+    if (Array.isArray(cfg)&&cfg.length>1) {
+      cfg.slice(1).forEach(r=>{
+        if(r[0]&&r[0].startsWith('costo_')){
+          const[,nom,tipo]=r[0].split('_');
+          if(!COSTOS[nom])COSTOS[nom]={};
+          COSTOS[nom][tipo]=parseInt(r[1])||0;
+        }
+      });
+    }
+  } catch(e) {}
+  return `
+  <div class="ph"><div class="pt"><div class="rb"></div>Dashboard de Costos</div>
+    <div class="pd">Análisis de costos en HH. Solo visible para administradores.</div></div>
+  ${buildDashFilterBar('costos')}
+  <div class="tabs" style="margin-bottom:0">
+    <button class="tab on" id="costosL-op" onclick="switchDashLevel('costos','op')">⚡ Operativo</button>
+    <button class="tab" id="costosL-tac" onclick="switchDashLevel('costos','tac')">📊 Táctico</button>
+    <button class="tab" id="costosL-est" onclick="switchDashLevel('costos','est')">🎯 Estratégico</button>
+  </div>
+  <div id="dash-content-costos"></div>`;
+}
+
+function buildDashFilterBar(id) {
+  const hoy = todayStr(), lun = mondayStr();
+  return `
+  <div class="fb" id="fb-${id}">
+    <div class="fb-f"><label>Usuarios</label>
+      <div class="user-checks">
+        <label><input type="checkbox" class="uchk" value="Luis Sanchez" checked> Luis S.</label>
+        <label><input type="checkbox" class="uchk" value="Luis Diaz" checked> Luis D.</label>
+        <label><input type="checkbox" class="uchk" value="Yamila Silva" checked> Yamila</label>
+      </div>
+    </div>
+    <div class="fb-f"><label>Área</label>
+      <select id="${id}-area"><option value="">Todas</option>${opts('Area')}</select></div>
+    <div class="fb-f"><label>Tipo</label>
+      <select id="${id}-tipo"><option value="">Todos</option>${opts('Tipo')}</select></div>
+    <div class="fb-f"><label>Estado</label>
+      <select id="${id}-est"><option value="">Todos</option>
+        <option>Por Iniciar</option><option>Programada</option><option>En Proceso</option>
+        <option>Listo</option><option>Standby</option><option>Cancelado</option></select></div>
+    <div class="fb-f"><label>Período</label>
+      <div class="tabs" style="margin-bottom:0">
+        <button class="tab on" onclick="dashPeriodo('${id}','semana',this)">Semana</button>
+        <button class="tab" onclick="dashPeriodo('${id}','hoy',this)">Hoy</button>
+        <button class="tab" onclick="dashPeriodo('${id}','mes',this)">Mes</button>
+        <button class="tab" onclick="dashPeriodo('${id}','libre',this)">Libre</button>
+      </div>
+    </div>
+    <div id="${id}-libre" style="display:none;gap:6px;align-items:flex-end">
+      <div class="fb-f"><label>Desde</label><input type="date" id="${id}-d" value="${lun}"></div>
+      <div class="fb-f"><label>Hasta</label><input type="date" id="${id}-h" value="${hoy}"></div>
+    </div>
+    <button class="btn sm" style="align-self:flex-end;margin-left:auto" onclick="applyDashFilter('${id}')">
+      <span class="bt">Actualizar</span></button>
+  </div>`;
+}
+
 async function applyDashFilter(id) {
   const f = getDashFilter(id);
   const cont = document.getElementById(`dash-content-${id}`);
@@ -2773,6 +2896,434 @@ function abrirModal(id) {
     </div>`);
 }
 
+
+
+function vTareas(filtroUsuario=null) {
+  const me = filtroUsuario || (VIEW_AS ? VIEW_AS.nombre : SESSION?.nombre) || '';
+  const isAdmin = activeRol()==='admin';
+  const persOpts2 = ['Todos',...PERSONAS].map(p=>
+    `<option value="${p}" ${p===me?'selected':''}>${p==='Todos'?'Todos':shortName(p)}</option>`).join('');
+  const lista = (isAdmin&&me==='Todos') ? TAREAS : TAREAS.filter(t=>t.nombre===me);
+  const act = lista.filter(t=>!['Listo','Cancelado'].includes(t.estado));
+  const cer = lista.filter(t=>['Listo','Cancelado'].includes(t.estado));
+  const busqVal = document.getElementById('tarBusq')?.value?.toLowerCase()||'';
+  const actF = busqVal ? act.filter(t=>t.tarea?.toLowerCase().includes(busqVal)||String(t.id).includes(busqVal)) : act;
+  const cerF = busqVal ? cer.filter(t=>t.tarea?.toLowerCase().includes(busqVal)||String(t.id).includes(busqVal)) : cer;
+
+  const rows = arr => arr.length===0
+    ? '<div class="emp"><span class="ei">📋</span>Sin tareas</div>'
+    : `<div class="tl">${arr.map(t=>`
+      <div class="ti2" onclick="abrirModal(${t.id})">
+        <span class="tid">#${t.id}</span>
+        <div class="tn2">
+          <div class="tna">${t.tarea}</div>
+          <div class="tme">${shortName(t.nombre)} · ${t.tipo||'—'} · ${t.area||'—'} · HHP:${t.hhPlan||'—'} HHR:${t.hhReal||'0'}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+          <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+          ${!t.fechaEjecucion&&!['Listo','Cancelado'].includes(t.estado)?'<span class="badge bex">Sin prog.</span>':''}
+        </div>
+      </div>`).join('')}</div>`;
+
+  return`
+  <div class="ph"><div class="pt"><div class="rb"></div>${isAdmin?'Todas las Tareas':'Mis Tareas'}</div></div>
+  <div class="fb" style="margin-bottom:12px">
+    ${isAdmin?`<div class="fb-f"><label>Persona</label>
+      <select id="tarPers" onchange="document.getElementById('main').innerHTML=vTareas(this.value)">${persOpts2}</select>
+    </div>`:''}
+    <div class="fb-f" style="flex:1"><label>Buscar</label>
+      <input type="text" id="tarBusq" placeholder="Texto o #ID…" oninput="document.getElementById('tarList').innerHTML=vTareasContent()" style="width:100%"></div>
+  </div>
+  <div id="tarList">
+    <div class="card"><div class="cl"><div class="d"></div>Activas (${actF.length})</div>${rows(actF)}</div>
+    <div class="card">
+      <div class="cl"><div class="d"></div>
+        Cerradas (${cerF.length})
+        <button class="btn sm ghost" style="margin-left:auto;padding:3px 8px" onclick="
+          const el=document.getElementById('tarCerradas');
+          el.style.display=el.style.display==='none'?'block':'none';
+          this.textContent=el.style.display==='none'?'Mostrar':'Ocultar';">Mostrar</button>
+      </div>
+      <div id="tarCerradas" style="display:none">${rows(cerF)}</div>
+    </div>
+  </div>`;
+}
+
+
+function vNuevaTarea() {
+  const hoy=todayStr();
+  const hora=new Date().toTimeString().slice(0,5);
+  return`
+  <div class="ph"><div class="pt"><div class="rb"></div>Nueva Tarea</div></div>
+
+  <div class="card">
+    <div class="cl"><div class="d"></div>Tipo de tarea ${tip('Express: se hace ahora mismo en pocos minutos. Simple: un día, un bloque. Compuesta: múltiples bloques en varios días.')}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div class="tt-btn ex" id="ttE" onclick="setTT('express')">
+        <span class="tt-ico">⚡</span><div class="tt-name">Express</div>
+        <div class="tt-desc">Se hace ahora<br><em style="font-size:9px">orientativo: menos de 3 min o acción inmediata</em></div>
+      </div>
+      <div class="tt-btn pl" id="ttS" onclick="setTT('simple')">
+        <span class="tt-ico">📋</span><div class="tt-name">Simple</div>
+        <div class="tt-desc">Un día<br>Un bloque de tiempo</div>
+      </div>
+      <div class="tt-btn pl" id="ttC" onclick="setTT('compuesta')">
+        <span class="tt-ico">📦</span><div class="tt-name">Compuesta</div>
+        <div class="tt-desc">Varios días o<br>múltiples bloques</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="fmTarea" style="display:none">
+    <!-- IDENTIFICACIÓN -->
+    <div class="card">
+      <div class="cl"><div class="d"></div>Identificación</div>
+      <div class="g2">
+        <div class="fi">
+          <label class="rq">Responsable ${tip('Se asigna automáticamente desde tu sesión.')}</label>
+          <input id="tNom" value="${activeUser()}" readonly style="background:#f0f0f0;color:var(--muted)">
+        </div>
+        <div class="fi">
+          <label>Solicitante ${tip('Persona o área que solicitó este trabajo.')}</label>
+          <select id="tSol"><option value="">— seleccionar —</option>${opts('Solicitante')}</select>
+        </div>
+        <div class="fi fw">
+          <label class="rq">Descripción ${tip('Sé específico: qué, para quién y en qué proyecto.')}</label>
+          <textarea id="tTar" placeholder="Ej: Cubicación módulo baño Proyecto Codelco Fase 2…" oninput="clearErr(['tTar'])"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- CLASIFICACIÓN -->
+    <div class="card">
+      <div class="cl"><div class="d"></div>Clasificación</div>
+      <div class="g2">
+        <div class="fi">
+          <label class="rq">Área ${tip('Área interna que originó esta tarea.')}</label>
+          <select id="tAre" onchange="clearErr(['tAre'])"><option value="">— seleccionar —</option>${opts('Area')}</select>
+        </div>
+        <div class="fi">
+          <label class="rq">Tipo ${tip('Plano=CAD, Costo=cotización, Consulta=técnica, Coordinación=gestión, EDP=estado pago, Informe=reporte, Vales=docs, Ejecución=trabajo físico.')}</label>
+          <select id="tTip" onchange="clearErr(['tTip'])"><option value="">— seleccionar —</option>${opts('Tipo')}</select>
+        </div>
+        <div class="fi">
+          <label class="rq">HH Planificadas ${tip('Horas estimadas. Base para calcular hora término y medir eficiencia real vs plan.')}</label>
+          <input type="number" id="tHHp" placeholder="Ej: 2.5" step="0.25" min="0.25" oninput="clearErr(['tHHp']);calcTerminoSimple()">
+        </div>
+        <div class="fi">
+          <label>Fecha límite ${tip('Fecha máxima de entrega. Genera alertas si se acerca o vence.')}</label>
+          <input type="date" id="tFco">
+        </div>
+        <div class="fi fw" id="divEis">
+          <label>Clasificación ${tip('Urgente = requiere acción inmediata. Importante = impacto en objetivos.')}</label>
+          <div class="eis-row">
+            <div class="eis-half">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;margin-bottom:5px">¿Es urgente?</div>
+              <div class="eis-opts">
+                <div class="eis-opt" id="eisUS" onclick="setEis('u',true)">🔴 Sí</div>
+                <div class="eis-opt" id="eisUN" onclick="setEis('u',false)">🟢 No</div>
+              </div>
+            </div>
+            <div class="eis-half">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;margin-bottom:5px">¿Es importante?</div>
+              <div class="eis-opts">
+                <div class="eis-opt" id="eisIS" onclick="setEis('i',true)">⭐ Sí</div>
+                <div class="eis-opt" id="eisIN" onclick="setEis('i',false)">⬜ No</div>
+              </div>
+            </div>
+          </div>
+          <div class="eis-quad" id="eisQuad" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROGRAMACIÓN (simple) -->
+    <div class="card" id="cardProgSimple" style="display:none">
+      <div class="cl"><div class="d"></div>Programación ${tip('Opcional al crear. Tienes hasta 24 horas para programar. Si no lo haces, recibirás alerta.')}</div>
+      <div class="g2">
+        <div class="fi">
+          <label>Fecha de ejecución ${tip('Cuándo ejecutarás esta tarea.')}</label>
+          <input type="date" id="tFej" value="${hoy}" onchange="calcTerminoSimple()">
+        </div>
+        <div class="fi">
+          <label>Hora inicio ${tip('Hora en que comenzarás.')}</label>
+          <input type="time" id="tHini" onchange="calcTerminoSimple()">
+        </div>
+        <div class="fi">
+          <label>Hora término ${tip('Calculada automáticamente: hora inicio + HH planificadas.')}</label>
+          <input type="time" id="tHter" readonly style="background:#f0f0f0;color:var(--muted)">
+        </div>
+        <div class="fi">
+          <label>Comentario</label>
+          <input type="text" id="tCom" placeholder="Notas adicionales (opcional)">
+        </div>
+      </div>
+      <div id="alProgSimple" style="margin-top:8px"></div>
+    </div>
+
+    <!-- PROGRAMACIÓN (compuesta) -->
+    <div class="card" id="cardProgComp" style="display:none">
+      <div class="cl"><div class="d"></div>Programación — Bloques ${tip('Agrega cada bloque de trabajo. Puedes también programar arrastrando desde la Agenda.')}</div>
+      <div id="bloquesContainer"></div>
+      <button class="btn sm ghost" style="margin-top:8px" onclick="agregarBloque()">
+        <span class="bt">＋ Agregar bloque</span>
+      </button>
+      <div class="fi" style="margin-top:10px">
+        <label>Comentario</label>
+        <input type="text" id="tComC" placeholder="Notas adicionales (opcional)">
+      </div>
+    </div>
+
+    <!-- EXPRESS: tiempo ejecutado ahora -->
+    <div class="card" id="cardExp" style="display:none">
+      <div class="cl"><div class="d"></div>Tiempo ejecutado ${tip('Ingresa horario real. Se crea bloque confirmado y la tarea queda cerrada.')}</div>
+      <div class="g2">
+        <div class="fi">
+          <label class="rq">Hora inicio</label>
+          <input type="time" id="tHinE" value="${hora}" oninput="calcHHN();updAlExp()">
+        </div>
+        <div class="fi">
+          <label class="rq">Hora término</label>
+          <input type="time" id="tHterE" oninput="calcHHN();updAlExp()">
+        </div>
+        <div class="fi fw">
+          <div class="hhp"><div class="hhpl"><div class="l">HH calculadas</div><div class="s">Bloque confirmado · Tarea cerrada</div></div>
+            <div class="hhv e" id="hhN">--</div></div>
+        </div>
+      </div>
+      <div id="alExp" style="margin-top:8px"></div>
+    </div>
+
+    <button class="btn w" id="btnT" onclick="guardarTarea()">
+      <div class="sp"></div><div class="st"></div><span class="bt" id="btnTTxt">Guardar</span>
+    </button>
+  </div>`;
+}
+
+
+function buildDashPlan(f) {
+  const tareas=filtrarTareas(f);
+  const hoy=todayStr();
+  const ayer=new Date();ayer.setDate(ayer.getDate()-1);const ayerStr=ayer.toISOString().split('T')[0];
+  const prox3=new Date();prox3.setDate(prox3.getDate()+3);const prox3Str=prox3.toISOString().split('T')[0];
+
+  // Unprogrammed > 1 day
+  const sinProg=tareas.filter(t=>!t.fechaEjecucion&&!['Listo','Cancelado'].includes(t.estado)&&t.fechaIngreso<=ayerStr);
+  // Vencidas prox 3 dias
+  const proxVenc=tareas.filter(t=>t.fechaComp&&t.fechaComp>=hoy&&t.fechaComp<=prox3Str&&!['Listo','Cancelado'].includes(t.estado));
+  // Tasa planificacion
+  const express=tareas.filter(t=>t.tipo==='Express'||t.urgente==='Si'&&!t.fechaEjecucion);
+  const planificadas=tareas.filter(t=>t.fechaEjecucion);
+  const tasaPlan=tareas.length>0?Math.round(planificadas.length/tareas.length*100):0;
+
+  // Alertas horario hoy
+  const cumplHTML=(()=>{
+    const personas=f.users;
+    return personas.map(p=>{
+      const gaps=checkGaps(p,hoy);
+      const cls=gaps.length===0?'cu-v':'cu-r';
+      return`<div class="cuc ${cls}"><div class="cud"></div>
+        <div><div class="cun">${p.split(' ')[0]}</div>
+        <div class="cuf">${gaps.length===0?'✅ Sin gaps hoy':`⚠ ${gaps.length} bloque(s) sin reportar`}</div></div>
+      </div>`;
+    }).join('');
+  })();
+
+  // Carga futura por persona
+  const cargaCards=f.users.map(p=>{
+    const pT=TAREAS.filter(t=>t.nombre===p&&!['Listo','Cancelado'].includes(t.estado));
+    const comprometidas=pT.reduce((s,t)=>s+Math.max(0,(parseFloat(t.hhPlan)||0)-(parseFloat(t.hhReal)||0)),0);
+    // Available hours next 5 work days
+    let dispHrs=0;const d=new Date();
+    for(let i=0;i<14&&dispHrs<(40);i++){d.setDate(d.getDate()+1);const dow=d.getDay();if(SCHEDULE[dow])dispHrs+=SCHEDULE[dow][1]-SCHEDULE[dow][0]-1;}
+    const pct=dispHrs>0?Math.round(comprometidas/dispHrs*100):0;
+    const cls=pct<70?'ok':pct<100?'warn':'over';
+    return`<div class="carga-card">
+      <div class="carga-head">
+        <div><div class="carga-name">${p}</div>
+          <div style="font-size:10px;color:var(--muted)">${pT.length} tareas · ${Math.round(comprometidas*10)/10}h pendientes / ${Math.round(dispHrs*10)/10}h disponibles (próx. 2 sem.)</div>
+        </div>
+        <div class="carga-pct ${cls}">${pct}%</div>
+      </div>
+      <div class="carga-bar"><div class="carga-fill ${cls}" style="width:${Math.min(pct,100)}%"></div></div>
+      <button class="btn sm ghost" style="margin-top:6px" id="btn_carga_${p.replace(' ','_')}" onclick="toggleCargaDetail('${p.replace(' ','_')}')" >▼ Ver tareas (${pT.filter(t=>((parseFloat(t.hhPlan)||0)-(parseFloat(t.hhReal)||0))>0).length})</button>
+      <div class="carga-detail"><div style="margin-top:6px">${pT.filter(t=>((parseFloat(t.hhPlan)||0)-(parseFloat(t.hhReal)||0))>0).map(t=>`
+        <div class="br"><div class="bl2" title="${t.tarea}">#${t.id} ${t.tarea.substring(0,20)}…</div>
+          <div class="bt2"><div class="bf a" style="width:${Math.min(100,Math.round(Math.max(0,(parseFloat(t.hhPlan)||0)-(parseFloat(t.hhReal)||0))/(Math.max(parseFloat(t.hhPlan)||1,1))*100))}%"></div></div>
+          <div class="bv">${fmtHH(Math.max(0,(parseFloat(t.hhPlan)||0)-(parseFloat(t.hhReal)||0)))}h</div>
+        </div>`).join('')||'<div class="emp" style="padding:8px">Sin HH pendientes</div>'}
+      </div></div>
+    </div>`;
+  }).join('');
+
+  return`
+  <div class="kg4">
+    <div class="kpi cl2" onclick="toggleDrill('drSinProg')">
+      <div class="kv ${sinProg.length>0?'neg':''}">${sinProg.length}</div>
+      <div class="kl">Sin programar (>1 día) ${tip('Tareas creadas hace más de 1 día sin fecha de ejecución asignada.')}</div>
+      <div class="drill" id="drSinProg">
+        <div style="font-size:11px;font-weight:600;color:var(--amber);margin-bottom:6px">
+          Total HH plan sin programar: ${sinProg.reduce((s,t)=>s+(parseFloat(t.hhPlan)||0),0).toFixed(1)}h
+        </div>
+        <div class="tl">${sinProg.slice(0,10).map(t=>`
+        <div class="ti2" onclick="abrirModal(${t.id})">
+          <span class="tid">#${t.id}</span><div class="tn2"><div class="tna">${t.tarea}</div>
+          <div class="tme">${shortName(t.nombre)} · Ingresada: ${dateStr(t.fechaIngreso)} · HHP: ${t.hhPlan||'—'}h</div></div>
+          <span style="font-size:11px;font-weight:700;color:var(--amber)">${t.hhPlan||'—'}h</span>
+        </div>`).join('')||'<div class="emp">Sin pendientes</div>'}</div>
+      </div>
+    </div>
+    <div class="kpi cl2" onclick="toggleDrill('drProxVenc')">
+      <div class="kv ${proxVenc.length>0?'warn':''}">${proxVenc.length}</div>
+      <div class="kl">Vencen en 3 días ${tip('Tareas con fecha límite en los próximos 3 días que no están cerradas.')}</div>
+      <div class="drill" id="drProxVenc"><div class="tl">${proxVenc.slice(0,10).map(t=>`
+        <div class="ti2" onclick="abrirModal(${t.id})">
+          <span class="tid">#${t.id}</span><div class="tn2"><div class="tna">${t.tarea}</div>
+          <div class="tme">Vence: ${t.fechaComp}</div></div>
+          <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+        </div>`).join('')||'<div class="emp">Sin urgencias</div>'}</div></div>
+    </div>
+    <div class="kpi">
+      <div class="kv">${tasaPlan}%</div>
+      <div class="kl">Tasa de programación ${tip('% de tareas activas que tienen fecha y bloque horario asignados vs total. Mide qué tan proactivo es el equipo.')}</div>
+      <div class="ks ${tasaPlan>=70?'pos':'neg'}">${tasaPlan>=70?'✅ Buena planificación':'⚠ Mejorar programación'}</div>
+    </div>
+    <div class="kpi cl2" onclick="toggleDrill('drProgramadas')">
+      <div class="kv">${planificadas.length}</div>
+      <div class="kl">Tareas programadas ${tip('Tareas con fecha y bloque horario asignado. Clic para ver detalle con HH comprometidas.')}</div>
+      <div class="ks">${planificadas.reduce((s,t)=>s+(parseFloat(t.hhPlan)||0),0).toFixed(1)}h comprometidas</div>
+      <div class="drill" id="drProgramadas">
+        <div class="tl">${planificadas.slice(0,10).map(t=>`
+          <div class="ti2" onclick="abrirModal(${t.id})">
+            <span class="tid">#${t.id}</span><div class="tn2"><div class="tna">${t.tarea}</div>
+            <div class="tme">${shortName(t.nombre)} · ${t.fechaEjecucion} · HHP:${t.hhPlan||'—'}h</div></div>
+            <span class="badge bpr">${t.hhPlan||'—'}h</span>
+          </div>`).join('')||'<div class="emp">Sin programadas</div>'}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card"><div class="cl"><div class="d"></div>Control de registro diario ${tip('Verde: registró hoy. Rojo: sin actividad registrada hoy.')}</div>
+    <div class="cug">${cumplHTML}</div></div>
+
+  <div class="ph" style="margin-top:12px"><div class="pt"><div class="rb"></div>Carga de trabajo futura</div></div>
+  ${cargaCards}
+
+  <!-- Criticidad Eisenhower -->
+  ${(()=>{
+    const criticos=tareas.filter(t=>t.urgente==='Si'&&t.importante==='Si'&&!['Listo','Cancelado'].includes(t.estado));
+    const total=tareas.filter(t=>!['Listo','Cancelado'].includes(t.estado)).length;
+    const pct=total>0?Math.round(criticos.length/total*100):0;
+    const color=pct>50?'var(--red)':pct>30?'var(--amber)':'var(--green)';
+    return `<div class="kg2">
+      <div class="kpi cl2" onclick="toggleDrill('drCritico')">
+        <div class="kv" style="color:${color}">${criticos.length}</div>
+        <div class="kl">⚡ Urgente + Importante ${tip('Tareas activas en el cuadrante crítico de Eisenhower. Si este número es alto, el equipo está en modo reactivo.')}</div>
+        <div class="ks" style="color:${color}">${pct}% del trabajo activo es crítico</div>
+        <div class="drill" id="drCritico">
+          <div class="tl">${criticos.slice(0,10).map(t=>`
+            <div class="ti2" onclick="abrirModal(${t.id})">
+              <span class="tid">#${t.id}</span>
+              <div class="tn2"><div class="tna">${t.tarea}</div>
+              <div class="tme">${shortName(t.nombre)} · ${t.area||'—'} · HHP:${t.hhPlan||'—'}h</div></div>
+              <span class="badge" style="background:#fee2e2;color:#991b1b">⚡ Crítico</span>
+            </div>`).join('')||'<div class="emp">Sin tareas críticas ✅</div>'}
+          </div>
+        </div>
+      </div>
+      <div class="kpi">
+        <div class="kv">${tareas.filter(t=>t.urgente!=='Si'&&t.importante==='Si'&&!['Listo','Cancelado'].includes(t.estado)).length}</div>
+        <div class="kl">📅 Importante no urgente ${tip('Tareas que deberían estar planificadas. Si este número es bajo, el equipo no está planificando trabajo estratégico.')}</div>
+      </div>
+    </div>`;
+  })()}`;
+}
+
+
+function vCRegistros() {
+  return`
+  <div class="ph"><div class="pt"><div class="rb"></div>Gestión de Registros</div></div>
+  <div class="sb2">
+    <input type="text" id="srQ" placeholder="🔍 Texto, #ID, solicitante…" oninput="buscarReg()" style="flex:1;min-width:160px">
+    <select id="srP" onchange="buscarReg()"><option value="">Todos los responsables</option>
+      <option>Luis Sanchez</option><option>Luis Diaz</option><option>Yamila Silva</option></select>
+    <select id="srE" onchange="buscarReg()"><option value="">Todos los estados</option>
+      <option>Por Iniciar</option><option>Programada</option><option>En Proceso</option>
+      <option>Listo</option><option>Standby</option><option>Cancelado</option></select>
+    <select id="srT" onchange="buscarReg()"><option value="">Todos los tipos</option></select>
+    <select id="srA" onchange="buscarReg()"><option value="">Todas las áreas</option></select>
+  </div>
+  <div class="tabs" style="margin-bottom:10px">
+    <button class="tab on" id="rpT" onclick="switchRegTab('t')">Tareas</button>
+    <button class="tab" id="rpS" onclick="switchRegTab('s')">Sesiones</button>
+  </div>
+  <div id="sr-t"><div class="sr" id="srCnt">—</div><div id="srLT"></div></div>
+  <div id="sr-s" style="display:none"><div class="sr" id="srCntS">—</div><div id="srLS"></div></div>`;
+}
+
+
+async function vCUsuarios() {
+  const rows=await apiGet({accion:'leer',tabla:'Usuarios'});
+  const usrs=Array.isArray(rows)&&rows.length>1?rows.slice(1):[];
+  return`
+  <div class="ph"><div class="pt"><div class="rb"></div>Usuarios del sistema</div></div>
+  <div class="card">
+    <div class="cl"><div class="d"></div>Usuarios activos</div>
+    <div class="tw" style="margin-bottom:14px"><table class="dt">
+      <thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Último registro</th><th>Acciones</th></tr></thead>
+      <tbody>${usrs.map(r=>`
+        <tr>
+          <td><code style="font-size:11px">${r[0]}</code></td>
+          <td>${r[1]}</td>
+          <td><span class="badge ${r[3]==='admin'?'bp':'bi'}">${r[3]}</span></td>
+          <td>${r[4]||'—'}</td>
+          <td style="display:flex;gap:5px;flex-wrap:wrap">
+            <button class="btn sm ghost" onclick="editarUsuario('${r[0]}','${r[1]}','${r[3]}')">Editar</button>
+            ${r[3]!=='admin'&&SESSION.rol==='admin'?`<button class="btn sm amber" onclick="startImpersonate('${r[1]}','${r[0]}')">Ver como</button>`:''}
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>
+    <button class="btn sm" onclick="nuevoUsuario()"><span class="st"></span><span class="bt">＋ Nuevo usuario</span></button>
+  </div>`;
+}
+
+
+function vCConfig() {
+  const tiposLista=Object.keys(LISTAS);
+  const pillsHTML=tiposLista.map((t,i)=>
+    `<button class="tab ${i===0?'on':''}" id="lpill-${t}" onclick="cambiarLista('${t}')">${t}</button>`).join('');
+  const defaultCostos={'Luis Sanchez':{normal:12000,extra:16000},'Luis Diaz':{normal:10000,extra:14000},'Yamila Silva':{normal:8000,extra:11000}};
+  const costos={...defaultCostos,...COSTOS};
+  const costosRows=['Luis Sanchez','Luis Diaz','Yamila Silva'].map(p=>`
+    <div class="br" style="margin-bottom:10px">
+      <div class="bl2" style="width:120px">${p.split(' ')[0]}</div>
+      <div style="display:flex;gap:8px;flex:1">
+        <div class="efi" style="flex:1">
+          <label>CLP/h Normal</label>
+          <input type="number" id="cn_${p.replace(' ','_')}" value="${costos[p]?.normal||10000}" step="500" min="0" style="background:var(--inp);border:1.5px solid var(--border);border-radius:5px;padding:6px 9px;font-family:Open Sans,sans-serif;font-size:12px;width:100%">
+        </div>
+        <div class="efi" style="flex:1">
+          <label>CLP/h Extra</label>
+          <input type="number" id="ce_${p.replace(' ','_')}" value="${costos[p]?.extra||14000}" step="500" min="0" style="background:var(--inp);border:1.5px solid var(--border);border-radius:5px;padding:6px 9px;font-family:Open Sans,sans-serif;font-size:12px;width:100%">
+        </div>
+      </div>
+    </div>`).join('');
+  return`
+  <div class="ph"><div class="pt"><div class="rb"></div>Configuración</div></div>
+  <div class="card">
+    <div class="cl"><div class="d"></div>Costos por hora ${tip('Valores en CLP por hora trabajada. Se usan en el dashboard de costos.')}</div>
+    ${costosRows}
+    <button class="btn sm" onclick="guardarCostos()"><span class="bt">Guardar costos</span></button>
+  </div>
+  <div class="card">
+    <div class="cl"><div class="d"></div>Listas desplegables</div>
+    <div class="tabs" id="lTabs">${pillsHTML}</div>
+    <div id="lEditor"></div>
+    <button class="btn sm" style="margin-top:10px" onclick="guardarListas()"><span class="bt">Guardar listas</span></button>
+  </div>`;
+}
 </script>
 </body>
 </html>
