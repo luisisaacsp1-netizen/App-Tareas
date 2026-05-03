@@ -865,6 +865,34 @@ async function loadData(forceRefresh=false) {
   _updateAlertCount();
 }
 
+
+function checkAutoEnProceso() {
+  const now = new Date();
+  const hoy = todayStr();
+  const nowMin = now.getHours()*60 + now.getMinutes();
+  let changed = false;
+  TAREAS.forEach(t => {
+    if (t.estado !== 'Programada') return;
+    if (t.fechaEjecucion !== hoy) return;
+    // Check if there's a planned block currently active
+    const blk = SESIONES.find(s =>
+      String(s.tareaId)===String(t.id) &&
+      s.comentario==='[Bloque planificado]' &&
+      s.inicio && s.termino && s.inicio.length===5 && s.termino.length===5
+    );
+    if (!blk) return;
+    const blkIni = t2m(blk.inicio);
+    const blkTer = t2m(blk.termino);
+    if (nowMin >= blkIni && nowMin < blkTer) {
+      // Block is active right now - set En Proceso
+      t.estado = 'En Proceso';
+      apiPost({accion:'actualizar',tabla:'Tareas',id:t.id,campos:{11:'En Proceso'}});
+      changed = true;
+    }
+  });
+  if (changed) invalidateCache();
+}
+
 function _updateAlertCount() {
   const ayer=new Date(); ayer.setDate(ayer.getDate()-1);
   const ayerStr=ayer.toISOString().split('T')[0];
@@ -1140,6 +1168,7 @@ function calGetPerson() {
 }
 
 function initCal() {
+  checkAutoEnProceso();
   _calView = 'semana';
   _calOffset = 0;
   ['D','S','M'].forEach(x => document.getElementById('cv'+x)?.classList.toggle('on', x==='S'));
@@ -1548,7 +1577,7 @@ function abrirModalProgramar(taskId, prefDate=null, prefIni=null, prefTer=null) 
             <label>Motivo de reprogramación *</label>
             <select id="schMotivo" style="background:#fff;border:1.5px solid var(--border);border-radius:5px;padding:5px 20px 5px 8px;font-size:12px;width:100%">
               <option value="">— seleccionar —</option>
-              ${opts('MotivoReprog')}
+              ${(LISTAS['MotivoReprog']||['Tarea urgente interrumpió','Cliente solicitó cambio','Error de estimación','Cambio de prioridad','Otro']).map(v=>`<option value="${v}">${v}</option>`).join('')}
             </select>
           </div>
         </div>`:``}
@@ -2907,7 +2936,9 @@ function abrirModal(id) {
     editFields=`
     <div class="eg" style="margin-bottom:10px">
       <div class="efi fw"><label>Descripción</label><textarea id="mTar" rows="2">${t.tarea||''}</textarea></div>
-      <div class="efi"><label>Estado</label><select id="mEst">${estOpts}</select></div>
+      <div class="efi"><label>Estado <span style="font-size:9px;color:var(--amber)">(selecciona y guarda)</span></label>
+        <select id="mEst" onchange="document.getElementById('mEstBadge').textContent=this.value">${estOpts}</select>
+      </div>
       <div class="efi"><label>Responsable</label><select id="mNom">
         ${PERSONAS.map(n=>`<option value="${n}" ${n===t.nombre?'selected':''}>${shortName(n)}</option>`).join('')}</select></div>
       <div class="efi"><label>Solicitante</label><select id="mSol"><option value="">—</option>${opts('Solicitante',t.solicitante)}</select></div>
