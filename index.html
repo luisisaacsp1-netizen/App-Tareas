@@ -1316,7 +1316,12 @@ function calRender() {
     // ONLY sessions belonging to this person on this date
     const daySessions = getSessionsForPersonOnDate(person, ds)
       .map(s => ({...s, inicio: normTime(s.inicio), termino: normTime(s.termino)}))
-      .filter(s => s.inicio && s.termino && s.inicio.length===5 && s.termino.length===5);
+      .filter(s => {
+        if(!s.inicio || !s.termino || s.inicio.length!==5 || s.termino.length!==5) return false;
+        const task = TAREAS.find(x => String(x.id)===String(s.tareaId));
+        if(task && ['Standby','Cancelado'].includes(task.estado)) return false;
+        return true;
+      });
 
     // Grid cells - hourly for performance (click snaps to nearest 30min anyway)
     const cells = Array.from({length: nHours}, (_,i) => {
@@ -1826,13 +1831,13 @@ function vConfirmarBloque(overridePers=null) {
         <button class="btn sm" style="flex:2;min-width:140px;background:var(--green)" onclick="cfAccion('${t.id}')">
           <span class="bt">✅ Confirmar bloque</span>
         </button>
-        <button class="btn sm ghost" style="flex:1;min-width:110px" onclick="cfAccionEstado('${t.id}','reprog')">
+        <button class="btn sm ghost" style="flex:1;min-width:110px" onclick="cfReprogramar('${t.id}')">
           <span class="bt">📅 Reprogramar</span>
         </button>
-        <button class="btn sm ghost" style="flex:1;min-width:80px" onclick="cfAccionEstado('${t.id}','standby')">
+        <button class="btn sm ghost" style="flex:1;min-width:80px" onclick="ponerStandby('${t.id}')">
           <span class="bt">⏸ Standby</span>
         </button>
-        <button class="btn sm danger" style="flex:1;min-width:80px" onclick="cfAccionEstado('${t.id}','cancelar')">
+        <button class="btn sm danger" style="flex:1;min-width:80px" onclick="cancelarTarea('${t.id}')">
           <span class="bt">✕ Cancelar</span>
         </button>
       </div>
@@ -1849,12 +1854,7 @@ function vConfirmarBloque(overridePers=null) {
     ? '<div class="al ok"><span class="al-ico">✅</span><div class="al-txt"><strong>Sin bloques pendientes</strong>No hay bloques programados que necesiten confirmación.</div></div>'
     : pendientes.map(renderItem).join('')
   }
-
-  <div style="margin-top:10px">
-    <button class="btn sm ghost w" onclick="goSub(\'A\',\'sesion_libre\')">
-      <span class="bt">+ Registrar sesión libre (sin bloque programado previo)</span>
-    </button>
-  </div>`;
+;
 }
 
 function cfCalcHH(tid) {
@@ -2912,51 +2912,65 @@ document.addEventListener('click',function(e){
 
 function abrirModal(id) {
   const t=TAREAS.find(x=>String(x.id)===String(id)); if(!t)return;
-  const isAdmin=activeRol()==='admin';
+  const isAdmin=SESSION.rol==='admin';
   const estOpts=['Por Iniciar','Programada','En Proceso','Listo','Standby','Cancelado']
     .map(e=>`<option value="${e}" ${e===t.estado?'selected':''}>${e}</option>`).join('');
 
-  // Planned blocks
+  // Get planned blocks
   const planBlks=SESIONES.filter(s=>String(s.tareaId)===String(id)&&s.comentario==='[Bloque planificado]');
-  // Confirmed blocks
   const confBlks=SESIONES.filter(s=>String(s.tareaId)===String(id)&&s.comentario!=='[Bloque planificado]');
 
-  const planHTML=planBlks.length>0
-    ?planBlks.map(b=>`<div style="display:flex;justify-content:space-between;padding:5px 8px;background:var(--off);border-radius:5px;margin-bottom:3px;font-size:11px">
-      <span>📅 ${normSessDate(b)||dateStr(b.fecha)} ${normTime(b.inicio)}–${normTime(b.termino)}</span>
-      <span style="font-weight:600">${parseFloat(b.hh)||0}h</span>
-    </div>`).join('')
-    :'<div style="font-size:11px;color:var(--muted)">Sin bloques programados</div>';
+  // Format planned block info
+  const planInfo = planBlks.length>0
+    ? planBlks.map(b=>`<div style="font-size:11px;background:var(--off);border-radius:5px;padding:6px 9px;margin-bottom:3px;display:flex;justify-content:space-between">
+        <span>📅 ${b._dn||normSessDate(b)||dateStr(b.fecha)} · ${normTime(b.inicio)||'—'}–${normTime(b.termino)||'—'}</span>
+        <span style="font-weight:600">${parseFloat(b.hh)||0}h</span>
+      </div>`).join('')
+    : '<div style="font-size:11px;color:var(--muted)">Sin bloque programado</div>';
 
-  const confHTML=confBlks.length>0
-    ?confBlks.map(b=>`<div style="display:flex;justify-content:space-between;padding:5px 8px;background:var(--greenl);border-radius:5px;margin-bottom:3px;font-size:11px">
-      <span>✅ ${normSessDate(b)||dateStr(b.fecha)} ${normTime(b.inicio)}–${normTime(b.termino)}${b.esExtra==='Sí'?' ⏰':''}</span>
-      <span style="font-weight:600">${parseFloat(b.hh)||0}h</span>
-    </div>`).join('')
-    :'<div style="font-size:11px;color:var(--muted)">Sin bloques confirmados aún</div>';
+  const confInfo = confBlks.length>0
+    ? confBlks.map(b=>`<div style="font-size:11px;background:var(--greenl);border-radius:5px;padding:6px 9px;margin-bottom:3px;display:flex;justify-content:space-between">
+        <span>✅ ${b._dn||normSessDate(b)||dateStr(b.fecha)} · ${normTime(b.inicio)||'—'}–${normTime(b.termino)||'—'}${b.esExtra==='Sí'?' ⏰':''}</span>
+        <span style="font-weight:600">${parseFloat(b.hh)||0}h</span>
+      </div>`).join('')
+    : '<div style="font-size:11px;color:var(--muted)">Sin bloques confirmados aún</div>';
+
+  // Check if task is confirmable (scheduled block time has passed)
+  const hoy=todayStr();
+  const now=new Date(); const nowMin=now.getHours()*60+now.getMinutes();
+  const planBlk = planBlks[0];
+  let confirmMsg='';
+  if(t.estado==='Por Iniciar'||!t.fechaEjecucion) {
+    confirmMsg=`<div class="al w" style="margin-bottom:8px"><span class="al-ico">⚠️</span><div class="al-txt">Primero debes programar la tarea para poder confirmar el bloque.</div></div>`;
+  } else if(t.fechaEjecucion > hoy || (t.fechaEjecucion===hoy && planBlk && t2m(normTime(planBlk.termino)||'23:59') > nowMin)) {
+    confirmMsg=`<div class="al info" style="margin-bottom:8px"><span class="al-ico">🕐</span><div class="al-txt">Aún no ha transcurrido el horario programado. Podrás confirmar después de las ${normTime(planBlk?.termino)||'—'}.</div></div>`;
+  }
 
   const infoGrid=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;margin-bottom:12px;background:var(--off);border-radius:6px;padding:10px">
-      <div><span style="color:var(--muted)">Área:</span> ${t.area||'—'}</div>
-      <div><span style="color:var(--muted)">Tipo:</span> ${t.tipo||'—'}</div>
-      <div><span style="color:var(--muted)">Solicitante:</span> ${t.solicitante||'—'}</div>
-      <div><span style="color:var(--muted)">Responsable:</span> ${shortName(t.nombre)}</div>
-      <div><span style="color:var(--muted)">HH Plan:</span> <strong>${t.hhPlan||'—'}h</strong></div>
-      <div><span style="color:var(--muted)">HH Real:</span> <strong>${t.hhReal||'0'}h</strong></div>
-      <div><span style="color:var(--muted)">F. Límite:</span> ${t.fechaComp||'—'}</div>
-      <div><span style="color:var(--muted)">F. Programada:</span> ${t.fechaEjecucion||'—'}</div>
-      <div><span style="color:var(--muted)">Urgente:</span> ${t.urgente==='Si'?'🔴 Sí':'🟢 No'}</div>
-      <div><span style="color:var(--muted)">Importante:</span> ${t.importante==='Si'?'⭐ Sí':'⬜ No'}</div>
-    </div>`;
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;margin-bottom:12px;background:var(--off);border-radius:6px;padding:10px">
+    <div><span style="color:var(--muted)">Área:</span> ${t.area||'—'}</div>
+    <div><span style="color:var(--muted)">Tipo:</span> ${t.tipo||'—'}</div>
+    <div><span style="color:var(--muted)">Solicitante:</span> ${t.solicitante||'—'}</div>
+    <div><span style="color:var(--muted)">Responsable:</span> ${shortName(t.nombre)}</div>
+    <div><span style="color:var(--muted)">HH Plan:</span> <strong>${t.hhPlan||'—'}h</strong></div>
+    <div><span style="color:var(--muted)">HH Real:</span> <strong>${t.hhReal||'0'}h</strong></div>
+    <div><span style="color:var(--muted)">F. Límite:</span> ${t.fechaComp||'—'}</div>
+    <div><span style="color:var(--muted)">Urgente:</span> ${t.urgente==='Si'?'🔴 Sí':'🟢 No'}</div>
+    <div style="grid-column:1/-1"><span style="color:var(--muted)">Programado:</span>
+      ${planBlks.length>0
+        ? `<strong>${planBlks[0]._dn||normSessDate(planBlks[0])||dateStr(planBlks[0].fecha)}</strong>
+           · ${normTime(planBlks[0].inicio)||'—'}–${normTime(planBlks[0].termino)||'—'}`
+        : '<span style="color:var(--muted)">Sin programar</span>'}
+    </div>
+  </div>`;
 
+  // Admin edit fields
   let editFields='';
   if(isAdmin){
     editFields=`
     <div class="eg" style="margin-bottom:10px">
       <div class="efi fw"><label>Descripción</label><textarea id="mTar" rows="2">${t.tarea||''}</textarea></div>
-      <div class="efi"><label>Estado <span style="font-size:9px;color:var(--amber)">(selecciona y guarda)</span></label>
-        <select id="mEst" onchange="document.getElementById('mEstBadge').textContent=this.value">${estOpts}</select>
-      </div>
+      <div class="efi"><label>Estado (selecciona y guarda)</label><select id="mEst">${estOpts}</select></div>
       <div class="efi"><label>Responsable</label><select id="mNom">
         ${PERSONAS.map(n=>`<option value="${n}" ${n===t.nombre?'selected':''}>${shortName(n)}</option>`).join('')}</select></div>
       <div class="efi"><label>Solicitante</label><select id="mSol"><option value="">—</option>${opts('Solicitante',t.solicitante)}</select></div>
@@ -2964,12 +2978,13 @@ function abrirModal(id) {
       <div class="efi"><label>Tipo</label><select id="mTip"><option value="">—</option>${opts('Tipo',t.tipo)}</select></div>
       <div class="efi"><label>HH Plan</label><input type="number" id="mHHp" value="${t.hhPlan||''}" step="0.25" min="0"></div>
       <div class="efi"><label>F. Límite</label><input type="date" id="mFco" value="${t.fechaComp||''}"></div>
-      <div class="efi"><label>F. Programada</label><input type="date" id="mFej" value="${t.fechaEjecucion||''}"></div>
       <div class="efi fw"><label>Comentario</label><input type="text" id="mCom" value="${t.comentario||''}"></div>
     </div>`;
-  } else {
-    editFields=`<div class="efi" style="margin-bottom:10px"><label>Cambiar estado</label><select id="mEst">${estOpts}</select></div>`;
   }
+
+  // Buttons based on estado
+  const canConfirm = !['Listo','Cancelado'].includes(t.estado) && confirmMsg==='' && t.fechaEjecucion;
+  const isProgramable = !['Listo','Cancelado'].includes(t.estado);
 
   openModal(`
     <div class="mt"><div class="rb"></div>Tarea #${t.id}</div>
@@ -2984,28 +2999,42 @@ function abrirModal(id) {
 
     <div style="margin-bottom:8px">
       <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Bloques programados</div>
-      ${planHTML}
+      ${planInfo}
     </div>
-    <div style="margin-bottom:12px">
+    <div style="margin-bottom:10px">
       <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Bloques ejecutados (${confBlks.length})</div>
-      ${confHTML}
+      ${confInfo}
     </div>
 
-    <div class="ma">
+    ${confirmMsg}
+
+    <div class="ma" style="flex-wrap:wrap;gap:6px">
       <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cerrar</span></button>
       ${isAdmin
         ?`<button class="btn" onclick="guardarModal(${t.id})"><span class="st"></span><span class="bt">Guardar</span></button>`
-        :`<button class="btn" onclick="cambiarEstado(${t.id})"><span class="st"></span><span class="bt">Guardar estado</span></button>`}
-      ${!['Listo','Cancelado'].includes(t.estado)
-        ?`<button class="btn sm" style="background:var(--navy3)" onclick="abrirModalProgramar(${t.id});cerrarModal()"><span class="bt">📅 Programar</span></button>
-          <button class="btn sm" style="background:var(--green)" onclick="goSub('A','confirmar');cerrarModal()"><span class="bt">✅ Confirmar</span></button>`
         :''}
-      <div style="margin-top:6px;width:100%">
-        <button class="btn sm ghost w" onclick="cargarReprogModal(${t.id})"><span class="bt">📋 Historial reprogramaciones</span></button>
-        <div id="modalReprogList" style="margin-top:5px"></div>
-      </div>
+      ${isProgramable
+        ?`<button class="btn sm" style="background:var(--navy3)" onclick="abrirModalProgramar(${t.id});cerrarModal()">
+            <span class="bt">${t.estado==='Programada'?'📅 Reprogramar':'📅 Programar'}</span></button>`
+        :''}
+      ${canConfirm
+        ?`<button class="btn sm" style="background:var(--green)" onclick="goSub('A','confirmar');cerrarModal()">
+            <span class="bt">✅ Confirmar bloque</span></button>`
+        :''}
+      ${!['Listo','Cancelado','Standby'].includes(t.estado)
+        ?`<button class="btn sm ghost" onclick="ponerStandby(${t.id})"><span class="bt">⏸ Standby</span></button>
+          <button class="btn sm danger" onclick="cancelarTarea(${t.id})"><span class="bt">✕ Cancelar</span></button>`
+        :''}
+      ${t.estado==='Standby'
+        ?`<button class="btn sm" style="background:var(--green)" onclick="retomarStandby(${t.id})"><span class="bt">▶ Retomar</span></button>`
+        :''}
+    </div>
+    <div style="margin-top:6px">
+      <button class="btn sm ghost w" onclick="cargarReprogModal(${t.id})"><span class="bt">📋 Historial reprogramaciones</span></button>
+      <div id="modalReprogList" style="margin-top:5px"></div>
     </div>`);
 }
+
 
 
 
@@ -3264,7 +3293,21 @@ function buildDashPlan(f) {
   }).join('');
 
   return`
-  <div class="kg4">
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">
+    <div class="kpi cl2" onclick="toggleDrill('drTotales')">
+      <div class="kv">${tareas.filter(t=>!['Cancelado'].includes(t.estado)).length}</div>
+      <div class="kl">Tareas totales ${tip('Todas las tareas activas del período (sin canceladas). Clic para ver listado.')}</div>
+      <div class="drill" id="drTotales">
+        <div class="tl">${tareas.filter(t=>!['Cancelado'].includes(t.estado)).slice(0,15).map(t=>`
+          <div class="ti2" onclick="abrirModal(${t.id})">
+            <span class="tid">#${t.id}</span>
+            <div class="tn2"><div class="tna">${t.tarea}</div>
+            <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'}</div></div>
+            <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+          </div>`).join('')||'<div class="emp">Sin tareas</div>'}
+        </div>
+      </div>
+    </div>
     <div class="kpi cl2" onclick="toggleDrill('drSinProg')">
       <div class="kv ${sinProg.length>0?'neg':''}">${sinProg.length}</div>
       <div class="kl">Sin programar (>1 día) ${tip('Tareas creadas hace más de 1 día sin fecha de ejecución asignada.')}</div>
@@ -3311,11 +3354,41 @@ function buildDashPlan(f) {
     </div>
   </div>
 
-  <div class="card"><div class="cl"><div class="d"></div>Control de registro diario ${tip('Verde: registró hoy. Rojo: sin actividad registrada hoy.')}</div>
-    <div class="cug">${cumplHTML}</div></div>
+  <div class="card"><div class="cl"><div class="d"></div>Control de registro diario ${tip('Verde: bloques confirmados. Rojo: bloques programados sin confirmar.')}</div>
+    <div class="cug">${cumplHTML}</div>
+    <div id="drCumpl" style="display:none;margin-top:8px"></div>
+  </div>
 
-  <!-- Daily breakdown -->
-  ${(()=>{const today=new Date();const days=[0,1,2].map(d=>{const dt=new Date(today);dt.setDate(today.getDate()+d);return dt.toISOString().split('T')[0];});const labels=['Hoy','Mañana','Pasado'];const rows=days.map((ds,i)=>{const dt2=TAREAS.filter(t=>f.users.includes(t.nombre)&&t.fechaEjecucion===ds&&!['Listo','Cancelado'].includes(t.estado));const hh=dt2.reduce((s,t)=>s+(parseFloat(t.hhPlan)||0),0);return `<div class="kpi" style="border-left:3px solid ${i===0?'var(--red)':i===1?'var(--amber)':'var(--muted)'}"><div class="kv" style="font-size:18px">${hh.toFixed(1)}h</div><div class="kl">${labels[i]} · ${dt2.length} tarea${dt2.length!==1?'s':''}</div></div>`;}).join('');return `<div class="ph" style="margin-top:12px"><div class="pt"><div class="rb"></div>Carga del día</div></div><div class="kg" style="margin-bottom:8px">${rows}</div>`;})()}
+  <!-- Daily breakdown like carga futura -->
+  ${(()=>{
+    const today=new Date();
+    const days=[0,1,2].map(d=>{const dt=new Date(today);dt.setDate(today.getDate()+d);return dt.toISOString().split('T')[0];});
+    const labels=['Hoy','Mañana','Pasado mañana'];
+    const cards=days.map((ds,i)=>{
+      const dt2=TAREAS.filter(t=>f.users.includes(t.nombre)&&t.fechaEjecucion===ds&&!['Listo','Cancelado'].includes(t.estado));
+      const hh=dt2.reduce((s,t)=>s+(parseFloat(t.hhPlan)||0),0);
+      const color=i===0?'var(--red)':i===1?'var(--amber)':'var(--muted)';
+      const tareasList=dt2.map(t=>`<div class="ti2" onclick="abrirModal(${t.id})">
+        <span class="tid">#${t.id}</span>
+        <div class="tn2"><div class="tna">${t.tarea}</div>
+        <div class="tme">${shortName(t.nombre)} · ${t.tipo||'—'} · ${hh.toFixed(1)}h</div></div>
+        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+      </div>`).join('');
+      return `<div class="carga-card">
+        <div class="carga-head">
+          <div><div class="carga-name">${labels[i]}</div>
+            <div style="font-size:10px;color:var(--muted)">${ds} · ${dt2.length} tarea${dt2.length!==1?'s':''}</div>
+          </div>
+          <div class="carga-pct" style="color:${color}">${hh.toFixed(1)}h</div>
+        </div>
+        ${dt2.length>0?`<button class="btn sm ghost" style="margin-top:4px" id="btn_day_${i}"
+          onclick="const d=document.getElementById('day_detail_${i}');d.style.display=d.style.display==='none'?'block':'none';this.textContent=d.style.display==='none'?'▼ Ver tareas (${dt2.length})':'▲ Ocultar'">
+          ▼ Ver tareas (${dt2.length})</button>
+          <div id="day_detail_${i}" style="display:none;margin-top:6px"><div class="tl">${tareasList}</div></div>`:''}
+      </div>`;
+    }).join('');
+    return `<div class="ph" style="margin-top:12px"><div class="pt"><div class="rb"></div>Carga del día</div></div>${cards}`;
+  })()}
   <div class="ph"><div class="pt"><div class="rb"></div>Carga de trabajo futura</div></div>
   ${cargaCards}
 
@@ -4359,6 +4432,31 @@ async function confirmarCancelacion(tid) {
   invalidateCache();
   cerrarModal();
   toast('Tarea cancelada','ok');
+}
+
+
+function cfReprogramar(tid) {
+  goSub('A','agenda');
+  setTimeout(()=>abrirModalProgramar(tid), 400);
+}
+
+
+function showCumplDetail(persona, taskIds) {
+  const el = document.getElementById('drCumpl'); if(!el)return;
+  if(el._persona===persona&&el.style.display!=='none'){el.style.display='none';return;}
+  el._persona=persona;
+  const tasks = taskIds.map(id=>TAREAS.find(x=>String(x.id)===String(id))).filter(Boolean);
+  el.innerHTML=`<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:5px">
+    Bloques sin confirmar — ${shortName(persona)}</div>
+    <div class="tl">${tasks.map(t=>`
+      <div class="ti2" onclick="goSub('A','confirmar')">
+        <span class="tid">#${t.id}</span>
+        <div class="tn2"><div class="tna">${t.tarea}</div>
+        <div class="tme">Prog: ${t.fechaEjecucion} · HHP:${t.hhPlan||'—'}h</div></div>
+        <span class="badge bpr">Sin confirmar</span>
+      </div>`).join('')||'<div class="emp">Sin pendientes</div>'}
+    </div>`;
+  el.style.display='block';
 }
 
 </script>
