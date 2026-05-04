@@ -3375,48 +3375,7 @@ function buildDashPlan(f) {
     </div>
   </div>
 
-  <div class="card"><div class="cl"><div class="d"></div>Control de registro diario ${tip('Verde: bloques confirmados. Rojo: bloques programados sin confirmar.')}</div>
-    <div class="cug">${cumplHTML}</div>
-    <div id="drCumpl" style="display:none;margin-top:8px"></div>
-  </div>
 
-  <!-- Carga del día - same format as carga futura -->
-  ${(()=>{
-    const today=new Date();
-    const days=[0,1,2].map(d=>{const dt=new Date(today);dt.setDate(today.getDate()+d);return dt.toISOString().split('T')[0];});
-    const labels=['Hoy','Mañana','Pasado mañana'];
-    const cards=days.map((ds,i)=>{
-      const dt2=TAREAS.filter(t=>f.users.includes(t.nombre)&&t.fechaEjecucion===ds&&!['Listo','Cancelado'].includes(t.estado));
-      const hhComp=dt2.reduce((s,t)=>s+Math.max(0,(parseFloat(t.hhPlan)||0)-(parseFloat(t.hhReal)||0)),0);
-      // Available hours that day
-      const dow=new Date(ds+'T12:00').getDay();
-      const dispHrs=SCHEDULE[dow]?SCHEDULE[dow][1]-SCHEDULE[dow][0]-1:0;
-      const pct=dispHrs>0?Math.round(hhComp/dispHrs*100):0;
-      const cls=pct<70?'ok':pct<100?'warn':'over';
-      const tareasList=dt2.map(t=>`<div class="ti2" onclick="abrirModal(${t.id})">
-        <span class="tid">#${t.id}</span>
-        <div class="tn2"><div class="tna">${t.tarea}</div>
-        <div class="tme">${shortName(t.nombre)} · ${t.tipo||'—'} · HHP:${t.hhPlan||'—'}h</div></div>
-        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
-      </div>`).join('');
-      const barW=Math.min(100,pct);
-      return `<div class="carga-card">
-        <div class="carga-head">
-          <div>
-            <div class="carga-name">${labels[i]}</div>
-            <div style="font-size:10px;color:var(--muted)">${ds} · ${dt2.length} tarea${dt2.length!==1?'s':''} · ${Math.round(hhComp*10)/10}h pendientes</div>
-          </div>
-          <div class="carga-pct ${cls}">${pct}%</div>
-        </div>
-        <div class="carga-bar"><div class="carga-fill ${cls}" style="width:${barW}%"></div></div>
-        ${dt2.length>0?`<button class="btn sm ghost" style="margin-top:6px"
-          onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.textContent=d.style.display==='none'?'▼ Ver tareas (${dt2.length})':'▲ Ocultar'">
-          ▼ Ver tareas (${dt2.length})</button>
-          <div style="display:none;margin-top:6px"><div class="tl">${tareasList}</div></div>`:''}
-      </div>`;
-    }).join('');
-    return `<div class="ph" style="margin-top:12px"><div class="pt"><div class="rb"></div>Carga del día</div></div>${cards}`;
-  })()}
   <div class="ph"><div class="pt"><div class="rb"></div>Carga de trabajo futura</div></div>
   ${cargaCards}
 
