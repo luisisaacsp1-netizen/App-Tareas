@@ -554,7 +554,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 // ══════════════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════════════
-const API = 'https://script.google.com/macros/s/AKfycbwEC7B-7bQ9YqzB_5t2MKY-EDfvXbQrap2dMp86OFyMCh2IP0KjlLDBYCTqfvz1nxwZ/exec';
+const API = 'https://script.google.com/macros/s/AKfycbxSIUXdvPuizbBeMIUo29MEp_TRprdSBrva_0dnqwKtyt_ofFmBnBvKRye7ABisUHdu/exec';
 if (API.includes('REPLACE')) console.warn('⚠️ API URL not configured - check index.html');
 const SCHEDULE = {1:[8,17,12,13],2:[8,18,12,13],3:[8,17,12,13],4:[8,18,12,13],5:[8,17,12,13]};
 
@@ -4706,6 +4706,36 @@ function mSetImp(val) {
   const no = document.getElementById('mImpNo');
   if(si) { si.style.background=val?'#fff3cd':'var(--off)'; si.style.borderColor=val?'var(--amber)':'var(--border)'; }
   if(no) { no.style.background=!val?'#d4edda':'var(--off)'; no.style.borderColor=!val?'var(--green)':'var(--border)'; }
+}
+
+
+
+async function vWeeklyReview() {
+  const usuario=activeRol()==='admin'&&!VIEW_AS?'admin':activeUser();
+  const data=await apiGet({accion:'weeklyReview',usuario});
+  if(!Array.isArray(data)||!data.length)return`
+    <div class="ph"><div class="pt"><div class="rb"></div>Revisión Semanal</div></div>
+    <div class="emp"><span class="ei">🎉</span>Sin tareas pendientes por revisar</div>`;
+  const venc=data.filter(t=>t.vencida),norm=data.filter(t=>!t.vencida);
+  const renderItems=arr=>arr.map(t=>`
+    <div class="wr-item">
+      <div class="wr-info">
+        <div style="font-size:12px;font-weight:600">#${t.id} · ${t.tarea}</div>
+        <div style="font-size:10px;color:var(--muted)">${t.nombre} · ${t.tipo||'—'} · ${t.area||'—'} · HHP:${t.hhPlan||'—'}</div>
+      </div>
+      <div class="wr-acts">
+        <button class="wr-btn wr-e" onclick="wrAccion(${t.id},'esta')">Esta semana</button>
+        <button class="wr-btn wr-p" onclick="wrAccion(${t.id},'post')">Posponer</button>
+        <button class="wr-btn wr-c" onclick="wrAccion(${t.id},'canc')">Cancelar</button>
+      </div>
+    </div>`).join('');
+  return`
+  <div class="ph"><div class="pt"><div class="rb"></div>Revisión Semanal</div>
+    <div class="pd">Decide qué harás con cada tarea pendiente.</div></div>
+  ${venc.length?`<div class="card"><div class="cl"><div class="d"></div>⚠️ Vencidas (${venc.length})</div>${renderItems(venc)}</div>`:''}
+  <div class="card"><div class="cl"><div class="d"></div>Por planificar (${norm.length})</div>
+    ${norm.length?renderItems(norm):'<div class="emp" style="padding:12px">Sin pendientes</div>'}
+  </div>`;
 }
 
 </script>
