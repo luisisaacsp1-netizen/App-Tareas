@@ -1724,9 +1724,16 @@ async function confirmarProgramacion(taskId) {
   }
 
   const hh = calcHHRaw(ini, ter);
+  // Remove ALL existing planned blocks for this task first (prevent duplicates)
+  const oldPlanned = SESIONES.filter(s=>String(s.tareaId)===String(taskId)&&s.comentario==='[Bloque planificado]');
+  for(const op of oldPlanned) {
+    await apiPost({accion:'eliminarSesion',tabla:'Sesiones',tareaId:taskId,
+      fecha:normSessDate(op)||dateStr(op.fecha),inicio:op.inicio});
+  }
+  SESIONES = SESIONES.filter(s=>!(String(s.tareaId)===String(taskId)&&s.comentario==='[Bloque planificado]'));
   // Update task
   await apiPost({accion:'actualizar',tabla:'Tareas',id:taskId,campos:{11:'Programada',15:fec}});
-  // Save planned block
+  // Save new planned block
   await apiPost({accion:'insertar',tabla:'Sesiones',
     fila:[taskId,t.tarea,t.nombre,fec,ini,ter,hh,'[Bloque planificado]',todayStr(),'No','']});
 
@@ -1786,11 +1793,11 @@ function vConfirmarBloque(overridePers=null) {
           <input type="date" id="cf_fec_${t.id}" value="${t.fechaEjecucion}">
         </div>
         <div class="efi">
-          <label>Hora inicio real ${ini?'(plan: '+ini+')':''}</label>
-          <input type="time" id="cf_ini_${t.id}" value="${ini}" oninput="cfCalcHH('${t.id}')">
+          <label>Hora inicio real ${ini?'(programado: '+ini+')':''}</label>
+          <input type="time" id="cf_ini_${t.id}" value="${ini}" oninput="cfCalcHH('${t.id}')" onload="cfCalcHH('${t.id}')">
         </div>
         <div class="efi">
-          <label>Hora término real ${ter?'(plan: '+ter+')':''}</label>
+          <label>Hora término real ${ter?'(programado: '+ter+')':''}</label>
           <input type="time" id="cf_ter_${t.id}" value="${ter}" oninput="cfCalcHH('${t.id}')">
         </div>
         <div class="efi">
@@ -1829,6 +1836,7 @@ function vConfirmarBloque(overridePers=null) {
           <span class="bt">✕ Cancelar</span>
         </button>
       </div>
+      <script>setTimeout(()=>cfCalcHH('${t.id}'),50);</script>
     </div>`;
   };
 
@@ -2270,13 +2278,13 @@ function buildDashFilterBar(id) {
   const hoy = todayStr(), lun = mondayStr();
   return `
   <div class="fb" id="fb-${id}">
-    <div class="fb-f"><label>Usuarios</label>
+    ${SESSION.rol==='admin'?`<div class="fb-f"><label>Usuarios</label>
       <div class="user-checks">
         <label><input type="checkbox" class="uchk" value="Luis Sanchez" checked> Luis S.</label>
         <label><input type="checkbox" class="uchk" value="Luis Diaz" checked> Luis D.</label>
         <label><input type="checkbox" class="uchk" value="Yamila Silva" checked> Yamila</label>
       </div>
-    </div>
+    </div>`:''}
     <div class="fb-f"><label>Área</label>
       <select id="${id}-area"><option value="">Todas</option>${opts('Area')}</select></div>
     <div class="fb-f"><label>Tipo</label>
@@ -2906,7 +2914,7 @@ document.addEventListener('click',function(e){
 function abrirModal(id) {
   const t=TAREAS.find(x=>String(x.id)===String(id)); if(!t)return;
   const isAdmin=activeRol()==='admin';
-  const estOpts=(LISTAS['Estado']||['Por Iniciar','Programada','En Proceso','Listo','Standby','Cancelado'])
+  const estOpts=['Por Iniciar','Programada','En Proceso','Listo','Standby','Cancelado']
     .map(e=>`<option value="${e}" ${e===t.estado?'selected':''}>${e}</option>`).join('');
 
   // Planned blocks
@@ -3307,7 +3315,9 @@ function buildDashPlan(f) {
   <div class="card"><div class="cl"><div class="d"></div>Control de registro diario ${tip('Verde: registró hoy. Rojo: sin actividad registrada hoy.')}</div>
     <div class="cug">${cumplHTML}</div></div>
 
-  <div class="ph" style="margin-top:12px"><div class="pt"><div class="rb"></div>Carga de trabajo futura</div></div>
+  <!-- Daily breakdown -->
+  ${(()=>{const today=new Date();const days=[0,1,2].map(d=>{const dt=new Date(today);dt.setDate(today.getDate()+d);return dt.toISOString().split('T')[0];});const labels=['Hoy','Mañana','Pasado'];const rows=days.map((ds,i)=>{const dt2=TAREAS.filter(t=>f.users.includes(t.nombre)&&t.fechaEjecucion===ds&&!['Listo','Cancelado'].includes(t.estado));const hh=dt2.reduce((s,t)=>s+(parseFloat(t.hhPlan)||0),0);return `<div class="kpi" style="border-left:3px solid ${i===0?'var(--red)':i===1?'var(--amber)':'var(--muted)'}"><div class="kv" style="font-size:18px">${hh.toFixed(1)}h</div><div class="kl">${labels[i]} · ${dt2.length} tarea${dt2.length!==1?'s':''}</div></div>`;}).join('');return `<div class="ph" style="margin-top:12px"><div class="pt"><div class="rb"></div>Carga del día</div></div><div class="kg" style="margin-bottom:8px">${rows}</div>`;})()}
+  <div class="ph"><div class="pt"><div class="rb"></div>Carga de trabajo futura</div></div>
   ${cargaCards}
 
   <!-- Criticidad Eisenhower -->
@@ -3356,7 +3366,7 @@ function vCRegistros() {
   </div>
   <div class="tabs" style="margin-bottom:10px">
     <button class="tab on" id="rpT" onclick="switchRegTab('t')">Tareas</button>
-    <button class="tab" id="rpS" onclick="switchRegTab('s')">Sesiones</button>
+    <button class="tab" id="rpS" onclick="switchRegTab('s')">Bloques</button>
   </div>
   <div id="sr-t"><div class="sr" id="srCnt">—</div><div id="srLT"></div></div>
   <div id="sr-s" style="display:none"><div class="sr" id="srCntS">—</div><div id="srLS"></div></div>`;
@@ -4001,7 +4011,7 @@ function buscarReg(){
     let r=[...SESIONES];
     if(q)r=r.filter(x=>x.tareaNombre?.toLowerCase().includes(q)||String(x.tareaId).includes(q));
     if(p)r=r.filter(x=>x.responsable===p);
-    const c=document.getElementById('srCntS');if(c)c.textContent=`${r.length} sesión${r.length!==1?'es':''} encontrada${r.length!==1?'s':''}`;
+    const c=document.getElementById('srCntS');if(c)c.textContent=`${r.length} bloque${r.length!==1?'s':''} encontrado${r.length!==1?'s':''}`;
     renderRegS(r);
   }
 }
@@ -4118,6 +4128,8 @@ async function delT(id){
   SESIONES=SESIONES.filter(s=>String(s.tareaId)!==String(id));
   invalidateCache();
   toast('Tarea eliminada','ok');buscarReg();
+  // Refresh calendar if visible
+  if(document.getElementById('calWrap'))calRender();
 }
 
 async function savEdS(i,tareaId,fechaOrig,inicioOrig){
@@ -4314,6 +4326,40 @@ async function retomarStandby(tid) {
   cerrarModal();
   toast('Tarea retomada - ahora puedes programarla','ok');
   calRefreshTray(SESSION.nombre);
+}
+
+
+async function cancelarTarea(tid) {
+  const t = TAREAS.find(x=>String(x.id)===String(tid)); if(!t)return;
+  openModal(`
+    <div class="mt"><div class="rb"></div>Cancelar tarea</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">#${t.id} · ${t.tarea}</div>
+    <div class="al d" style="margin-bottom:12px"><span class="al-ico">⚠️</span>
+      <div class="al-txt">Esta acción no se puede deshacer. La tarea quedará como Cancelada.</div></div>
+    <div class="efi" style="margin-bottom:14px">
+      <label>Motivo de cancelación *</label>
+      <textarea id="cancelMotivo" rows="2" style="background:var(--inp);border:1.5px solid var(--border);
+        border-radius:6px;padding:8px;font-size:13px;width:100%"
+        placeholder="Ej: Ya no aplica, cliente canceló proyecto..."></textarea>
+    </div>
+    <div class="ma">
+      <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Volver</span></button>
+      <button class="btn danger" onclick="confirmarCancelacion('${tid}')">
+        <span class="bt">✕ Confirmar cancelación</span></button>
+    </div>`);
+}
+
+async function confirmarCancelacion(tid) {
+  const motivo = document.getElementById('cancelMotivo')?.value?.trim();
+  if(!motivo){toast('Escribe el motivo','er');return;}
+  const t = TAREAS.find(x=>String(x.id)===String(tid)); if(!t)return;
+  const com = (t.comentario?t.comentario+' | ':'')+'[Cancelada '+todayStr()+': '+motivo+']';
+  await apiPost({accion:'actualizar',tabla:'Tareas',id:tid,campos:{11:'Cancelado',12:com}});
+  const idx = TAREAS.findIndex(x=>String(x.id)===String(tid));
+  if(idx>-1){TAREAS[idx].estado='Cancelado';TAREAS[idx].comentario=com;}
+  invalidateCache();
+  cerrarModal();
+  toast('Tarea cancelada','ok');
 }
 
 </script>
