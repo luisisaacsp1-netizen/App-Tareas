@@ -3101,7 +3101,7 @@ function vNuevaTarea() {
 
   <div class="card">
     <div class="cl"><div class="d"></div>Tipo de tarea ${tip('Express: se hace ahora mismo en pocos minutos. Simple: un día, un bloque. Compuesta: múltiples bloques en varios días.')}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+    <div style="display:grid;grid-template-columns:${SESSION.rol==='admin'?'1fr 1fr 1fr':'1fr 1fr'};gap:8px">
       <div class="tt-btn ex" id="ttE" onclick="setTT('express')">
         <span class="tt-ico">⚡</span><div class="tt-name">Express</div>
         <div class="tt-desc">Se hace ahora<br><em style="font-size:9px">orientativo: menos de 3 min o acción inmediata</em></div>
