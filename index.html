@@ -1028,7 +1028,7 @@ async function goSub(sec, sub) {
     case 'agenda':      main.innerHTML=vAgenda(); setTimeout(()=>initCal(),60); break;
     case 'tareas':      main.innerHTML=vTareas(); break;
     case 'nuevaTarea':  taskType='';eisUrgente=null;eisImportante=null;main.innerHTML=vNuevaTarea(); break;
-    case 'confirmar':   main.innerHTML=vConfirmarBloque(); break;
+    case 'confirmar':   main.innerHTML=vConfirmarBloque(); setTimeout(()=>document.querySelectorAll('[id^="cf_ini_"]').forEach(el=>{const tid=el.id.replace('cf_ini_','');cfCalcHH(tid);}),100); break;
     case 'sesion_libre':main.innerHTML=vSesion(); break;
     case 'revision':    main.innerHTML=`<div class="skel-card"><div class="skel skel-line" style="width:40%;height:20px;margin-bottom:16px"></div>
   <div class="skel skel-line" style="width:100%"></div><div class="skel skel-line" style="width:80%"></div>
@@ -1836,8 +1836,7 @@ function vConfirmarBloque(overridePers=null) {
           <span class="bt">✕ Cancelar</span>
         </button>
       </div>
-      <script>setTimeout(()=>cfCalcHH('${t.id}'),50);</script>
-    </div>`;
+          </div>`;
   };
 
   return `
