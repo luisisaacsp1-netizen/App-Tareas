@@ -1973,10 +1973,26 @@ async function cfConfirmEstado(tid, accion) {
 
 async function guardarModal(id){
   const idx=TAREAS.findIndex(t=>String(t.id)===String(id));
-  const campos={1:document.getElementById('mNom')?.value||'',2:document.getElementById('mTar')?.value||'',3:document.getElementById('mSol')?.value||'',4:document.getElementById('mAre')?.value||'',5:document.getElementById('mTip')?.value||'',8:parseFloat(document.getElementById('mHHp')?.value)||'',10:document.getElementById('mFco')?.value||'',11:document.getElementById('mEst')?.value||'',12:document.getElementById('mCom')?.value||'',15:document.getElementById('mFej')?.value||''};
+  const campos={
+    1:document.getElementById('mNom')?.value||'',
+    2:document.getElementById('mTar')?.value||'',
+    3:document.getElementById('mSol')?.value||'',
+    4:document.getElementById('mAre')?.value||'',
+    5:document.getElementById('mTip')?.value||'',
+    6:_mUrg===true?'Si':_mUrg===false?'No':(TAREAS[idx]?.urgente||''),
+    7:_mImp===true?'Si':_mImp===false?'No':(TAREAS[idx]?.importante||''),
+    8:parseFloat(document.getElementById('mHHp')?.value)||'',
+    10:document.getElementById('mFco')?.value||'',
+    11:document.getElementById('mEst')?.value||'',
+    12:document.getElementById('mCom')?.value||'',
+    15:document.getElementById('mFej')?.value||''
+  };
   await apiPost({accion:'actualizar',tabla:'Tareas',id,campos});
-  const m={'1':'nombre','2':'tarea','3':'solicitante','4':'area','5':'tipo','8':'hhPlan','10':'fechaComp','11':'estado','12':'comentario','15':'fechaEjecucion'};
+  const m={1:'nombre',2:'tarea',3:'solicitante',4:'area',5:'tipo',
+    6:'urgente',7:'importante',8:'hhPlan',10:'fechaComp',
+    11:'estado',12:'comentario',15:'fechaEjecucion'};
   if(idx>-1)Object.entries(campos).forEach(([c,v])=>{if(m[c])TAREAS[idx][m[c]]=v;});
+  invalidateCache();
   cerrarModal();toast('Tarea actualizada','ok');
 }
 
@@ -2911,6 +2927,7 @@ document.addEventListener('click',function(e){
 // ═══════════════════════════════════════════════════════════════════
 
 function abrirModal(id) {
+  _mUrg=null; _mImp=null; // reset toggles
   const t=TAREAS.find(x=>String(x.id)===String(id)); if(!t)return;
   const isAdmin=SESSION.rol==='admin';
   const estOpts=['Por Iniciar','Programada','En Proceso','Listo','Standby','Cancelado']
@@ -2986,6 +3003,32 @@ function abrirModal(id) {
       <div class="efi"><label>HH Plan</label><input type="number" id="mHHp" value="${t.hhPlan||''}" step="0.25" min="0"></div>
       <div class="efi"><label>F. Límite</label><input type="date" id="mFco" value="${t.fechaComp||''}"></div>
       <div class="efi fw"><label>Comentario</label><input type="text" id="mCom" value="${t.comentario||''}"></div>
+      <div class="efi">
+        <label>¿Es urgente?</label>
+        <div style="display:flex;gap:6px">
+          <button id="mUrgSi" onclick="mSetUrg(true)" class="tt-btn ex ${t.urgente==='Si'?'on':''}"
+            style="flex:1;padding:6px;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;
+            background:${t.urgente==='Si'?'#fee2e2':'var(--off)'};border:2px solid ${t.urgente==='Si'?'var(--red)':'var(--border)'}">
+            🔴 Sí</button>
+          <button id="mUrgNo" onclick="mSetUrg(false)" class="tt-btn ${t.urgente!=='Si'?'on':''}"
+            style="flex:1;padding:6px;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;
+            background:${t.urgente!=='Si'?'#d4edda':'var(--off)'};border:2px solid ${t.urgente!=='Si'?'var(--green)':'var(--border)'}">
+            🟢 No</button>
+        </div>
+      </div>
+      <div class="efi">
+        <label>¿Es importante?</label>
+        <div style="display:flex;gap:6px">
+          <button id="mImpSi" onclick="mSetImp(true)"
+            style="flex:1;padding:6px;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;
+            background:${t.importante==='Si'?'#fff3cd':'var(--off)'};border:2px solid ${t.importante==='Si'?'var(--amber)':'var(--border)'}">
+            ⭐ Sí</button>
+          <button id="mImpNo" onclick="mSetImp(false)"
+            style="flex:1;padding:6px;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;
+            background:${t.importante!=='Si'?'#d4edda':'var(--off)'};border:2px solid ${t.importante!=='Si'?'var(--green)':'var(--border)'}">
+            🟩 No</button>
+        </div>
+      </div>
     </div>`;
   }
 
@@ -3376,7 +3419,43 @@ function buildDashPlan(f) {
   </div>
 
 
-  <div class="ph"><div class="pt"><div class="rb"></div>Carga de trabajo futura</div></div>
+  <!-- Carga del día - same format as carga futura -->
+  ${(()=>{
+    const today=new Date();
+    const days=[0,1,2].map(d=>{const dt=new Date(today);dt.setDate(today.getDate()+d);return dt.toISOString().split('T')[0];});
+    const labels=['Hoy','Mañana','Pasado mañana'];
+    const cards=days.map((ds,i)=>{
+      const dt2=TAREAS.filter(t=>f.users.includes(t.nombre)&&t.fechaEjecucion===ds&&!['Listo','Cancelado'].includes(t.estado));
+      const hhComp=dt2.reduce((s,t)=>s+Math.max(0,(parseFloat(t.hhPlan)||0)-(parseFloat(t.hhReal)||0)),0);
+      const dow=new Date(ds+'T12:00').getDay();
+      const dispHrs=SCHEDULE[dow]?SCHEDULE[dow][1]-SCHEDULE[dow][0]-1:0;
+      const pct=dispHrs>0?Math.round(hhComp/dispHrs*100):0;
+      const cls=pct<70?'ok':pct<100?'warn':'over';
+      const tareasList=dt2.map(t=>`<div class="ti2" onclick="abrirModal(${t.id})">
+        <span class="tid">#${t.id}</span>
+        <div class="tn2"><div class="tna">${t.tarea}</div>
+        <div class="tme">${shortName(t.nombre)} · ${t.tipo||'—'} · HHP:${t.hhPlan||'—'}h</div></div>
+        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+      </div>`).join('');
+      const barW=Math.min(100,pct);
+      return `<div class="carga-card">
+        <div class="carga-head">
+          <div>
+            <div class="carga-name">${labels[i]}</div>
+            <div style="font-size:10px;color:var(--muted)">${ds} · ${dt2.length} tarea${dt2.length!==1?'s':''} · ${Math.round(hhComp*10)/10}h pendientes</div>
+          </div>
+          <div class="carga-pct ${cls}">${pct}%</div>
+        </div>
+        <div class="carga-bar"><div class="carga-fill ${cls}" style="width:${barW}%"></div></div>
+        ${dt2.length>0?`<button class="btn sm ghost" style="margin-top:6px"
+          onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.textContent=d.style.display==='none'?'▼ Ver tareas (${dt2.length})':'▲ Ocultar'">
+          ▼ Ver tareas (${dt2.length})</button>
+          <div style="display:none;margin-top:6px"><div class="tl">${tareasList}</div></div>`:''}
+      </div>`;
+    }).join('');
+    return `<div class="ph" style="margin-top:12px"><div class="pt"><div class="rb"></div>Carga del día</div></div>${cards}`;
+  })()}
+    <div class="ph"><div class="pt"><div class="rb"></div>Carga de trabajo futura</div></div>
   ${cargaCards}
 
   <!-- Criticidad Eisenhower -->
@@ -4598,6 +4677,25 @@ document.addEventListener('DOMContentLoaded', ()=>{});
 function ctrlDiarioInit() {
   _ctrlDayOffset=0;
   ctrlSetDay(0);
+}
+
+
+let _mUrg = null, _mImp = null;
+
+function mSetUrg(val) {
+  _mUrg = val;
+  const si = document.getElementById('mUrgSi');
+  const no = document.getElementById('mUrgNo');
+  if(si) { si.style.background=val?'#fee2e2':'var(--off)'; si.style.borderColor=val?'var(--red)':'var(--border)'; }
+  if(no) { no.style.background=!val?'#d4edda':'var(--off)'; no.style.borderColor=!val?'var(--green)':'var(--border)'; }
+}
+
+function mSetImp(val) {
+  _mImp = val;
+  const si = document.getElementById('mImpSi');
+  const no = document.getElementById('mImpNo');
+  if(si) { si.style.background=val?'#fff3cd':'var(--off)'; si.style.borderColor=val?'var(--amber)':'var(--border)'; }
+  if(no) { no.style.background=!val?'#d4edda':'var(--off)'; no.style.borderColor=!val?'var(--green)':'var(--border)'; }
 }
 
 </script>
