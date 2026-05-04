@@ -3480,9 +3480,19 @@ function buildDashPlan(f) {
           </div>
         </div>
       </div>
-      <div class="kpi">
+      <div class="kpi cl2" onclick="toggleDrill('drImpNoUrg')">
         <div class="kv">${tareas.filter(t=>t.urgente!=='Si'&&t.importante==='Si'&&!['Listo','Cancelado'].includes(t.estado)).length}</div>
-        <div class="kl">📅 Importante no urgente ${tip('Tareas que deberían estar planificadas. Si este número es bajo, el equipo no está planificando trabajo estratégico.')}</div>
+        <div class="kl">📅 Importante no urgente ${tip('Tareas planificadas pero no urgentes. Clic para ver listado.')}</div>
+        <div class="drill" id="drImpNoUrg">
+          <div class="tl">${tareas.filter(t=>t.urgente!=='Si'&&t.importante==='Si'&&!['Listo','Cancelado'].includes(t.estado)).slice(0,10).map(t=>`
+            <div class="ti2" onclick="abrirModal(${t.id})">
+              <span class="tid">#${t.id}</span>
+              <div class="tn2"><div class="tna">${t.tarea}</div>
+              <div class="tme">${shortName(t.nombre)} · ${t.area||'—'} · HHP:${t.hhPlan||'—'}h</div></div>
+              <span class="badge" style="background:#d4edda;color:#155724">📅 Planificar</span>
+            </div>`).join('')||'<div class="emp">Sin tareas en este cuadrante</div>'}
+          </div>
+        </div>
       </div>
     </div>`;
   })()}`;
@@ -4191,7 +4201,7 @@ function renderRegT(lista){
         </div>
       </div>
       <div class="ri-acts">
-        <button class="be" onclick="togEf(${t.id})">Editar</button>
+        <button class="be" onclick="abrirModal(${t.id})">Editar</button>
         <button class="bd" onclick="togCd('T',${t.id})">Eliminar</button>
       </div>
     </div>`).join('');
