@@ -958,7 +958,7 @@ const SECS = {
     label:'Dashboard',
     subs:[
       {id:'dPlan',    ico:'📅', lbl:'Planificación'},
-      {id:'dRend',    ico:'⚡',  lbl:'Rendimiento'},
+      {id:'dRend',    ico:'⚡',  lbl:'Rendimiento', adminOnly:true},
       {id:'dCostos',  ico:'💰', lbl:'Costos', adminOnly:true},
       {id:'dGlobal',  ico:'🗂',  lbl:'Vista Global'},
     ]
@@ -2917,7 +2917,14 @@ function abrirModal(id) {
     .map(e=>`<option value="${e}" ${e===t.estado?'selected':''}>${e}</option>`).join('');
 
   // Get planned blocks
-  const planBlks=SESIONES.filter(s=>String(s.tareaId)===String(id)&&s.comentario==='[Bloque planificado]');
+  // Deduplicate planned blocks (same date+time may appear multiple times)
+  const _allPlan=SESIONES.filter(s=>String(s.tareaId)===String(id)&&s.comentario==='[Bloque planificado]');
+  const _seen=new Set();
+  const planBlks=_allPlan.filter(s=>{
+    const key=(s._dn||normSessDate(s)||'')+' '+normTime(s.inicio)+'-'+normTime(s.termino);
+    if(_seen.has(key)) return false;
+    _seen.add(key); return true;
+  });
   const confBlks=SESIONES.filter(s=>String(s.tareaId)===String(id)&&s.comentario!=='[Bloque planificado]');
 
   // Format planned block info
@@ -3014,7 +3021,7 @@ function abrirModal(id) {
         ?`<button class="btn" onclick="guardarModal(${t.id})"><span class="st"></span><span class="bt">Guardar</span></button>`
         :''}
       ${isProgramable
-        ?`<button class="btn sm" style="background:var(--navy3)" onclick="abrirModalProgramar(${t.id});cerrarModal()">
+        ?`<button class="btn sm" style="background:var(--navy3)" onclick="cerrarModal();setTimeout(()=>abrirModalProgramar(${t.id}),150)">
             <span class="bt">${t.estado==='Programada'?'📅 Reprogramar':'📅 Programar'}</span></button>`
         :''}
       ${canConfirm
@@ -3103,10 +3110,10 @@ function vNuevaTarea() {
         <span class="tt-ico">📋</span><div class="tt-name">Simple</div>
         <div class="tt-desc">Un día<br>Un bloque de tiempo</div>
       </div>
-      <div class="tt-btn pl" id="ttC" onclick="setTT('compuesta')">
+      ${SESSION.rol==='admin'?`<div class="tt-btn pl" id="ttC" onclick="setTT('compuesta')">
         <span class="tt-ico">📦</span><div class="tt-name">Compuesta</div>
         <div class="tt-desc">Varios días o<br>múltiples bloques</div>
-      </div>
+      </div>`:''}
     </div>
   </div>
 
@@ -3293,6 +3300,20 @@ function buildDashPlan(f) {
   }).join('');
 
   return`
+  <!-- Control de gestión diaria - filtrable por día -->
+  <div class="card" style="margin-bottom:14px" id="ctrlDiario">
+    <div class="cl" style="margin-bottom:10px">
+      <div class="d"></div>
+      <strong>Control de gestión diaria</strong>
+      <div style="margin-left:auto;display:flex;gap:4px">
+        <button class="btn sm ghost" id="ctrlBtnAyer"  onclick="ctrlSetDay(-1)">Ayer</button>
+        <button class="btn sm"       id="ctrlBtnHoy"   onclick="ctrlSetDay(0)" style="background:var(--navy)">Hoy</button>
+        <button class="btn sm ghost" id="ctrlBtnMan"   onclick="ctrlSetDay(1)">Mañana</button>
+      </div>
+    </div>
+    <div id="ctrlBody" style="font-size:12px;color:var(--muted)">Cargando...</div>
+  </div>
+  
   <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">
     <div class="kpi cl2" onclick="toggleDrill('drTotales')">
       <div class="kv">${tareas.filter(t=>!['Cancelado'].includes(t.estado)).length}</div>
@@ -3359,32 +3380,39 @@ function buildDashPlan(f) {
     <div id="drCumpl" style="display:none;margin-top:8px"></div>
   </div>
 
-  <!-- Daily breakdown like carga futura -->
+  <!-- Carga del día - same format as carga futura -->
   ${(()=>{
     const today=new Date();
     const days=[0,1,2].map(d=>{const dt=new Date(today);dt.setDate(today.getDate()+d);return dt.toISOString().split('T')[0];});
     const labels=['Hoy','Mañana','Pasado mañana'];
     const cards=days.map((ds,i)=>{
       const dt2=TAREAS.filter(t=>f.users.includes(t.nombre)&&t.fechaEjecucion===ds&&!['Listo','Cancelado'].includes(t.estado));
-      const hh=dt2.reduce((s,t)=>s+(parseFloat(t.hhPlan)||0),0);
-      const color=i===0?'var(--red)':i===1?'var(--amber)':'var(--muted)';
+      const hhComp=dt2.reduce((s,t)=>s+Math.max(0,(parseFloat(t.hhPlan)||0)-(parseFloat(t.hhReal)||0)),0);
+      // Available hours that day
+      const dow=new Date(ds+'T12:00').getDay();
+      const dispHrs=SCHEDULE[dow]?SCHEDULE[dow][1]-SCHEDULE[dow][0]-1:0;
+      const pct=dispHrs>0?Math.round(hhComp/dispHrs*100):0;
+      const cls=pct<70?'ok':pct<100?'warn':'over';
       const tareasList=dt2.map(t=>`<div class="ti2" onclick="abrirModal(${t.id})">
         <span class="tid">#${t.id}</span>
         <div class="tn2"><div class="tna">${t.tarea}</div>
-        <div class="tme">${shortName(t.nombre)} · ${t.tipo||'—'} · ${hh.toFixed(1)}h</div></div>
+        <div class="tme">${shortName(t.nombre)} · ${t.tipo||'—'} · HHP:${t.hhPlan||'—'}h</div></div>
         <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
       </div>`).join('');
+      const barW=Math.min(100,pct);
       return `<div class="carga-card">
         <div class="carga-head">
-          <div><div class="carga-name">${labels[i]}</div>
-            <div style="font-size:10px;color:var(--muted)">${ds} · ${dt2.length} tarea${dt2.length!==1?'s':''}</div>
+          <div>
+            <div class="carga-name">${labels[i]}</div>
+            <div style="font-size:10px;color:var(--muted)">${ds} · ${dt2.length} tarea${dt2.length!==1?'s':''} · ${Math.round(hhComp*10)/10}h pendientes</div>
           </div>
-          <div class="carga-pct" style="color:${color}">${hh.toFixed(1)}h</div>
+          <div class="carga-pct ${cls}">${pct}%</div>
         </div>
-        ${dt2.length>0?`<button class="btn sm ghost" style="margin-top:4px" id="btn_day_${i}"
-          onclick="const d=document.getElementById('day_detail_${i}');d.style.display=d.style.display==='none'?'block':'none';this.textContent=d.style.display==='none'?'▼ Ver tareas (${dt2.length})':'▲ Ocultar'">
+        <div class="carga-bar"><div class="carga-fill ${cls}" style="width:${barW}%"></div></div>
+        ${dt2.length>0?`<button class="btn sm ghost" style="margin-top:6px"
+          onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.textContent=d.style.display==='none'?'▼ Ver tareas (${dt2.length})':'▲ Ocultar'">
           ▼ Ver tareas (${dt2.length})</button>
-          <div id="day_detail_${i}" style="display:none;margin-top:6px"><div class="tl">${tareasList}</div></div>`:''}
+          <div style="display:none;margin-top:6px"><div class="tl">${tareasList}</div></div>`:''}
       </div>`;
     }).join('');
     return `<div class="ph" style="margin-top:12px"><div class="pt"><div class="rb"></div>Carga del día</div></div>${cards}`;
@@ -4457,6 +4485,160 @@ function showCumplDetail(persona, taskIds) {
       </div>`).join('')||'<div class="emp">Sin pendientes</div>'}
     </div>`;
   el.style.display='block';
+}
+
+
+function showCumplDetailAll(taskIds) {
+  // Show in the cumpl detail area if exists, otherwise show modal
+  const el = document.getElementById('drCumpl');
+  if (!el) {
+    // Show as modal
+    const tasks = taskIds.map(id=>TAREAS.find(x=>String(x.id)===String(id))).filter(Boolean);
+    openModal(`
+      <div class="mt"><div class="rb"></div>Bloques sin confirmar hoy</div>
+      <div class="tl">${tasks.map(t=>`
+        <div class="ti2" onclick="abrirModal(${t.id})">
+          <span class="tid">#${t.id}</span>
+          <div class="tn2"><div class="tna">${t.tarea}</div>
+          <div class="tme">${shortName(t.nombre)} · Prog: ${t.fechaEjecucion} · HHP:${t.hhPlan||'—'}h</div></div>
+          <span class="badge bpr">Sin confirmar</span>
+        </div>`).join('')||'<div class="emp">Sin pendientes</div>'}
+      </div>
+      <div class="ma"><button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cerrar</span></button>
+      <button class="btn" onclick="goSub('A','confirmar');cerrarModal()"><span class="bt">✅ Ir a confirmar</span></button></div>`);
+    return;
+  }
+  if(el.style.display!=='none'&&el._showing==='all'){el.style.display='none';return;}
+  el._showing='all';
+  const tasks = taskIds.map(id=>TAREAS.find(x=>String(x.id)===String(id))).filter(Boolean);
+  el.innerHTML=`<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:5px">Bloques sin confirmar hoy</div>
+    <div class="tl">${tasks.map(t=>`
+      <div class="ti2" onclick="goSub('A','confirmar')">
+        <span class="tid">#${t.id}</span>
+        <div class="tn2"><div class="tna">${t.tarea}</div>
+        <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'}h</div></div>
+        <span class="badge bpr">Sin confirmar</span>
+      </div>`).join('')||'<div class="emp">Sin pendientes</div>'}
+    </div>`;
+  el.style.display='block';
+}
+
+
+// ── Control gestión diaria ─────────────────────────────────────────────
+let _ctrlDayOffset = 0;
+
+function ctrlSetDay(offset) {
+  _ctrlDayOffset = offset;
+  // Update button styles
+  ['Ayer','Hoy','Man'].forEach((n,i)=>{
+    const btn=document.getElementById('ctrlBtn'+n);
+    if(!btn)return;
+    const active=(i-1)===offset;
+    btn.style.background=active?'var(--navy)':'';
+    btn.style.color=active?'#fff':'';
+    btn.className=active?'btn sm':'btn sm ghost';
+  });
+  ctrlRenderDay();
+}
+
+function ctrlRenderDay() {
+  const body = document.getElementById('ctrlBody'); if(!body)return;
+  const today=new Date();
+  const target=new Date(today); target.setDate(today.getDate()+_ctrlDayOffset);
+  const ds=target.toISOString().split('T')[0];
+  const dow=target.getDay();
+  const dayLabel=_ctrlDayOffset===-1?'Ayer':_ctrlDayOffset===0?'Hoy':'Mañana';
+  const dateLabel=target.toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long'});
+
+  // Get current filter users
+  const dashEl=document.getElementById('fb-plan');
+  let users;
+  if(dashEl) {
+    const chks=[...dashEl.querySelectorAll('.uchk')].filter(c=>c.checked).map(c=>c.value);
+    users=chks.length>0?chks:PERSONAS;
+  } else {
+    users=SESSION.rol==='admin'?PERSONAS:[SESSION.nombre];
+  }
+
+  if(!SCHEDULE[dow]) {
+    body.innerHTML=`<div class="al ok"><span class="al-ico">📅</span>
+      <div class="al-txt">${dayLabel} ${dateLabel} — Día no laborable</div></div>`;
+    return;
+  }
+
+  const workStart=SCHEDULE[dow][0], workEnd=SCHEDULE[dow][1];
+  const lunchStart=SCHEDULE[dow][2], lunchEnd=SCHEDULE[dow][3];
+  const totalWorkHrs=(workEnd-workStart)-(lunchEnd-lunchStart);
+
+  // Per user analysis
+  const userRows = users.map(p => {
+    // Scheduled tasks this day
+    const tarProg=TAREAS.filter(t=>t.nombre===p&&t.fechaEjecucion===ds&&!['Cancelado'].includes(t.estado));
+    // Confirmed sessions this day
+    const sesCon=SESIONES.filter(s=>s.responsable===p&&(s._dn||normSessDate(s))===ds&&s.comentario!=='[Bloque planificado]');
+    // Planned blocks
+    const blkPlan=SESIONES.filter(s=>s.responsable===p&&(s._dn||normSessDate(s))===ds&&s.comentario==='[Bloque planificado]');
+
+    // ── Part 1: Unscheduled hours (checkGaps) ────────────────────────────
+    const gaps=checkGaps(p,ds);
+    const gapHrs=gaps.reduce((s,g)=>{
+      const [ini,ter]=g.split('–');
+      try{return s+calcHHRaw(ini.trim(),ter.trim());}catch(e){return s;}
+    },0);
+
+    // ── Part 2: Unconfirmed blocks (past time) ───────────────────────────
+    const nowMin=new Date().getHours()*60+new Date().getMinutes();
+    const sinConf=tarProg.filter(t=>{
+      if(ds>new Date().toISOString().split('T')[0]) return false; // future day
+      if(['Listo'].includes(t.estado)) return false;
+      const blk=blkPlan.find(s=>String(s.tareaId)===String(t.id));
+      if(!blk) return false; // no planned block
+      const blkEnd=t2m(normTime(blk.termino)||'23:59');
+      return ds<new Date().toISOString().split('T')[0]||(ds===new Date().toISOString().split('T')[0]&&blkEnd<=nowMin);
+    });
+
+    const allOk=gaps.length===0&&sinConf.length===0;
+    const gapHtml=gaps.length>0?`
+      <div style="margin-top:6px">
+        <div style="font-weight:600;color:var(--amber);font-size:11px;margin-bottom:3px">
+          🕐 ${gaps.length} rango${gaps.length!==1?'s':''} sin programar (${gapHrs.toFixed(1)}h libre${gapHrs!==1?'s':''}):</div>
+        ${gaps.map(g=>`<div style="font-size:11px;background:#fff3cd;border-radius:4px;padding:3px 8px;margin-bottom:2px;display:flex;justify-content:space-between;cursor:pointer"
+          onclick="cerrarModal&&cerrarModal();goSub('A','agenda')">
+          <span>⏰ ${g}</span><span style="color:var(--amber);font-size:10px">→ Programar</span>
+        </div>`).join('')}
+      </div>`:'';
+    const confHtml=sinConf.length>0?`
+      <div style="margin-top:6px">
+        <div style="font-weight:600;color:var(--red);font-size:11px;margin-bottom:3px">
+          ⚠️ ${sinConf.length} bloque${sinConf.length!==1?'s':''} sin confirmar:</div>
+        ${sinConf.map(t=>`<div style="font-size:11px;background:#f8d7da;border-radius:4px;padding:3px 8px;margin-bottom:2px;display:flex;justify-content:space-between;cursor:pointer"
+          onclick="abrirModal(${t.id})">
+          <span>#${t.id} ${t.tarea.substring(0,25)}</span>
+          <span style="color:var(--red);font-size:10px">→ Confirmar</span>
+        </div>`).join('')}
+      </div>`:'';
+
+    return `<div style="border:1px solid ${allOk?'#c3e6cb':gaps.length>0&&sinConf.length>0?'#f5c6cb':gaps.length>0?'#ffeeba':'#f5c6cb'};
+      border-radius:8px;padding:10px 12px;margin-bottom:8px;background:${allOk?'#f0faf4':'#fff'}">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="font-weight:600;font-size:13px">${shortName(p)}</div>
+        <div style="font-size:11px;color:var(--muted)">${totalWorkHrs}h jornada · ${tarProg.length} tarea${tarProg.length!==1?'s':''} prog.</div>
+        <span style="font-size:16px">${allOk?'✅':gaps.length>0&&sinConf.length>0?'🔴':gaps.length>0?'🟡':'🟠'}</span>
+      </div>
+      ${gapHtml}${confHtml}
+      ${allOk?'<div style="font-size:11px;color:#155724;margin-top:4px">✅ Jornada completa — todo programado y confirmado</div>':''}
+    </div>`;
+  }).join('');
+
+  body.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">
+    ${dayLabel} · ${dateLabel}</div>${userRows}`;
+}
+
+// Auto-render when dashboard is shown
+document.addEventListener('DOMContentLoaded', ()=>{});
+function ctrlDiarioInit() {
+  _ctrlDayOffset=0;
+  ctrlSetDay(0);
 }
 
 </script>
