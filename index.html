@@ -579,8 +579,9 @@ const ESTADO_COLS = {
 // ══════════════════════════════════════════════════════════
 let SESSION = null;       // real logged-in user
 let VIEW_AS = null;       // impersonation target (admin only)
-let TAREAS = [];
-let SESIONES = [];
+let BLOQUES = [];
+let TAREAS = [];          // legacy stub — keeps dead-code references from crashing
+let SESIONES = [];        // legacy stub — keeps dead-code references from crashing
 let LISTAS = {};
 let COSTOS = {};          // {nombre: {normal, extra}}
 let REPROG = [];
@@ -588,15 +589,11 @@ let nextId = 1;
 let currentSec = 'A';
 let currentSub = '';
 let eisUrgente = null, eisImportante = null;
-let taskType = '';
-let bloques = []; // blocks for compuesta task
-let esExtra = false;
 let vgView = 'kanban';
 let calOffset = 0;
 let calView = 'semana';   // dia | semana | mes
 let calDragTask = null;
 let calDragOrigSlot = null;
-let alertasNoProgCount = 0;
 
 // ══════════════════════════════════════════════════════════
 // API
@@ -689,17 +686,18 @@ function getWorkBlocks(ds, nombre=null) {
 }
 function overlaps(s1,e1,s2,e2){return s1<e2&&s2<e1;}
 function getSessOnDate(nombre,date){
-  return SESIONES.filter(s=>{
-    if(s.responsable!==nombre) return false;
-    const fd = s._dateNorm || (()=>{
-      let d = s.fecha;
-      if(d instanceof Date) d = d.toISOString().split('T')[0];
-      else d = String(d||'').substring(0,10);
-      s._dateNorm = d;
-      return d;
-    })();
-    return fd === date;
-  });
+  return BLOQUES
+    .filter(b => {
+      if(String(b.responsable||'').trim() !== String(nombre||'').trim()) return false;
+      if(['Cancelado','Standby'].includes(b.estado)) return false;
+      const d = b.estado==='Programado' ? b.fechaProg : b.fechaReal;
+      return d === date;
+    })
+    .map(b => ({
+      ...b,
+      inicio: b.estado==='Programado' ? b.horaInicioProg : b.horaInicio,
+      termino: b.estado==='Programado' ? b.horaFinProg : b.horaFin,
+    }));
 }
 function checkOverlap(nombre,date,ini,ter,skipIdx=-1){
   const ns=t2m(ini),ne=t2m(ter),conflicts=[];
@@ -785,122 +783,38 @@ async function doLogin() {
 }
 
 async function loadData(forceRefresh=false) {
-  // Try cache first (valid for 3 minutes)
   if (!forceRefresh) {
     try {
       const cached = sessionStorage.getItem('ot_cache');
       const cachedTime = parseInt(sessionStorage.getItem('ot_cache_time')||'0');
-      if (cached && Date.now() - cachedTime < 600000) { // 10 min cache
+      if (cached && Date.now() - cachedTime < 600000) {
         const d = JSON.parse(cached);
-        TAREAS = d.tareas; SESIONES = d.sesiones; LISTAS = d.listas;
-        nextId = TAREAS.length>0 ? Math.max(...TAREAS.map(t=>parseInt(t.id)||0))+1 : 1;
+        BLOQUES = d.bloques; LISTAS = d.listas;
         _updateAlertCount();
         return;
       }
     } catch(e) {}
   }
-  // Parallel fetch
-  const[tRows,listas,sRows]=await Promise.all([
-    apiGet({accion:'leer',tabla:'Tareas'}),
+  const [bloqueRows, listas] = await Promise.all([
+    apiGet({accion:'leer'}),
     apiGet({accion:'listas'}),
-    apiGet({accion:'leer',tabla:'Sesiones'}),
   ]);
-  LISTAS=listas||{};
-  TAREAS=Array.isArray(tRows)&&tRows.length>1?tRows.slice(1).map(r=>({
-    id:String(r[0]||'').trim(),
-    nombre:String(r[1]||'').trim(),
-    tarea:String(r[2]||'').trim(),
-    solicitante:String(r[3]||'').trim(),
-    area:String(r[4]||'').trim(),
-    tipo:String(r[5]||'').trim(),
-    urgente:String(r[6]||'').trim(),
-    importante:String(r[7]||'').trim(),
-    hhPlan:r[8],fechaIngreso:String(r[9]||'').substring(0,10),
-    fechaComp:String(r[10]||'').substring(0,10),
-    estado:String(r[11]||'').trim(),
-    comentario:String(r[12]||'').trim(),
-    hhReal:r[13],nSes:r[14],
-    fechaEjecucion:String(r[15]||'').substring(0,10)
-  })):[];
-  SESIONES=Array.isArray(sRows)&&sRows.length>1?sRows.slice(1).map(r=>{
-    // Normalize fecha
-    let fecha = r[3];
-    if(fecha instanceof Date) fecha = fecha.toISOString().split('T')[0];
-    else if(typeof fecha === 'string') fecha = fecha.substring(0,10);
-    else fecha = String(fecha||'').substring(0,10);
-    // Normalize inicio/termino - extract HH:MM from datetime strings
-    let ini = r[4]||'', ter = r[5]||'';
-    // Normalize time to HH:MM - handle Date objects, ISO strings, time strings
-    function normTime(t) {
-      if(!t) return '';
-      if(t instanceof Date) return t.toTimeString().substring(0,5);
-      const s = String(t);
-      if(s.includes('T')) return s.split('T')[1]?.substring(0,5)||'';
-      return s.substring(0,5); // Take only HH:MM
-    }
-    ini = normTime(ini);
-    ter = normTime(ter);
-    return {
-      tareaId:String(r[0]||'').trim(),
-      tareaNombre:String(r[1]||'').trim(),
-      responsable:String(r[2]||'').trim(),
-      fecha,inicio:ini,termino:ter,hh:parseFloat(r[6])||0,
-      comentario:String(r[7]||'').trim(),
-      esExtra:String(r[8]||'No').trim(),
-      motivoExtra:String(r[9]||'').trim()
-    };
-  }).filter(s=>s.fecha>='2020-01-01'):[];
-  nextId=TAREAS.length>0?Math.max(...TAREAS.map(t=>parseInt(t.id)||0))+1:1;
-  // Pre-normalize all session dates/times once on load (makes calRender instant)
-  SESIONES.forEach(s => {
-    normSessDate(s); // sets s._dn
-    if (s.inicio)  s.inicio  = normTime(s.inicio);
-    if (s.termino) s.termino = normTime(s.termino);
-  });
-  // Save to cache
+  LISTAS = listas || {};
+  BLOQUES = Array.isArray(bloqueRows) ? bloqueRows : [];
   try {
-    sessionStorage.setItem('ot_cache', JSON.stringify({tareas:TAREAS,sesiones:SESIONES,listas:LISTAS}));
+    sessionStorage.setItem('ot_cache', JSON.stringify({bloques:BLOQUES, listas:LISTAS}));
     sessionStorage.setItem('ot_cache_time', String(Date.now()));
   } catch(e) {}
   _updateAlertCount();
 }
 
 
-function checkAutoEnProceso() {
-  const now = new Date();
-  const hoy = todayStr();
-  const nowMin = now.getHours()*60 + now.getMinutes();
-  let changed = false;
-  TAREAS.forEach(t => {
-    if (t.estado !== 'Programada') return;
-    if (t.fechaEjecucion !== hoy) return;
-    // Check if there's a planned block currently active
-    const blk = SESIONES.find(s =>
-      String(s.tareaId)===String(t.id) &&
-      s.comentario==='[Bloque planificado]' &&
-      s.inicio && s.termino && s.inicio.length===5 && s.termino.length===5
-    );
-    if (!blk) return;
-    const blkIni = t2m(blk.inicio);
-    const blkTer = t2m(blk.termino);
-    if (nowMin >= blkIni && nowMin < blkTer) {
-      // Block is active right now - set En Proceso
-      t.estado = 'En Proceso';
-      apiPost({accion:'actualizar',tabla:'Tareas',id:t.id,campos:{11:'En Proceso'}});
-      changed = true;
-    }
-  });
-  if (changed) invalidateCache();
-}
 
 function _updateAlertCount() {
-  const ayer=new Date(); ayer.setDate(ayer.getDate()-1);
-  const ayerStr=ayer.toISOString().split('T')[0];
-  const myName=SESSION.nombre;
-  alertasNoProgCount=TAREAS.filter(t=>
-    t.nombre===myName&&!['Listo','Cancelado'].includes(t.estado)&&
-    !t.fechaEjecucion&&t.fechaIngreso<=ayerStr
-  ).length;
+  const sinProg = BLOQUES.filter(b => b.estado === 'Por Iniciar').length;
+  const badge = document.querySelector('#snb-nuevoBloque .badge-alert');
+  if (badge) badge.textContent = sinProg > 0 ? sinProg : '';
+  if (badge) badge.style.display = sinProg > 0 ? '' : 'none';
 }
 
 function invalidateCache() {
@@ -908,7 +822,7 @@ function invalidateCache() {
 }
 
 function logout() {
-  SESSION=null;VIEW_AS=null;TAREAS=[];SESIONES=[];LISTAS={};
+  SESSION=null;VIEW_AS=null;BLOQUES=[];LISTAS={};
   document.getElementById('loginScreen').style.display='flex';
   document.getElementById('appShell').style.display='none';
   document.getElementById('loginUser').value='';
@@ -947,11 +861,10 @@ const SECS = {
   A: {
     label:'Mi Operación',
     subs:[
-      {id:'agenda',   ico:'📅', lbl:'Agenda'},
-      {id:'tareas',   ico:'☰',  lbl:'Mis Tareas'},
-      {id:'nuevaTarea',ico:'＋',lbl:'Nueva Tarea'},
-      {id:'confirmar',ico:'✅', lbl:'Confirmar Bloque'},
-      {id:'revision', ico:'📋', lbl:'Revisión Semanal'},
+      {id:'agenda',      ico:'📅', lbl:'Agenda'},
+      {id:'bloques',     ico:'☰',  lbl:'Mis Bloques'},
+      {id:'nuevoBloque', ico:'＋', lbl:'Nuevo Bloque'},
+      {id:'confirmar',   ico:'✅', lbl:'Confirmar Bloque'},
     ]
   },
   B: {
@@ -1026,20 +939,9 @@ async function goSub(sec, sub) {
   switch(sub) {
     // SECTION A
     case 'agenda':      main.innerHTML=vAgenda(); setTimeout(()=>initCal(),60); break;
-    case 'tareas':      main.innerHTML=vTareas(); break;
-    case 'nuevaTarea':  taskType='';eisUrgente=null;eisImportante=null;main.innerHTML=vNuevaTarea(); break;
+    case 'bloques':     main.innerHTML=vBloques(); break;
+    case 'nuevoBloque': nbTipo='';nbEisUrgente=null;nbEisImportante=null;main.innerHTML=vNuevoBloque(); break;
     case 'confirmar':   main.innerHTML=vConfirmarBloque(); setTimeout(()=>document.querySelectorAll('[id^="cf_ini_"]').forEach(el=>{const tid=el.id.replace('cf_ini_','');cfCalcHH(tid);}),100); break;
-    case 'sesion_libre':main.innerHTML=vSesion(); break;
-    case 'revision':    main.innerHTML=`<div class="skel-card"><div class="skel skel-line" style="width:40%;height:20px;margin-bottom:16px"></div>
-  <div class="skel skel-line" style="width:100%"></div><div class="skel skel-line" style="width:80%"></div>
-  <div class="skel skel-line" style="width:60%"></div></div>
-<div class="skel-card"><div class="skel skel-line" style="width:30%;height:16px;margin-bottom:12px"></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-    <div class="skel" style="height:70px;border-radius:8px"></div>
-    <div class="skel" style="height:70px;border-radius:8px"></div>
-    <div class="skel" style="height:70px;border-radius:8px"></div>
-  </div></div>`;
-                        vWeeklyReview().then(h=>{main.innerHTML=h;}); break;
     // SECTION B
     case 'dPlan':
       main.innerHTML=`<div class="skel-card"><div class="skel skel-line" style="width:40%;height:20px;margin-bottom:16px"></div>
@@ -1172,7 +1074,6 @@ function calGetPerson() {
 }
 
 function initCal() {
-  checkAutoEnProceso();
   _calView = 'semana';
   _calOffset = 0;
   ['D','S','M'].forEach(x => document.getElementById('cv'+x)?.classList.toggle('on', x==='S'));
@@ -1245,14 +1146,16 @@ function normTime(t) {
   return String(t).substring(0,5);
 }
 
-// ── Get sessions for a specific person on a specific date ─────────
-function getSessionsForPersonOnDate(personName, dateStr) {
+// ── Get bloques for a specific person on a specific date ──────────
+function getBloquesForPersonOnDate(personName, dateStr) {
   const pName = String(personName||'').trim();
-  return SESIONES.filter(s => {
-    const sName = String(s.responsable||'').trim();
-    if (sName !== pName) return false;
-    const sDate = s._dn || normSessDate(s);
-    return sDate === dateStr;
+  return BLOQUES.filter(b => {
+    if (String(b.responsable||'').trim() !== pName) return false;
+    if (['Standby','Cancelado'].includes(b.estado)) return false;
+    if (b.estado === 'Programado'  && b.fechaProg  === dateStr) return true;
+    if (b.estado === 'Confirmado'  && b.fechaReal  === dateStr) return true;
+    if (b.estado === 'En Proceso'  && (b.fechaProg === dateStr || b.fechaReal === dateStr)) return true;
+    return false;
   });
 }
 
@@ -1283,17 +1186,17 @@ function calRender() {
     const isSat = dow===0||dow===6;
 
     // Saturation for this person on this date
-    const daySes = getSessionsForPersonOnDate(person, ds);
+    const daySes = getBloquesForPersonOnDate(person, ds);
     const blks = getWorkBlocks(ds, person);
     const totalWork = blks ? blks.reduce((s,b)=>s+(b.end-b.start),0)/60 : 0;
-    const taskHH = TAREAS.filter(t=>t.nombre===person&&t.fechaEjecucion===ds&&!['Listo','Cancelado'].includes(t.estado))
-      .reduce((s,t)=>s+(parseFloat(t.hhPlan)||0),0);
-    const sesHH = daySes.reduce((s,se)=>{
-      const ini=normTime(se.inicio), ter=normTime(se.termino);
-      if(ini&&ter&&ini.length===5&&ter.length===5) {try{return s+calcHHRaw(ini,ter);}catch(e){return s;}}
+    const dayBloques = getBloquesForPersonOnDate(person, ds);
+    const sesHH = dayBloques.reduce((s,b)=>{
+      const ini = b.estado==='Programado' ? b.horaInicioProg : b.horaInicio;
+      const ter = b.estado==='Programado' ? b.horaFinProg    : b.horaFin;
+      if(ini&&ter&&ini.length===5&&ter.length===5){try{return s+calcHHRaw(ini,ter);}catch(e){return s;}}
       return s;
     },0);
-    const sat = totalWork>0 ? Math.round(Math.max(sesHH,taskHH)/totalWork*100) : 0;
+    const sat = totalWork>0 ? Math.round(sesHH/totalWork*100) : 0;
     const satColor = sat>=80?'#e63329':sat>=60?'#c97a00':sat>0?'#1a7a4a':'';
     const satTxt = sat>0 ? `<div style="font-size:9px;color:${satColor};font-weight:700">${sat}%</div>` : '';
 
@@ -1313,15 +1216,14 @@ function calRender() {
     const blks = getWorkBlocks(ds, person);
     const isToday = ds === todayS;
 
-    // ONLY sessions belonging to this person on this date
-    const daySessions = getSessionsForPersonOnDate(person, ds)
-      .map(s => ({...s, inicio: normTime(s.inicio), termino: normTime(s.termino)}))
-      .filter(s => {
-        if(!s.inicio || !s.termino || s.inicio.length!==5 || s.termino.length!==5) return false;
-        const task = TAREAS.find(x => String(x.id)===String(s.tareaId));
-        if(task && ['Standby','Cancelado'].includes(task.estado)) return false;
-        return true;
-      });
+    // ONLY bloques belonging to this person on this date
+    const daySessions = getBloquesForPersonOnDate(person, ds)
+      .map(b => {
+        const ini = b.estado==='Programado' ? (b.horaInicioProg||'') : (b.horaInicio||'');
+        const ter = b.estado==='Programado' ? (b.horaFinProg||'')    : (b.horaFin||'');
+        return {...b, _ini: ini, _ter: ter};
+      })
+      .filter(b => b._ini && b._ter && b._ini.length===5 && b._ter.length===5);
 
     // Grid cells - hourly for performance (click snaps to nearest 30min anyway)
     const cells = Array.from({length: nHours}, (_,i) => {
@@ -1346,28 +1248,19 @@ function calRender() {
     }).join('');
 
     // Events
-    const events = daySessions.map(s => {
-      const topPx = Math.max(0, (t2m(s.inicio)/60 - hStart) * HOUR_H);
-      const heightPx = Math.max(20, calcHHRaw(s.inicio, s.termino) * HOUR_H);
-      const task = TAREAS.find(x=>String(x.id)===String(s.tareaId));
-      const isPlan = s.comentario === '[Bloque planificado]';
-      let evtCls = 'planned';
-      if (!isPlan) {
-        if (s.esExtra==='Sí') evtCls='express';
-        else if (task?.estado==='Listo') evtCls='done';
-        else if (task?.estado==='En Proceso') evtCls='inprogress';
-        else if (task?.fechaComp && dateStr(task.fechaComp) < todayS && task?.estado!=='Listo') evtCls='overdue';
-        else evtCls='done';
-      }
+    const events = daySessions.map(b => {
+      const topPx    = Math.max(0, (t2m(b._ini)/60 - hStart) * HOUR_H);
+      const heightPx = Math.max(20, calcHHRaw(b._ini, b._ter) * HOUR_H);
+      const evtCls   = b.estado === 'Confirmado' ? 'done' : 'planned';
       return `<div class="cal-event ${evtCls}"
         draggable="true"
         style="top:${topPx}px;height:${heightPx}px"
-        title="#${s.tareaId} ${s.tareaNombre||''}"
-        ondragstart="calEvtDragStart(event,'${s.tareaId}','${ds}','${s.inicio}','${s.termino}')"
+        title="#${b.id} ${b.titulo||''}"
+        ondragstart="calEvtDragStart(event,'${b.id}','${ds}','${b._ini}','${b._ter}')"
         ondragend="this.classList.remove('dragging')"
-        onclick="event.stopPropagation();abrirModal(${s.tareaId})">
-        <div class="cal-event-title">#${s.tareaId} ${(s.tareaNombre||'').substring(0,18)}</div>
-        <div class="cal-event-time">${s.inicio}–${s.termino}${isPlan?' 📋':' ✅'}</div>
+        onclick="event.stopPropagation();abrirModalBloque(${b.id})">
+        <div class="cal-event-title">#${b.id} ${(b.titulo||'').substring(0,18)}</div>
+        <div class="cal-event-time">${b._ini}–${b._ter}${b.estado==='Confirmado'?' ✅':' 📋'}</div>
       </div>`;
     }).join('');
 
@@ -1417,9 +1310,9 @@ function calRenderMes(dates, person, todayS) {
   const cells = dates.map(d => {
     const ds = d.toISOString().split('T')[0];
     const isToday = ds === todayS;
-    const daySes = getSessionsForPersonOnDate(person, ds);
+    const daySes = getBloquesForPersonOnDate(person, ds);
     const items = daySes.slice(0,2).map(s =>
-      `<div style="font-size:9px;background:#e0f2fe;border-radius:3px;padding:1px 4px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">#${s.tareaId}</div>`
+      `<div style="font-size:9px;background:#e0f2fe;border-radius:3px;padding:1px 4px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">#${s.id}</div>`
     ).join('');
     const more = daySes.length>2 ? `<div style="font-size:9px;color:var(--muted)">+${daySes.length-2}</div>` : '';
     return `<div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px;min-height:70px;cursor:pointer"
@@ -1444,37 +1337,31 @@ function calRefreshTray(person) {
   const list = document.getElementById('calTrayList');
   if (!tray || !list) return;
 
-  const unscheduled = TAREAS.filter(t =>
-    t.nombre === _p &&
-    !t.fechaEjecucion &&
-    !['Listo','Cancelado'].includes(t.estado)
-  );
-  const standby = TAREAS.filter(t =>
-    t.nombre === _p && t.estado === 'Standby'
-  );
-  const all = [...unscheduled.filter(t=>t.estado!=='Standby'), ...standby];
+  const porIniciar = BLOQUES.filter(b => b.responsable === _p && b.estado === 'Por Iniciar');
+  const standby    = BLOQUES.filter(b => b.responsable === _p && b.estado === 'Standby');
+  const all = [...porIniciar, ...standby];
 
   tray.style.display = 'block';
 
   if (all.length === 0) {
     list.innerHTML = `<div style="font-size:11px;color:rgba(255,255,255,.5);padding:4px 8px">
-      ✅ Sin tareas pendientes de programar</div>`;
+      ✅ Sin bloques pendientes de programar</div>`;
     return;
   }
 
-  list.innerHTML = all.map(t => {
-    const isStandby = t.estado === 'Standby';
-    const bg = isStandby ? 'var(--purple)' : 'var(--navy)';
-    const label = isStandby ? '⏸ Standby' : '';
-    return `<div draggable="true" id="trayTask_${t.id}"
-      onclick="abrirModalProgramar('${t.id}')"
-      ondragstart="calTrayDragStart(event,${t.id})"
+  list.innerHTML = all.map(b => {
+    const isStandby = b.estado === 'Standby';
+    const bg    = isStandby ? 'var(--purple)' : 'var(--navy)';
+    const label = isStandby ? ' ⏸' : '';
+    return `<div draggable="true" id="trayTask_${b.id}"
+      onclick="abrirModalProgramarBloque('${b.id}')"
+      ondragstart="calTrayDragStart(event,${b.id})"
       ondragend="this.style.opacity='1'"
       style="background:${bg};color:#fff;border-radius:6px;padding:6px 10px;
         cursor:pointer;user-select:none;border:1px solid rgba(255,255,255,.15)"
-      title="${isStandby?'En Standby - clic para retomar':'Clic para programar'}">
-      <div style="font-size:9px;opacity:.6">#${t.id} · ${t.hhPlan||'—'}h · ${t.tipo||'—'} ${label}</div>
-      <div style="font-size:11px;font-weight:600">${t.tarea.substring(0,28)}${t.tarea.length>28?'…':''}</div>
+      title="${isStandby?'En Standby':'Clic para programar'}">
+      <div style="font-size:9px;opacity:.6">#${b.id} · ${b.hhPlan||'—'}h · ${b.tipoBloque||'—'}${label}</div>
+      <div style="font-size:11px;font-weight:600">${(b.titulo||'').substring(0,28)}${(b.titulo||'').length>28?'…':''}</div>
     </div>`;
   }).join('');
 }
@@ -1515,7 +1402,7 @@ function calCellDrop(e, cell, newDs, newHour) {
   cell.style.background = '';
   const taskId = _calDragTaskId || e.dataTransfer.getData('text/plain');
   if (!taskId) return;
-  const t = TAREAS.find(x => String(x.id) === String(taskId));
+  const t = BLOQUES.find(x => String(x.id) === String(taskId));
   if (!t) return;
 
   const hh = parseFloat(t.hhPlan) || 1;
@@ -1532,7 +1419,7 @@ function calCellDrop(e, cell, newDs, newHour) {
   _calDragTaskId = null; _calDragOrigDate = null; _calDragOrigIni = null;
 
   // Open scheduling modal
-  abrirModalProgramar(taskId, newDs, ini, ter);
+  abrirModalProgramarBloque(taskId, newDs, ini, ter);
 }
 
 // ── Click on empty cell ────────────────────────────────────────────
@@ -1545,213 +1432,93 @@ function calCellClick(ds, hour) {
 // MODULE 2: MODAL PROGRAMAR — Teams-style scheduling
 // ═══════════════════════════════════════════════════════════════════
 
-function abrirModalProgramar(taskId, prefDate=null, prefIni=null, prefTer=null) {
-  const t = TAREAS.find(x => String(x.id) === String(taskId));
-  if (!t) return;
+function abrirModalProgramarBloque(bloqueId, prefDate=null, prefIni=null, prefTer=null) {
+  const b = BLOQUES.find(x => String(x.id) === String(bloqueId));
+  if (!b) return;
 
-  const hoy = todayStr();
-  const hh = parseFloat(t.hhPlan) || 1;
-  const fDate = prefDate || t.fechaEjecucion || hoy;
-  const fIni  = prefIni  || '09:00';
-  const fTer  = prefTer  || m2t(t2m(fIni) + Math.round(hh*60));
+  const hoy  = todayStr();
+  const hh   = parseFloat(b.hhPlan) || 1;
+  const fDate = prefDate || b.fechaProg || hoy;
+  const fIni  = prefIni  || b.horaInicioProg || '09:00';
+  const fTer  = prefTer  || b.horaFinProg    || m2t(t2m(fIni) + Math.round(hh * 60));
 
   openModal(`
-    <div class="mt"><div class="rb"></div>Programar tarea</div>
+    <div class="mt"><div class="rb"></div>${b.fechaProg ? 'Reprogramar bloque' : 'Programar bloque'}</div>
+    <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:4px">#${b.id} · ${b.titulo}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">${b.tipoBloque||'—'} · ${b.area||'—'} · HHP: ${b.hhPlan||'—'}h</div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <!-- Left: form -->
-      <div>
-        <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:8px">
-          #${t.id} · ${t.tarea}
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">
-          ${t.tipo||'—'} · ${t.area||'—'} · HHP: ${t.hhPlan||'—'}h
-        </div>
+    ${b.fechaProg ? `<div class="al w" style="margin-bottom:10px"><span class="al-ico">📅</span>
+      <div class="al-txt">Programado actualmente: <strong>${b.fechaProg} ${b.horaInicioProg}–${b.horaFinProg}</strong></div></div>` : ''}
 
-        <div class="g2" style="margin-bottom:10px">
-          <div class="efi fw">
-            <label>Fecha de ejecución</label>
-            <input type="date" id="schDate" value="${fDate}" oninput="schUpdPreview()">
-          </div>
-          <div class="efi">
-            <label>Hora inicio</label>
-            <input type="time" id="schIni" value="${fIni}" oninput="schUpdTermino();schUpdPreview()">
-          </div>
-          <div class="efi">
-            <label>Hora término</label>
-            <input type="time" id="schTer" value="${fTer}" oninput="schUpdPreview()">
-          </div>
-        </div>
-
-        <div id="schAlerts" style="margin-bottom:8px"></div>
-
-        ${t.estado==='Programada'?`
-        <div style="background:var(--amberl);border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:11px">
-          ⚠️ Esta tarea ya estaba programada para <strong>${t.fechaEjecucion||'—'}</strong>.
-          Al guardar se registrará como reprogramación.
-          <div class="efi" style="margin-top:6px">
-            <label>Motivo de reprogramación *</label>
-            <select id="schMotivo" style="background:#fff;border:1.5px solid var(--border);border-radius:5px;padding:5px 20px 5px 8px;font-size:12px;width:100%">
-              <option value="">— seleccionar —</option>
-              ${(LISTAS['MotivoReprog']||['Tarea urgente interrumpió','Cliente solicitó cambio','Error de estimación','Cambio de prioridad','Otro']).map(v=>`<option value="${v}">${v}</option>`).join('')}
-            </select>
-          </div>
-        </div>`:``}
+    <div class="g2" style="margin-bottom:10px">
+      <div class="efi fw">
+        <label class="rq">Fecha</label>
+        <input type="date" id="schDate" value="${fDate}" oninput="schBloqueUpdTer()">
       </div>
-
-      <!-- Right: day preview -->
-      <div>
-        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Vista previa del día</div>
-        <div id="schDayPreview" style="border:1px solid var(--border);border-radius:6px;overflow:hidden;height:280px;overflow-y:auto;position:relative"></div>
+      <div class="efi">
+        <label class="rq">Hora inicio</label>
+        <input type="time" id="schIni" value="${fIni}" oninput="schBloqueUpdTer()">
+      </div>
+      <div class="efi">
+        <label class="rq">Hora fin</label>
+        <input type="time" id="schTer" value="${fTer}">
       </div>
     </div>
-
+    ${b.fechaProg ? `
+    <div class="efi" style="margin-bottom:10px">
+      <label class="rq">Motivo reprogramación</label>
+      <select id="schMotivo" style="background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:8px 22px 8px 9px;font-size:13px;width:100%">
+        <option value="">— seleccionar —</option>${opts('MotivoReprog')}
+      </select>
+    </div>` : ''}
     <div class="ma">
       <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>
-      <button class="btn" onclick="confirmarProgramacion('${taskId}')">
-        <span class="st"></span><span class="bt">📅 Programar</span>
+      <button class="btn" style="background:var(--green)" onclick="confirmarProgramacionBloque('${bloqueId}',${!!b.fechaProg})">
+        <span class="st"></span><span class="bt">${b.fechaProg ? 'Reprogramar' : 'Programar'}</span>
       </button>
-    </div>
-  `);
-
-  // Initialize preview
-  setTimeout(() => schUpdPreview(), 50);
+    </div>`);
 }
 
-function schUpdTermino() {
+function schBloqueUpdTer() {
   const ini = document.getElementById('schIni')?.value;
-  const t   = TAREAS.find(x => String(x.id) === String(
-    document.querySelector('#schDate')?.closest('.mc')?.getAttribute('data-taskid') || '0'));
-  // Use current ter if no task found
-  const hh = 1; // fallback
   const ter = document.getElementById('schTer');
-  if (ini && ter && !ter._userEdited) {
-    ter.value = m2t((t2m(ini) + Math.round(hh*60)) % 1440);
-  }
+  if (!ini || !ter) return;
+  const b = BLOQUES.find(x => String(x.id) === String(_calDragTaskId));
+  const hh = b ? (parseFloat(b.hhPlan)||1) : 1;
+  ter.value = m2t(t2m(ini) + Math.round(hh*60));
 }
 
-function schUpdPreview() {
-  const preview = document.getElementById('schDayPreview');
-  if (!preview) return;
-
-  const date = document.getElementById('schDate')?.value || todayStr();
-  const ini  = document.getElementById('schIni')?.value  || '09:00';
-  const ter  = document.getElementById('schTer')?.value  || '10:00';
-  const person = calGetPerson();
-
-  // Build mini day view (8:00–20:00)
-  const hStart=7, hEnd=20, nH=hEnd-hStart;
-  const PH = 20; // px per hour in preview
-
-  // Get existing sessions for this person on this date
-  const daySes = getSessionsForPersonOnDate(person, date)
-    .map(s=>({...s, inicio:normTime(s.inicio), termino:normTime(s.termino)}))
-    .filter(s=>s.inicio&&s.termino&&s.inicio.length===5&&s.termino.length===5);
-
-  const lunch = getLunchFor(person);
-  const blks = getWorkBlocks(date, person);
-
-  // Hour lines
-  let hoursHTML = '';
-  for (let i=0; i<nH; i++) {
-    const h = hStart+i;
-    const isWork = blks && blks.some(b=>h*60>=b.start&&(h+1)*60<=b.end+60);
-    const isLunch = h>=lunch.start&&h<lunch.end;
-    const bg = !blks?'#f9f9f9':isLunch?'rgba(232,163,23,.08)':isWork?'#fff':'#f4f6f9';
-    hoursHTML += `<div style="height:${PH}px;border-bottom:1px solid var(--border);background:${bg};display:flex;align-items:flex-start;padding-left:2px;position:relative">
-      <span style="font-size:8px;color:var(--muted);font-family:Montserrat,sans-serif;line-height:1">${String(h).padStart(2,'0')}:00</span>
-    </div>`;
-  }
-
-  // Existing events
-  let eventsHTML = daySes.map(s => {
-    const top = Math.max(0,(t2m(s.inicio)/60-hStart)*PH);
-    const ht  = Math.max(8, calcHHRaw(s.inicio,s.termino)*PH);
-    return `<div style="position:absolute;left:28px;right:2px;top:${top}px;height:${ht}px;
-      background:#e0f2fe;border-left:2px solid #075985;border-radius:3px;font-size:8px;
-      padding:1px 3px;overflow:hidden;color:#075985;font-weight:600">
-      #${s.tareaId} ${s.inicio}–${s.termino}
-    </div>`;
-  }).join('');
-
-  // New event preview
-  let newEvtHTML = '';
-  if (ini && ter && ini.length===5 && ter.length===5) {
-    const top = Math.max(0,(t2m(ini)/60-hStart)*PH);
-    const ht  = Math.max(8, calcHHRaw(ini,ter)*PH);
-    newEvtHTML = `<div style="position:absolute;left:28px;right:2px;top:${top}px;height:${ht}px;
-      background:#fee2e2;border-left:2px solid var(--red);border-radius:3px;font-size:8px;
-      padding:1px 3px;overflow:hidden;color:#721c24;font-weight:700;z-index:2">
-      🆕 ${ini}–${ter}
-    </div>`;
-    // Scroll to show it
-    setTimeout(() => { preview.scrollTop = Math.max(0, top-30); }, 50);
-  }
-
-  preview.innerHTML = `<div style="position:relative;height:${nH*PH}px">
-    ${hoursHTML}<div style="position:absolute;inset:0">${eventsHTML}${newEvtHTML}</div>
-  </div>`;
-
-  // Update alerts
-  const alerts = document.getElementById('schAlerts');
-  if (alerts && ini && ter) alerts.innerHTML = renderAlerts(person, date, ini, ter);
-}
-
-async function confirmarProgramacion(taskId) {
+async function confirmarProgramacionBloque(bloqueId, esReprog) {
   const fec    = document.getElementById('schDate')?.value;
   const ini    = document.getElementById('schIni')?.value;
   const ter    = document.getElementById('schTer')?.value;
-  const motivo = document.getElementById('schMotivo')?.value;
-  if (!fec||!ini||!ter) { toast('Completa fecha y horario','er'); return; }
+  const motivo = document.getElementById('schMotivo')?.value || '';
 
-  const t = TAREAS.find(x=>String(x.id)===String(taskId));
-  if (!t) return;
+  if (!fec || !ini || !ter) { toast('Completa fecha y horario','warn'); return; }
+  if (esReprog && !motivo) { toast('Indica el motivo de reprogramación','warn'); return; }
 
-  // Overlap check
-  const cfx = checkOverlap(t.nombre, fec, ini, ter);
-  if (cfx.length>0 && !document.getElementById('chkOvlp')?.checked) {
-    toast('Confirma el traslape en la alerta','er'); return;
+  const b = BLOQUES.find(x => String(x.id) === String(bloqueId));
+  if (!b) return;
+
+  if (esReprog) {
+    await apiPost({accion:'reprogramar',
+      bloqueId: b.id, titulo: b.titulo, responsable: b.responsable,
+      fechaOriginal: b.fechaProg, horaInicioOriginal: b.horaInicioProg, horaFinOriginal: b.horaFinProg,
+      fechaNueva: fec, horaInicioNueva: ini, horaFinNueva: ter,
+      motivo, esUrgencia: false, reprogramadoPor: SESSION.nombre,
+    });
+  } else {
+    await apiPost({accion:'actualizar', id:b.id, campos:{
+      10: 'Programado',
+      16: fec,
+      17: ini,
+      18: ter,
+    }});
   }
 
-  // Was it already programmed? Register reprogramacion
-  if (t.fechaEjecucion && t.fechaEjecucion !== fec) {
-    if (!motivo) { toast('Selecciona el motivo de reprogramación','er'); return; }
-    await apiPost({accion:'reprogramar', tareaId:taskId, tareaNombre:t.tarea,
-      responsable:t.nombre, fechaOriginal:t.fechaEjecucion, fechaNueva:fec,
-      motivo, esUrgencia:false, reprogramadoPor:SESSION.nombre});
-    // Remove old planned block
-    const oldSesIdx = SESIONES.findIndex(s=>String(s.tareaId)===String(taskId)&&s.comentario==='[Bloque planificado]');
-    if (oldSesIdx>=0) {
-      await apiPost({accion:'eliminarSesion',tabla:'Sesiones',tareaId:taskId,
-        fecha:t.fechaEjecucion,inicio:SESIONES[oldSesIdx].inicio});
-      SESIONES.splice(oldSesIdx,1);
-    }
-  }
-
-  const hh = calcHHRaw(ini, ter);
-  // Remove ALL existing planned blocks for this task first (prevent duplicates)
-  const oldPlanned = SESIONES.filter(s=>String(s.tareaId)===String(taskId)&&s.comentario==='[Bloque planificado]');
-  for(const op of oldPlanned) {
-    await apiPost({accion:'eliminarSesion',tabla:'Sesiones',tareaId:taskId,
-      fecha:normSessDate(op)||dateStr(op.fecha),inicio:op.inicio});
-  }
-  SESIONES = SESIONES.filter(s=>!(String(s.tareaId)===String(taskId)&&s.comentario==='[Bloque planificado]'));
-  // Update task
-  await apiPost({accion:'actualizar',tabla:'Tareas',id:taskId,campos:{11:'Programada',15:fec}});
-  // Save new planned block
-  await apiPost({accion:'insertar',tabla:'Sesiones',
-    fila:[taskId,t.tarea,t.nombre,fec,ini,ter,hh,'[Bloque planificado]',todayStr(),'No','']});
-
-  // Update local state
-  const idx = TAREAS.findIndex(x=>String(x.id)===String(taskId));
-  if (idx>-1) { TAREAS[idx].estado='Programada'; TAREAS[idx].fechaEjecucion=fec; }
-  SESIONES.push({tareaId:taskId,tareaNombre:t.tarea,responsable:t.nombre,
-    fecha:fec,inicio:ini,termino:ter,hh,comentario:'[Bloque planificado]',esExtra:'No',motivoExtra:''});
-
-  invalidateCache();
+  await loadData(true);
   cerrarModal();
-  toast(`✅ Tarea #${taskId} programada: ${fec} ${ini}–${ter}`,'ok');
-  calRefreshTray(calGetPerson());
+  toast(`✅ Bloque #${b.id} ${esReprog?'reprogramado':'programado'}: ${fec} ${ini}–${ter}`,'ok');
   calRender();
 }
 
@@ -1761,100 +1528,77 @@ async function confirmarProgramacion(taskId) {
 
 function vConfirmarBloque(overridePers=null) {
   const hoy = todayStr();
-  const me  = SESSION.nombre; // always own tasks
-  const isAdmin = SESSION.rol === 'admin';
+  const me  = SESSION.nombre;
 
-  // Tasks with a programmed block whose date <= today (need confirmation)
-  const pendientes = TAREAS
-    .filter(t => t.nombre===me && t.fechaEjecucion && t.fechaEjecucion<=hoy &&
-      ['Programada','En Proceso'].includes(t.estado))
-    .sort((a,b) => a.fechaEjecucion > b.fechaEjecucion ? 1 : -1);
+  const pendientes = BLOQUES
+    .filter(b => b.responsable === me && b.estado === 'Programado' && b.fechaProg <= hoy)
+    .sort((a,b) => a.fechaProg > b.fechaProg ? 1 : -1);
 
-  // Get planned blocks for these tasks
-  const renderItem = t => {
-    const planBlk = SESIONES.find(s =>
-      String(s.tareaId)===String(t.id) && s.comentario==='[Bloque planificado]'
-    );
-    const ini = planBlk ? normTime(planBlk.inicio) : '';
-    const ter = planBlk ? normTime(planBlk.termino) : '';
-    const isHoy = t.fechaEjecucion === hoy;
-    const motivoExtraOpts = (LISTAS['MotivoExtra']||['Cumplir plazo','Urgencia cliente','Otro'])
-      .map(m=>`<option value="${m}">${m}</option>`).join('');
+  const BADGE = {
+    'Por Iniciar':'bp','Programado':'bpr','En Proceso':'bi',
+    'Confirmado':'bl','Standby':'bs','Cancelado':'bc'
+  };
 
+  const renderItem = b => {
+    const isHoy = b.fechaProg === hoy;
     return `<div style="background:#fff;border:1px solid ${isHoy?'var(--navy3)':'var(--border)'};
       border-radius:var(--r);padding:14px;margin-bottom:10px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span class="tid">#${t.id}</span>
+        <span class="tid">#${b.id}</span>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${t.tarea}</div>
-          <div style="font-size:10px;color:var(--muted)">${t.tipo||'—'} · ${t.area||'—'} · HHP:${t.hhPlan||'—'}h · Prog: ${t.fechaEjecucion}</div>
+          <div style="font-size:13px;font-weight:600">${b.titulo}</div>
+          <div style="font-size:10px;color:var(--muted)">${b.tipoBloque||'—'} · ${b.area||'—'} · HHP:${b.hhPlan||'—'}h · Prog: ${b.fechaProg} ${b.horaInicioProg}–${b.horaFinProg}</div>
         </div>
-        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+        <span class="badge ${BADGE[b.estado]||'bi'}">${b.estado}</span>
       </div>
 
       <div class="g2" style="margin-bottom:8px">
         <div class="efi">
           <label>Fecha real</label>
-          <input type="date" id="cf_fec_${t.id}" value="${t.fechaEjecucion}">
+          <input type="date" id="cf_fec_${b.id}" value="${b.fechaProg}">
         </div>
         <div class="efi">
-          <label>Hora inicio real ${ini?'(programado: '+ini+')':''}</label>
-          <input type="time" id="cf_ini_${t.id}" value="${ini}" oninput="cfCalcHH('${t.id}')" onload="cfCalcHH('${t.id}')">
+          <label>Hora inicio real (prog: ${b.horaInicioProg||'—'})</label>
+          <input type="time" id="cf_ini_${b.id}" value="${b.horaInicioProg}" oninput="cfCalcHH('${b.id}')">
         </div>
         <div class="efi">
-          <label>Hora término real ${ter?'(programado: '+ter+')':''}</label>
-          <input type="time" id="cf_ter_${t.id}" value="${ter}" oninput="cfCalcHH('${t.id}')">
+          <label>Hora fin real (prog: ${b.horaFinProg||'—'})</label>
+          <input type="time" id="cf_ter_${b.id}" value="${b.horaFinProg}" oninput="cfCalcHH('${b.id}')">
         </div>
         <div class="efi">
-          <div class="hhp" style="padding:8px 12px">
-            <div class="hhpl"><div class="l">HH Real</div></div>
-            <div class="hhv e" id="cf_hh_${t.id}" style="font-size:16px">--</div>
+          <div style="background:var(--off);border-radius:6px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--muted);font-weight:600">HH Real</div>
+            <div id="cf_hh_${b.id}" style="font-size:18px;font-weight:700;color:var(--navy)">--</div>
           </div>
         </div>
       </div>
 
-      <div class="efi" style="margin-bottom:8px">
-        <label>¿Qué se realizó?</label>
-        <input type="text" id="cf_com_${t.id}" placeholder="Descripción breve del trabajo realizado">
-      </div>
-
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-          <input type="checkbox" id="cf_ex_${t.id}" onchange="cfToggleExtra('${t.id}')"> ⏰ Hora extra
-        </label>
-        <select id="cf_mot_${t.id}" style="display:none;background:var(--inp);border:1.5px solid var(--border);border-radius:5px;padding:5px 18px 5px 8px;font-size:12px">
-          <option value="">— Motivo hora extra —</option>${motivoExtraOpts}
-        </select>
+      <div class="efi" style="margin-bottom:10px">
+        <label>Comentario de ejecución</label>
+        <input type="text" id="cf_com_${b.id}" placeholder="Opcional">
       </div>
 
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn sm" style="flex:2;min-width:140px;background:var(--green)" onclick="cfAccion('${t.id}')">
+        <button class="btn sm" style="flex:2;min-width:140px;background:var(--green)" onclick="cfAccion('${b.id}')">
           <span class="bt">✅ Confirmar bloque</span>
         </button>
-        <button class="btn sm ghost" style="flex:1;min-width:110px" onclick="cfReprogramar('${t.id}')">
+        <button class="btn sm ghost" style="flex:1;min-width:110px" onclick="cfReprogramar('${b.id}')">
           <span class="bt">📅 Reprogramar</span>
         </button>
-        <button class="btn sm ghost" style="flex:1;min-width:80px" onclick="ponerStandby('${t.id}')">
-          <span class="bt">⏸ Standby</span>
-        </button>
-        <button class="btn sm danger" style="flex:1;min-width:80px" onclick="cancelarTarea('${t.id}')">
+        <button class="btn sm danger" style="flex:1;min-width:80px" onclick="cancelarBloque('${b.id}')">
           <span class="bt">✕ Cancelar</span>
         </button>
       </div>
-          </div>`;
+    </div>`;
   };
 
   return `
   <div class="ph"><div class="pt"><div class="rb"></div>Confirmar Bloques</div>
-    <div class="pd">Bloques programados cuyo horario ya pasó. Confirma, reprograma o cancela.</div></div>
-
-
-
+    <div class="pd">Bloques programados cuyo horario ya pasó. Confirma o reprograma.</div></div>
   ${pendientes.length===0
     ? '<div class="al ok"><span class="al-ico">✅</span><div class="al-txt"><strong>Sin bloques pendientes</strong>No hay bloques programados que necesiten confirmación.</div></div>'
-    : pendientes.map(renderItem).join('')
-  }
-`;
+    : pendientes.map(renderItem).join('')}`;
+
 }
 
 function cfCalcHH(tid) {
@@ -1870,56 +1614,31 @@ function cfToggleExtra(tid){
   if(mot)mot.style.display=chk?'block':'none';
 }
 
-async function cfAccion(tid) {
-  const ini=document.getElementById('cf_ini_'+tid)?.value;
-  const ter=document.getElementById('cf_ter_'+tid)?.value;
-  const fec=document.getElementById('cf_fec_'+tid)?.value||todayStr();
-  if(!ini||!ter){toast('Ingresa hora inicio y término','er');return;}
-  const hh=calcHHRaw(ini,ter);
-  if(!hh||hh<=0){toast('Verifica los horarios','er');return;}
-  const esEx=document.getElementById('cf_ex_'+tid)?.checked||false;
-  const motEx=esEx?(document.getElementById('cf_mot_'+tid)?.value||''):'';
-  const com=document.getElementById('cf_com_'+tid)?.value||'';
-  const t=TAREAS.find(x=>String(x.id)===String(tid)); if(!t)return;
+async function cfAccion(bid) {
+  const ini = document.getElementById('cf_ini_'+bid)?.value;
+  const ter = document.getElementById('cf_ter_'+bid)?.value;
+  const fec = document.getElementById('cf_fec_'+bid)?.value || todayStr();
+  if (!ini || !ter) { toast('Ingresa hora inicio y término','er'); return; }
+  const hh = calcHHRaw(ini, ter);
+  if (!hh || hh <= 0) { toast('Verifica los horarios','er'); return; }
+  const com = document.getElementById('cf_com_'+bid)?.value || '';
 
-  // Check if there are more pending planned blocks for this task
-  const bloquesRestantes = SESIONES.filter(s=>
-    String(s.tareaId)===String(tid) &&
-    s.comentario==='[Bloque planificado]' &&
-    (normSessDate(s)||dateStr(s.fecha)) > fec
-  );
+  const campos = {10:'Confirmado', 11:fec, 12:ini, 13:ter, 14:hh};
+  if (com) campos[9] = com;
 
-  // Smart close logic: ask only if no more blocks pending
-  let nuevoEstado = 'En Proceso';
-  if (bloquesRestantes.length === 0) {
-    // No more planned blocks — ask if task is done
-    const yaListo = confirm('¿La tarea quedó completamente lista?\n\n"Aceptar" = cerrar como Listo\n"Cancelar" = dejar En Proceso (puedes agregar más bloques)');
-    nuevoEstado = yaListo ? 'Listo' : 'En Proceso';
-  }
-  // If there are more blocks, stay En Proceso automatically (no popup needed)
-
-  // Save confirmed session
-  await apiPost({accion:'insertar',tabla:'Sesiones',
-    fila:[tid,t.tarea,t.nombre,fec,ini,ter,hh,com,todayStr(),esEx?'Sí':'No',motEx]});
-  const idx=TAREAS.findIndex(x=>String(x.id)===String(tid));
-  const nHH=Math.round(((parseFloat(t.hhReal)||0)+hh)*100)/100;
-  const nN=(parseInt(t.nSes)||0)+1;
-  await apiPost({accion:'actualizar',tabla:'Tareas',id:tid,campos:{13:nHH,14:nN,11:nuevoEstado}});
-  if(idx>-1){TAREAS[idx].hhReal=nHH;TAREAS[idx].nSes=nN;TAREAS[idx].estado=nuevoEstado;}
-  SESIONES.push({tareaId:tid,tareaNombre:t.tarea,responsable:t.nombre,fecha:fec,
-    inicio:ini,termino:ter,hh,comentario:com,esExtra:esEx?'Sí':'No',motivoExtra:motEx});
-  await apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario});
-  invalidateCache();
-  toast(nuevoEstado==='Listo'?'✅ Bloque confirmado y tarea cerrada':'✅ Bloque confirmado','ok');
-  document.getElementById('main').innerHTML=vConfirmarBloque();
+  await apiPost({accion:'actualizar', id:bid, campos});
+  await apiPost({accion:'actualizarUltimoRegistro', usuario:SESSION.usuario});
+  await loadData(true);
+  toast('✅ Bloque confirmado','ok');
+  document.getElementById('main').innerHTML = vConfirmarBloque();
 }
 
-function cfAccionEstado(tid, accion) {
-  const t=TAREAS.find(x=>String(x.id)===String(tid)); if(!t)return;
+function cfAccionEstado(bid, accion) {
+  const b=BLOQUES.find(x=>String(x.id)===String(bid)); if(!b)return;
   const motivoOpts=opts('MotivoReprog');
   openModal(`
-    <div class="mt"><div class="rb"></div>${accion==='reprog'?'Reprogramar':accion==='standby'?'Poner en Standby':'Cancelar tarea'}</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">#${t.id} · ${t.tarea}</div>
+    <div class="mt"><div class="rb"></div>${accion==='reprog'?'Reprogramar':accion==='standby'?'Poner en Standby':'Cancelar bloque'}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">#${b.id} · ${b.titulo}</div>
     ${accion==='reprog'?`
       <div class="efi" style="margin-bottom:10px">
         <label>Motivo de reprogramación *</label>
@@ -1934,36 +1653,33 @@ function cfAccionEstado(tid, accion) {
       </div>`:``}
     <div class="ma">
       <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>
-      <button class="btn ${accion==='cancelar'?'danger':''}" onclick="cfConfirmEstado('${tid}','${accion}')">
+      <button class="btn ${accion==='cancelar'?'danger':''}" onclick="cfConfirmEstado('${bid}','${accion}')">
         <span class="st"></span><span class="bt">Confirmar</span>
       </button>
     </div>`);
 }
 
-async function cfConfirmEstado(tid, accion) {
+async function cfConfirmEstado(bid, accion) {
   const motivo=document.getElementById('cfStateMotivo')?.value||document.getElementById('cfStateJust')?.value||'';
   if(!motivo){toast('La justificación es obligatoria','er');return;}
-  const t=TAREAS.find(x=>String(x.id)===String(tid)); if(!t)return;
+  const b=BLOQUES.find(x=>String(x.id)===String(bid)); if(!b)return;
   let nuevoEstado='Por Iniciar';
   if(accion==='standby') nuevoEstado='Standby';
   else if(accion==='cancelar') nuevoEstado='Cancelado';
-  else nuevoEstado='Por Iniciar'; // reprog → back to Por Iniciar, remove fechaEjecucion
-  const campos={11:nuevoEstado};
-  if(accion==='reprog') campos[15]=''; // clear fechaEjecucion
-  await apiPost({accion:'actualizar',tabla:'Tareas',id:tid,campos});
+  else nuevoEstado='Por Iniciar';
+  const campos={10:nuevoEstado};
   if(accion==='reprog') {
-    await apiPost({accion:'reprogramar',tareaId:tid,tareaNombre:t.tarea,
-      responsable:t.nombre,fechaOriginal:t.fechaEjecucion,fechaNueva:'',
-      motivo,esUrgencia:false,reprogramadoPor:SESSION.nombre});
-    // Remove planned block
-    const si=SESIONES.findIndex(s=>String(s.tareaId)===String(tid)&&s.comentario==='[Bloque planificado]');
-    if(si>=0){await apiPost({accion:'eliminarSesion',tabla:'Sesiones',tareaId:tid,fecha:SESIONES[si].fecha,inicio:SESIONES[si].inicio});SESIONES.splice(si,1);}
+    campos[16]=''; campos[17]=''; campos[18]=''; // clear fechaProg/horarios
+    await apiPost({accion:'reprogramar',
+      bloqueId:b.id, titulo:b.titulo, responsable:b.responsable,
+      fechaOriginal:b.fechaProg, horaInicioOriginal:b.horaInicioProg, horaFinOriginal:b.horaFinProg,
+      fechaNueva:'', horaInicioNueva:'', horaFinNueva:'',
+      motivo, esUrgencia:false, reprogramadoPor:SESSION.nombre});
   }
-  const idx=TAREAS.findIndex(x=>String(x.id)===String(tid));
-  if(idx>-1){TAREAS[idx].estado=nuevoEstado;if(accion==='reprog')TAREAS[idx].fechaEjecucion='';}
-  invalidateCache();
+  await apiPost({accion:'actualizar', id:bid, campos});
+  await loadData(true);
   cerrarModal();
-  toast(`Tarea #${tid}: ${nuevoEstado}`,'ok');
+  toast(`Bloque #${bid}: ${nuevoEstado}`,'ok');
   document.getElementById('main').innerHTML=vConfirmarBloque();
 }
 
@@ -2033,40 +1749,6 @@ function toggleExtraCF(tid) {
   const mot=document.getElementById('cf_mot_'+tid);
   if(mot)mot.style.display=chk?'block':'none';
 }
-
-async function confirmarBloque(tid, cerrar=false) {
-  const ini=document.getElementById('cf_ini_'+tid)?.value;
-  const ter=document.getElementById('cf_ter_'+tid)?.value;
-  const fec=document.getElementById('cf_fec_'+tid)?.value||todayStr();
-  if(!ini||!ter){toast('Ingresa hora inicio y término','er');return;}
-  const cfx=checkOverlap(SESSION.nombre,fec,ini,ter);
-  if(cfx.length>0&&!document.getElementById('chkOvlp')?.checked){
-    toast('Confirma el traslape en la alerta','er');return;
-  }
-  const hh=calcHHRaw(ini,ter);
-  if(!hh||hh<=0){toast('Verifica los horarios','er');return;}
-  const esEx=document.getElementById('cf_ex_'+tid)?.checked||false;
-  const motEx=esEx?(document.getElementById('cf_mot_'+tid)?.value||''):'';
-  const com=document.getElementById('cf_com_'+tid)?.value||'';
-  const t=TAREAS.find(x=>String(x.id)===String(tid));
-  const hoy=todayStr();
-  await apiPost({accion:'insertar',tabla:'Sesiones',
-    fila:[tid,t?.tarea||'',SESSION.nombre,fec,ini,ter,hh,com,hoy,esEx?'Sí':'No',motEx]});
-  if(t){
-    const idx=TAREAS.findIndex(x=>String(x.id)===String(tid));
-    const nHH=Math.round(((parseFloat(t.hhReal)||0)+hh)*100)/100;
-    const nN=(parseInt(t.nSes)||0)+1;
-    const nuevoCampos=cerrar?{13:nHH,14:nN,11:'Listo'}:{13:nHH,14:nN};
-    await apiPost({accion:'actualizar',tabla:'Tareas',id:tid,campos:nuevoCampos});
-    if(idx>-1){TAREAS[idx].hhReal=nHH;TAREAS[idx].nSes=nN;if(cerrar)TAREAS[idx].estado='Listo';}
-    SESIONES.push({tareaId:tid,tareaNombre:t.tarea,responsable:SESSION.nombre,fecha:fec,inicio:ini,termino:ter,hh,esExtra:esEx?'Sí':'No',motivoExtra:motEx});
-  }
-  await apiPost({accion:'actualizarUltimoRegistro',usuario:SESSION.usuario});
-  invalidateCache();
-  toast(cerrar?'Bloque confirmado y tarea cerrada ✅':`Bloque confirmado: ${hh}h`,'ok');
-  main.innerHTML=vConfirmarBloque();
-}
-
 
 // Sesión libre (sin bloque programado)
 function vSesion() {
@@ -2335,13 +2017,115 @@ async function applyDashFilter(id) {
       <div class="skel" style="height:80px;border-radius:8px"></div>
       <div class="skel" style="height:80px;border-radius:8px"></div>
     </div></div>`;
-  const level = DASH_LEVELS[id] || 'op';
-  switch(id) {
-    case 'plan':   cont.innerHTML = buildDashPlanLevel(f, level); break;
-    case 'rend':   cont.innerHTML = await buildDashRendLevel(f, level); break;
-    case 'costos': cont.innerHTML = buildDashCostosLevel(f, level); break;
-    case 'global': cont.innerHTML = buildDashGlobal(f); break;
+  try {
+    const data = await apiGet({accion:'dashboard', desde:f.desde, hasta:f.hasta});
+    cont.innerHTML = renderDashBloques(data, f);
+  } catch(e) {
+    cont.innerHTML = `<div class="al d"><span class="al-ico">⚠️</span><div class="al-txt">Error al cargar dashboard: ${e.message}</div></div>`;
   }
+}
+
+function renderDashBloques(d, f) {
+  if (!d || !d.resumen) return '<div class="al w">Sin datos para el período seleccionado.</div>';
+  const r = d.resumen;
+
+  const bar = (label, hh, max, cls='') => {
+    const w = max > 0 ? Math.round(hh/max*100) : 0;
+    return `<div class="br">
+      <div class="bl2">${label}</div>
+      <div class="bt2"><div class="bf ${cls}" style="width:${w}%"></div></div>
+      <div class="bv">${Math.round(hh*10)/10}h</div>
+    </div>`;
+  };
+
+  const hhAreaMax  = Math.max(...Object.values(d.hhArea||{}), 1);
+  const hhTipoMax  = Math.max(...Object.values(d.hhTipo||{}), 1);
+  const hhPersMax  = Math.max(...Object.values(d.hhPersona||{}), 1);
+
+  const estadosBadge = {
+    'Por Iniciar':'bp','Programado':'bpr','En Proceso':'bi','Confirmado':'bl','Standby':'bs','Cancelado':'bc'
+  };
+
+  const pctExpress = r.confirmados > 0 ? Math.round(r.nExpress/r.confirmados*100) : 0;
+  const pctSimple  = r.confirmados > 0 ? Math.round(r.nSimple/r.confirmados*100)  : 0;
+  const urgColor   = r.pctUrgente >= 60 ? 'var(--red)' : r.pctUrgente >= 40 ? 'var(--amber)' : 'var(--green)';
+
+  return `
+  <!-- KPIs principales -->
+  <div class="kg4" style="margin-bottom:14px">
+    <div class="kpi">
+      <div class="kv">${r.totalBloques}</div>
+      <div class="kl">Total bloques período</div>
+    </div>
+    <div class="kpi">
+      <div class="kv">${r.confirmados}</div>
+      <div class="kl">Bloques confirmados</div>
+    </div>
+    <div class="kpi">
+      <div class="kv">${r.totalHHReal}h</div>
+      <div class="kl">HH reales ejecutadas</div>
+    </div>
+    <div class="kpi">
+      <div class="kv" style="color:${urgColor}">${r.pctUrgente}%</div>
+      <div class="kl">Bloques urgentes</div>
+    </div>
+  </div>
+
+  <!-- KPI clave: Express vs Simple -->
+  <div class="cw" style="border-left:4px solid var(--amber);margin-bottom:14px">
+    <div class="ct"><span style="color:var(--amber)">⚡</span> Express vs Simple — Argumento de eficiencia</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:12px;font-weight:600">⚡ Express (urgencias)</span>
+          <span style="font-family:Montserrat,sans-serif;font-size:14px;font-weight:700;color:var(--amber)">${r.nExpress} <small style="font-size:10px;color:var(--muted)">(${pctExpress}%)</small></span>
+        </div>
+        <div class="bt2"><div class="bf a" style="width:${pctExpress}%"></div></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">${r.hhExpress}h reales en atenciones express</div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:12px;font-weight:600">📋 Simple (planificado)</span>
+          <span style="font-family:Montserrat,sans-serif;font-size:14px;font-weight:700;color:var(--green)">${r.nSimple} <small style="font-size:10px;color:var(--muted)">(${pctSimple}%)</small></span>
+        </div>
+        <div class="bt2"><div class="bf g" style="width:${pctSimple}%"></div></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">${r.hhSimple}h reales en trabajo planificado</div>
+      </div>
+    </div>
+    ${r.pctUrgente >= 50 ? `<div class="al w" style="margin-top:10px"><span class="al-ico">⚠️</span>
+      <div class="al-txt"><strong>Más de la mitad del trabajo son urgencias.</strong> Esto evidencia una operación reactiva que impide la planificación efectiva.</div></div>` : ''}
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+    <!-- HH por área -->
+    <div class="cw">
+      <div class="ct">HH Real por Área</div>
+      ${Object.entries(d.hhArea||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>bar(k,v,hhAreaMax)).join('')||'<div style="color:var(--muted);font-size:12px">Sin datos</div>'}
+    </div>
+    <!-- HH por responsable -->
+    <div class="cw">
+      <div class="ct">HH Real por Responsable</div>
+      ${Object.entries(d.hhPersona||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>bar(k,v,hhPersMax,'t')).join('')||'<div style="color:var(--muted);font-size:12px">Sin datos</div>'}
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <!-- HH por tipo de bloque -->
+    <div class="cw">
+      <div class="ct">HH Real por Tipo de Bloque</div>
+      ${Object.entries(d.hhTipo||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>bar(k,v,hhTipoMax,'r')).join('')||'<div style="color:var(--muted);font-size:12px">Sin datos</div>'}
+    </div>
+    <!-- Estado de bloques -->
+    <div class="cw">
+      <div class="ct">Estado de Bloques</div>
+      ${Object.entries(d.estados||{}).map(([e,n])=>`
+        <div class="br">
+          <div class="bl2"><span class="badge ${estadosBadge[e]||'bi'}" style="font-size:9px">${e}</span></div>
+          <div class="bt2"><div class="bf" style="width:${r.totalBloques>0?Math.round(n/r.totalBloques*100):0}%"></div></div>
+          <div class="bv">${n}</div>
+        </div>`).join('')||'<div style="color:var(--muted);font-size:12px">Sin datos</div>'}
+    </div>
+  </div>`;
 }
 
 // ── PLANIFICACIÓN LEVELS ──────────────────────────────────────────────────
@@ -2926,364 +2710,394 @@ document.addEventListener('click',function(e){
 // MODULE 4: UNIFIED TASK MODAL
 // ═══════════════════════════════════════════════════════════════════
 
-function abrirModal(id) {
-  _mUrg=null; _mImp=null; // reset toggles
-  const t=TAREAS.find(x=>String(x.id)===String(id)); if(!t)return;
-  const isAdmin=SESSION.rol==='admin';
-  const estOpts=['Por Iniciar','Programada','En Proceso','Listo','Standby','Cancelado']
-    .map(e=>`<option value="${e}" ${e===t.estado?'selected':''}>${e}</option>`).join('');
+function abrirModal(id) { abrirModalBloque(id); }
 
-  // Get planned blocks
-  // Deduplicate planned blocks (same date+time may appear multiple times)
-  const _allPlan=SESIONES.filter(s=>String(s.tareaId)===String(id)&&s.comentario==='[Bloque planificado]');
-  const _seen=new Set();
-  const planBlks=_allPlan.filter(s=>{
-    const key=(s._dn||normSessDate(s)||'')+' '+normTime(s.inicio)+'-'+normTime(s.termino);
-    if(_seen.has(key)) return false;
-    _seen.add(key); return true;
-  });
-  const confBlks=SESIONES.filter(s=>String(s.tareaId)===String(id)&&s.comentario!=='[Bloque planificado]');
+function abrirModalBloque(id) {
+  const b = BLOQUES.find(b => String(b.id) === String(id));
+  if (!b) { toast('Bloque no encontrado','err'); return; }
 
-  // Format planned block info
-  const planInfo = planBlks.length>0
-    ? planBlks.map(b=>`<div style="font-size:11px;background:var(--off);border-radius:5px;padding:6px 9px;margin-bottom:3px;display:flex;justify-content:space-between">
-        <span>📅 ${b._dn||normSessDate(b)||dateStr(b.fecha)} · ${normTime(b.inicio)||'—'}–${normTime(b.termino)||'—'}</span>
-        <span style="font-weight:600">${parseFloat(b.hh)||0}h</span>
-      </div>`).join('')
-    : '<div style="font-size:11px;color:var(--muted)">Sin bloque programado</div>';
+  const BADGE = {
+    'Por Iniciar':'bp','Programado':'bpr','En Proceso':'bi',
+    'Confirmado':'bl','Standby':'bs','Cancelado':'bc'
+  };
 
-  const confInfo = confBlks.length>0
-    ? confBlks.map(b=>`<div style="font-size:11px;background:var(--greenl);border-radius:5px;padding:6px 9px;margin-bottom:3px;display:flex;justify-content:space-between">
-        <span>✅ ${b._dn||normSessDate(b)||dateStr(b.fecha)} · ${normTime(b.inicio)||'—'}–${normTime(b.termino)||'—'}${b.esExtra==='Sí'?' ⏰':''}</span>
-        <span style="font-weight:600">${parseFloat(b.hh)||0}h</span>
-      </div>`).join('')
-    : '<div style="font-size:11px;color:var(--muted)">Sin bloques confirmados aún</div>';
-
-  // Check if task is confirmable (scheduled block time has passed)
-  const hoy=todayStr();
-  const now=new Date(); const nowMin=now.getHours()*60+now.getMinutes();
-  const planBlk = planBlks[0];
-  let confirmMsg='';
-  if(t.estado==='Por Iniciar'||!t.fechaEjecucion) {
-    confirmMsg=`<div class="al w" style="margin-bottom:8px"><span class="al-ico">⚠️</span><div class="al-txt">Primero debes programar la tarea para poder confirmar el bloque.</div></div>`;
-  } else if(t.fechaEjecucion > hoy || (t.fechaEjecucion===hoy && planBlk && t2m(normTime(planBlk.termino)||'23:59') > nowMin)) {
-    confirmMsg=`<div class="al info" style="margin-bottom:8px"><span class="al-ico">🕐</span><div class="al-txt">Aún no ha transcurrido el horario programado. Podrás confirmar después de las ${normTime(planBlk?.termino)||'—'}.</div></div>`;
-  }
-
-  const infoGrid=`
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;margin-bottom:12px;background:var(--off);border-radius:6px;padding:10px">
-    <div><span style="color:var(--muted)">Área:</span> ${t.area||'—'}</div>
-    <div><span style="color:var(--muted)">Tipo:</span> ${t.tipo||'—'}</div>
-    <div><span style="color:var(--muted)">Solicitante:</span> ${t.solicitante||'—'}</div>
-    <div><span style="color:var(--muted)">Responsable:</span> ${shortName(t.nombre)}</div>
-    <div><span style="color:var(--muted)">HH Plan:</span> <strong>${t.hhPlan||'—'}h</strong></div>
-    <div><span style="color:var(--muted)">HH Real:</span> <strong>${t.hhReal||'0'}h</strong></div>
-    <div><span style="color:var(--muted)">F. Límite:</span> ${t.fechaComp||'—'}</div>
-    <div><span style="color:var(--muted)">Urgente:</span> ${t.urgente==='Si'?'🔴 Sí':'🟢 No'}</div>
-    <div style="grid-column:1/-1"><span style="color:var(--muted)">Programado:</span>
-      ${planBlks.length>0
-        ? `<strong>${planBlks[0]._dn||normSessDate(planBlks[0])||dateStr(planBlks[0].fecha)}</strong>
-           · ${normTime(planBlks[0].inicio)||'—'}–${normTime(planBlks[0].termino)||'—'}`
-        : '<span style="color:var(--muted)">Sin programar</span>'}
-    </div>
+  const infoPairs = [
+    ['Área', b.area], ['Tipo', b.tipoBloque],
+    ['Solicitante', b.solicitante], ['Responsable', b.responsable],
+    ['HH Plan', b.hhPlan ? b.hhPlan+'h' : '—'], ['HH Real', b.hhReal ? b.hhReal+'h' : '—'],
+    ['Urgente', b.urgente], ['Importante', b.importante],
+  ];
+  const infoGrid = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;background:var(--off);border-radius:6px;padding:10px">
+    ${infoPairs.map(([k,v])=>`<div><div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase">${k}</div><div style="font-size:12px;font-weight:600">${v||'—'}</div></div>`).join('')}
   </div>`;
 
-  // Admin edit fields
-  let editFields='';
-  if(isAdmin){
-    editFields=`
-    <div class="eg" style="margin-bottom:10px">
-      <div class="efi fw"><label>Descripción</label><textarea id="mTar" rows="2">${t.tarea||''}</textarea></div>
-      <div class="efi"><label>Estado (selecciona y guarda)</label><select id="mEst">${estOpts}</select></div>
-      <div class="efi"><label>Responsable</label><select id="mNom">
-        ${PERSONAS.map(n=>`<option value="${n}" ${n===t.nombre?'selected':''}>${shortName(n)}</option>`).join('')}</select></div>
-      <div class="efi"><label>Solicitante</label><select id="mSol"><option value="">—</option>${opts('Solicitante',t.solicitante)}</select></div>
-      <div class="efi"><label>Área</label><select id="mAre"><option value="">—</option>${opts('Area',t.area)}</select></div>
-      <div class="efi"><label>Tipo</label><select id="mTip"><option value="">—</option>${opts('Tipo',t.tipo)}</select></div>
-      <div class="efi"><label>HH Plan</label><input type="number" id="mHHp" value="${t.hhPlan||''}" step="0.25" min="0"></div>
-      <div class="efi"><label>F. Límite</label><input type="date" id="mFco" value="${t.fechaComp||''}"></div>
-      <div class="efi fw"><label>Comentario</label><input type="text" id="mCom" value="${t.comentario||''}"></div>
-      <div class="efi">
-        <label>¿Es urgente?</label>
-        <div style="display:flex;gap:6px">
-          <button id="mUrgSi" onclick="mSetUrg(true)" class="tt-btn ex ${t.urgente==='Si'?'on':''}"
-            style="flex:1;padding:6px;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;
-            background:${t.urgente==='Si'?'#fee2e2':'var(--off)'};border:2px solid ${t.urgente==='Si'?'var(--red)':'var(--border)'}">
-            🔴 Sí</button>
-          <button id="mUrgNo" onclick="mSetUrg(false)" class="tt-btn ${t.urgente!=='Si'?'on':''}"
-            style="flex:1;padding:6px;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;
-            background:${t.urgente!=='Si'?'#d4edda':'var(--off)'};border:2px solid ${t.urgente!=='Si'?'var(--green)':'var(--border)'}">
-            🟢 No</button>
-        </div>
-      </div>
-      <div class="efi">
-        <label>¿Es importante?</label>
-        <div style="display:flex;gap:6px">
-          <button id="mImpSi" onclick="mSetImp(true)"
-            style="flex:1;padding:6px;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;
-            background:${t.importante==='Si'?'#fff3cd':'var(--off)'};border:2px solid ${t.importante==='Si'?'var(--amber)':'var(--border)'}">
-            ⭐ Sí</button>
-          <button id="mImpNo" onclick="mSetImp(false)"
-            style="flex:1;padding:6px;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;
-            background:${t.importante!=='Si'?'#d4edda':'var(--off)'};border:2px solid ${t.importante!=='Si'?'var(--green)':'var(--border)'}">
-            🟩 No</button>
-        </div>
-      </div>
-    </div>`;
-  }
+  const progInfo = b.fechaProg
+    ? `<div style="background:var(--amberl);border-radius:5px;padding:7px 10px;font-size:12px">
+        📅 ${b.fechaProg} · ${b.horaInicioProg||'?'} – ${b.horaFinProg||'?'}
+       </div>`
+    : `<div style="color:var(--muted);font-size:12px">Sin programar</div>`;
 
-  // Buttons based on estado
-  const canConfirm = !['Listo','Cancelado'].includes(t.estado) && confirmMsg==='' && t.fechaEjecucion;
-  const isProgramable = !['Listo','Cancelado'].includes(t.estado);
+  const realInfo = b.fechaReal
+    ? `<div style="background:var(--greenl);border-radius:5px;padding:7px 10px;font-size:12px">
+        ✅ ${b.fechaReal} · ${b.horaInicio||'?'} – ${b.horaFin||'?'} · ${b.hhReal}h
+       </div>`
+    : `<div style="color:var(--muted);font-size:12px">Sin ejecutar</div>`;
+
+  const isProgramable = ['Por Iniciar','Programado'].includes(b.estado);
+  const canConfirm = b.estado === 'Programado';
+  const isConfirmado = b.estado === 'Confirmado';
 
   openModal(`
-    <div class="mt"><div class="rb"></div>Tarea #${t.id}</div>
-    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">
-      <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
-      ${!t.fechaEjecucion?'<span class="badge bex">Sin programar</span>':''}
+    <div class="mt"><div class="rb"></div>Bloque #${b.id}
+      <span class="badge ${BADGE[b.estado]||'bi'}" style="margin-left:auto">${b.estado}</span>
+      <span class="badge ${b.tipoIngreso==='Express'?'bex':'bpr'}" style="font-size:8px">${b.tipoIngreso}</span>
     </div>
-    <div style="font-size:14px;font-weight:600;color:var(--navy);margin-bottom:10px">${t.tarea}</div>
-
+    <div style="font-size:14px;font-weight:600;color:var(--navy);margin-bottom:10px">${b.titulo}</div>
     ${infoGrid}
-    ${editFields}
-
+    ${b.comentario ? `<div style="background:var(--off);border-radius:5px;padding:8px 10px;font-size:12px;margin-bottom:8px;color:var(--muted)">${b.comentario}</div>` : ''}
     <div style="margin-bottom:8px">
-      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Bloques programados</div>
-      ${planInfo}
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Bloque programado</div>
+      ${progInfo}
     </div>
     <div style="margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Bloques ejecutados (${confBlks.length})</div>
-      ${confInfo}
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Ejecución real</div>
+      ${realInfo}
     </div>
-
-    ${confirmMsg}
-
     <div class="ma" style="flex-wrap:wrap;gap:6px">
       <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cerrar</span></button>
-      ${isAdmin
-        ?`<button class="btn" onclick="guardarModal(${t.id})"><span class="st"></span><span class="bt">Guardar</span></button>`
-        :''}
       ${isProgramable
-        ?`<button class="btn sm" style="background:var(--navy3)" onclick="cerrarModal();setTimeout(()=>abrirModalProgramar(${t.id}),150)">
-            <span class="bt">${t.estado==='Programada'?'📅 Reprogramar':'📅 Programar'}</span></button>`
-        :''}
+        ? `<button class="btn sm" style="background:var(--navy3)" onclick="cerrarModal();setTimeout(()=>abrirModalProgramarBloque(${b.id}),150)">
+             <span class="bt">${b.estado==='Programado'?'📅 Reprogramar':'📅 Programar'}</span></button>` : ''}
       ${canConfirm
-        ?`<button class="btn sm" style="background:var(--green)" onclick="goSub('A','confirmar');cerrarModal()">
-            <span class="bt">✅ Confirmar bloque</span></button>`
-        :''}
-      ${!['Listo','Cancelado','Standby'].includes(t.estado)
-        ?`<button class="btn sm ghost" onclick="ponerStandby(${t.id})"><span class="bt">⏸ Standby</span></button>
-          <button class="btn sm danger" onclick="cancelarTarea(${t.id})"><span class="bt">✕ Cancelar</span></button>`
-        :''}
-      ${t.estado==='Standby'
-        ?`<button class="btn sm" style="background:var(--green)" onclick="retomarStandby(${t.id})"><span class="bt">▶ Retomar</span></button>`
-        :''}
+        ? `<button class="btn sm" style="background:var(--green)" onclick="goSub('A','confirmar');cerrarModal()">
+             <span class="bt">✅ Confirmar bloque</span></button>` : ''}
+      ${!isConfirmado && b.estado !== 'Cancelado'
+        ? `<button class="btn sm danger" onclick="cancelarBloque(${b.id})"><span class="bt">✕ Cancelar</span></button>` : ''}
     </div>
     <div style="margin-top:6px">
-      <button class="btn sm ghost w" onclick="cargarReprogModal(${t.id})"><span class="bt">📋 Historial reprogramaciones</span></button>
+      <button class="btn sm ghost w" onclick="cargarReprogModalBloque(${b.id})"><span class="bt">📋 Historial reprogramaciones</span></button>
       <div id="modalReprogList" style="margin-top:5px"></div>
     </div>`);
 }
 
+async function cancelarBloque(id) {
+  if (!confirm('¿Cancelar este bloque?')) return;
+  await apiPost({accion:'actualizar', id, campos:{10:'Cancelado'}});
+  await loadData(true);
+  cerrarModal();
+  toast('Bloque cancelado','ok');
+}
+
+async function cargarReprogModalBloque(id) {
+  const el = document.getElementById('modalReprogList');
+  el.innerHTML = '<div style="font-size:11px;color:var(--muted)">Cargando...</div>';
+  const data = await apiGet({accion:'reprogramaciones'});
+  const mios = (data||[]).filter(r => String(r.bloqueId) === String(id));
+  if (mios.length === 0) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--muted)">Sin reprogramaciones</div>';
+    return;
+  }
+  el.innerHTML = mios.map(r=>`
+    <div style="background:var(--off);border-radius:5px;padding:7px 9px;margin-bottom:4px;font-size:11px">
+      <strong>${r.fechaOrig}</strong> → <strong>${r.fechaNueva}</strong> · ${r.motivo}
+      ${r.esUrgencia==='Sí'?'<span style="color:var(--red);font-weight:700"> ⚡urgente</span>':''}
+    </div>`).join('');
+}
 
 
 
-function vTareas(filtroUsuario=null) {
-  const me = SESSION.nombre; // ALWAYS own tasks
-  const isAdmin = SESSION.rol === 'admin';
-  const lista = TAREAS.filter(t=>t.nombre===me);
-  const act = lista.filter(t=>!['Listo','Cancelado'].includes(t.estado));
-  const cer = lista.filter(t=>['Listo','Cancelado'].includes(t.estado));
-  const busqVal = document.getElementById('tarBusq')?.value?.toLowerCase()||'';
-  const actF = busqVal ? act.filter(t=>t.tarea?.toLowerCase().includes(busqVal)||String(t.id).includes(busqVal)) : act;
-  const cerF = busqVal ? cer.filter(t=>t.tarea?.toLowerCase().includes(busqVal)||String(t.id).includes(busqVal)) : cer;
 
-  const rows = arr => arr.length===0
-    ? '<div class="emp"><span class="ei">📋</span>Sin tareas</div>'
-    : `<div class="tl">${arr.map(t=>`
-      <div class="ti2" onclick="abrirModal(${t.id})">
-        <span class="tid">#${t.id}</span>
-        <div class="tn2">
-          <div class="tna">${t.tarea}</div>
-          <div class="tme">${shortName(t.nombre)} · ${t.tipo||'—'} · ${t.area||'—'} · HHP:${t.hhPlan||'—'} HHR:${t.hhReal||'0'}</div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-          <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
-          ${!t.fechaEjecucion&&!['Listo','Cancelado'].includes(t.estado)?'<span class="badge bex">Sin prog.</span>':''}
-        </div>
-      </div>`).join('')}</div>`;
+function vBloques() {
+  const me = SESSION.nombre;
+  const mios = BLOQUES.filter(b => b.responsable === me);
+  const activos = mios.filter(b => b.estado !== 'Confirmado' && b.estado !== 'Cancelado');
+  const confirmados = mios.filter(b => b.estado === 'Confirmado');
 
-  return`
-  <div class="ph"><div class="pt"><div class="rb"></div>${isAdmin?'Todas las Tareas':'Mis Tareas'}</div></div>
-  <div class="fb" style="margin-bottom:12px">
-    <div class="fb-f" style="flex:1"><label>Buscar</label>
-      <input type="text" id="tarBusq" placeholder="Texto o #ID…" style="width:100%"
-        oninput="this.closest('#main')&&refreshTareasList()"></div>
+  const BADGE = {
+    'Por Iniciar':'bp','Programado':'bpr','En Proceso':'bi',
+    'Confirmado':'bl','Standby':'bs','Cancelado':'bc'
+  };
+
+  const rows = arr => arr.length === 0
+    ? '<div class="emp"><span class="ei">📋</span>Sin bloques</div>'
+    : `<div class="tl">${arr.map(b=>`
+        <div class="ti2" onclick="abrirModalBloque(${b.id})">
+          <span class="tid">#${b.id}</span>
+          <div class="tn2">
+            <div class="tna">${b.titulo}</div>
+            <div class="tme">${b.tipoBloque||'—'} · ${b.area||'—'} · ${b.fechaReal||b.fechaProg||b.fechaIngreso||'—'}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+            <span class="badge ${BADGE[b.estado]||'bi'}">${b.estado}</span>
+            <span class="badge ${b.tipoIngreso==='Express'?'bex':'bpr'}" style="font-size:8px">${b.tipoIngreso}</span>
+          </div>
+        </div>`).join('')}</div>`;
+
+  return `
+  <div class="ph"><div class="pt"><div class="rb"></div>Mis Bloques</div></div>
+  <div class="card">
+    <div class="cl"><div class="d"></div>Activos (${activos.length})</div>
+    ${rows(activos)}
   </div>
-  <div id="tarList">
-    <div class="card"><div class="cl"><div class="d"></div>Activas (${actF.length})</div>${rows(actF)}</div>
-    <div class="card">
-      <div class="cl"><div class="d"></div>
-        Cerradas (${cerF.length})
-        <button class="btn sm ghost" style="margin-left:auto;padding:3px 8px" onclick="
-          const el=document.getElementById('tarCerradas');
-          el.style.display=el.style.display==='none'?'block':'none';
-          this.textContent=el.style.display==='none'?'Mostrar':'Ocultar';">Mostrar</button>
-      </div>
-      <div id="tarCerradas" style="display:none">${rows(cerF)}</div>
+  <div class="card">
+    <div class="cl"><div class="d"></div>
+      Confirmados (${confirmados.length})
+      <button class="btn sm ghost" style="margin-left:auto;padding:3px 8px" onclick="
+        const el=document.getElementById('blqConf');
+        el.style.display=el.style.display==='none'?'block':'none';
+        this.textContent=el.style.display==='none'?'Mostrar':'Ocultar';">Mostrar</button>
     </div>
+    <div id="blqConf" style="display:none">${rows(confirmados)}</div>
   </div>`;
 }
 
 
-function vNuevaTarea() {
-  const hoy=todayStr();
-  const hora=new Date().toTimeString().slice(0,5);
-  return`
-  <div class="ph"><div class="pt"><div class="rb"></div>Nueva Tarea</div></div>
+function vNuevoBloque() {
+  const hoy = todayStr();
+  const hora = new Date().toTimeString().slice(0, 5);
+  return `
+  <div class="ph"><div class="pt"><div class="rb"></div>Nuevo Bloque</div></div>
 
   <div class="card">
-    <div class="cl"><div class="d"></div>Tipo de tarea ${tip('Express: se hace ahora mismo en pocos minutos. Simple: un día, un bloque. Compuesta: múltiples bloques en varios días.')}</div>
-    <div style="display:grid;grid-template-columns:${SESSION.rol==='admin'?'1fr 1fr 1fr':'1fr 1fr'};gap:8px">
-      <div class="tt-btn ex" id="ttE" onclick="setTT('express')">
-        <span class="tt-ico">⚡</span><div class="tt-name">Express</div>
-        <div class="tt-desc">Se hace ahora<br><em style="font-size:9px">orientativo: menos de 3 min o acción inmediata</em></div>
+    <div class="cl"><div class="d"></div>Tipo de ingreso</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px">
+      <div class="tt-btn ex" id="ttE" onclick="setNBTipo('express')" style="cursor:pointer;border:2px solid var(--border);border-radius:8px;padding:14px;text-align:center">
+        <div style="font-size:22px">⚡</div>
+        <div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:12px;margin:5px 0">Express</div>
+        <div style="font-size:11px;color:var(--muted)">Ya ocurrió — registro inmediato<br>Queda confirmado automáticamente</div>
       </div>
-      <div class="tt-btn pl" id="ttS" onclick="setTT('simple')">
-        <span class="tt-ico">📋</span><div class="tt-name">Simple</div>
-        <div class="tt-desc">Un día<br>Un bloque de tiempo</div>
+      <div class="tt-btn pl" id="ttS" onclick="setNBTipo('simple')" style="cursor:pointer;border:2px solid var(--border);border-radius:8px;padding:14px;text-align:center">
+        <div style="font-size:22px">📋</div>
+        <div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:12px;margin:5px 0">Simple</div>
+        <div style="font-size:11px;color:var(--muted)">Por hacer — queda en Por Iniciar<br>Se programa desde la Agenda</div>
       </div>
-      ${SESSION.rol==='admin'?`<div class="tt-btn pl" id="ttC" onclick="setTT('compuesta')">
-        <span class="tt-ico">📦</span><div class="tt-name">Compuesta</div>
-        <div class="tt-desc">Varios días o<br>múltiples bloques</div>
-      </div>`:''}
     </div>
+    <div id="nbTipoMsg" style="font-size:11px;color:var(--muted);text-align:center;padding:4px 0"></div>
   </div>
 
-  <div id="fmTarea" style="display:none">
-    <!-- IDENTIFICACIÓN -->
+  <div id="fmNuevoBloque" style="display:none">
     <div class="card">
       <div class="cl"><div class="d"></div>Identificación</div>
       <div class="g2">
         <div class="fi">
-          <label class="rq">Responsable ${tip('Se asigna automáticamente desde tu sesión.')}</label>
-          <input id="tNom" value="${SESSION.nombre}" readonly style="background:#f0f0f0;color:var(--muted)">
+          <label class="rq">Responsable</label>
+          <input id="nbResp" value="${SESSION.nombre}" readonly style="background:#f0f0f0;color:var(--muted)">
         </div>
         <div class="fi">
-          <label>Solicitante ${tip('Persona o área que solicitó este trabajo.')}</label>
-          <select id="tSol"><option value="">— seleccionar —</option>${opts('Solicitante')}</select>
+          <label class="rq">Solicitante</label>
+          <select id="nbSol" onchange="clearErr(['nbSol'])"><option value="">— seleccionar —</option>${opts('Solicitante')}</select>
         </div>
         <div class="fi fw">
-          <label class="rq">Descripción ${tip('Sé específico: qué, para quién y en qué proyecto.')}</label>
-          <textarea id="tTar" placeholder="Ej: Cubicación módulo baño Proyecto Codelco Fase 2…" oninput="clearErr(['tTar'])"></textarea>
+          <label class="rq">Título / Descripción</label>
+          <textarea id="nbTit" placeholder="¿Qué se hizo o hará? Sé específico." oninput="clearErr(['nbTit'])"></textarea>
         </div>
       </div>
     </div>
 
-    <!-- CLASIFICACIÓN -->
     <div class="card">
       <div class="cl"><div class="d"></div>Clasificación</div>
       <div class="g2">
         <div class="fi">
-          <label class="rq">Área ${tip('Área interna que originó esta tarea.')}</label>
-          <select id="tAre" onchange="clearErr(['tAre'])"><option value="">— seleccionar —</option>${opts('Area')}</select>
+          <label class="rq">Área</label>
+          <select id="nbAre" onchange="clearErr(['nbAre'])"><option value="">— seleccionar —</option>${opts('Area')}</select>
         </div>
         <div class="fi">
-          <label class="rq">Tipo ${tip('Plano=CAD, Costo=cotización, Consulta=técnica, Coordinación=gestión, EDP=estado pago, Informe=reporte, Vales=docs, Ejecución=trabajo físico.')}</label>
-          <select id="tTip" onchange="clearErr(['tTip'])"><option value="">— seleccionar —</option>${opts('Tipo')}</select>
+          <label class="rq">Tipo de bloque</label>
+          <select id="nbTip" onchange="clearErr(['nbTip'])"><option value="">— seleccionar —</option>${opts('Tipo_Bloque')}</select>
         </div>
-        <div class="fi">
-          <label class="rq">HH Planificadas ${tip('Horas estimadas. Base para calcular hora término y medir eficiencia real vs plan.')}</label>
-          <input type="number" id="tHHp" placeholder="Ej: 2.5" step="0.25" min="0.25" oninput="clearErr(['tHHp']);calcTerminoSimple()">
-        </div>
-        <div class="fi">
-          <label>Fecha límite ${tip('Fecha máxima de entrega. Genera alertas si se acerca o vence.')}</label>
-          <input type="date" id="tFco">
-        </div>
-        <div class="fi fw" id="divEis">
-          <label>Clasificación ${tip('Urgente = requiere acción inmediata. Importante = impacto en objetivos.')}</label>
+        <div class="fi fw" id="divNBeis">
+          <label class="rq">Clasificación</label>
           <div class="eis-row">
             <div class="eis-half">
               <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;margin-bottom:5px">¿Es urgente?</div>
               <div class="eis-opts">
-                <div class="eis-opt" id="eisUS" onclick="setEis('u',true)">🔴 Sí</div>
-                <div class="eis-opt" id="eisUN" onclick="setEis('u',false)">🟢 No</div>
+                <div class="eis-opt" id="nbEisUS" onclick="setNBEis('u',true)">🔴 Sí</div>
+                <div class="eis-opt" id="nbEisUN" onclick="setNBEis('u',false)">🟢 No</div>
               </div>
             </div>
             <div class="eis-half">
               <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;margin-bottom:5px">¿Es importante?</div>
               <div class="eis-opts">
-                <div class="eis-opt" id="eisIS" onclick="setEis('i',true)">⭐ Sí</div>
-                <div class="eis-opt" id="eisIN" onclick="setEis('i',false)">⬜ No</div>
+                <div class="eis-opt" id="nbEisIS" onclick="setNBEis('i',true)">⭐ Sí</div>
+                <div class="eis-opt" id="nbEisIN" onclick="setNBEis('i',false)">⬜ No</div>
               </div>
             </div>
           </div>
-          <div class="eis-quad" id="eisQuad" style="display:none"></div>
         </div>
       </div>
     </div>
 
-    <!-- PROGRAMACIÓN (simple) -->
-    <div class="card" id="cardProgSimple" style="display:none">
-      <div class="cl"><div class="d"></div>Programación ${tip('Opcional al crear. Tienes hasta 24 horas para programar. Si no lo haces, recibirás alerta.')}</div>
+    <!-- Express fields -->
+    <div class="card" id="cardNBExpress" style="display:none">
+      <div class="cl"><div class="d"></div>Horario real ejecutado</div>
       <div class="g2">
         <div class="fi">
-          <label>Fecha de ejecución ${tip('Opcional. Si no defines fecha y hora, la tarea queda Sin Programar.')}</label>
-          <input type="date" id="tFej" placeholder="Opcional" onchange="calcTerminoSimple()">
+          <label class="rq">Fecha</label>
+          <input type="date" id="nbFechaR" value="${hoy}" oninput="clearErr(['nbFechaR'])">
         </div>
         <div class="fi">
-          <label>Hora inicio ${tip('Hora en que comenzarás.')}</label>
-          <input type="time" id="tHini" onchange="calcTerminoSimple()">
+          <label class="rq">Hora inicio</label>
+          <input type="time" id="nbHIni" value="${hora}" oninput="clearErr(['nbHIni']);nbCalcHH()">
         </div>
         <div class="fi">
-          <label>Hora término ${tip('Calculada automáticamente: hora inicio + HH planificadas.')}</label>
-          <input type="time" id="tHter" readonly style="background:#f0f0f0;color:var(--muted)">
+          <label class="rq">Hora fin</label>
+          <input type="time" id="nbHFin" oninput="clearErr(['nbHFin']);nbCalcHH()">
+        </div>
+        <div class="fi">
+          <label>HH Real</label>
+          <input id="nbHHr" readonly style="background:#f0f0f0;color:var(--muted)" placeholder="Se calcula automático">
+        </div>
+      </div>
+      <div class="fi" style="margin-top:8px">
+        <label>Comentario</label>
+        <input type="text" id="nbComE" placeholder="Opcional">
+      </div>
+    </div>
+
+    <!-- Simple fields -->
+    <div class="card" id="cardNBSimple" style="display:none">
+      <div class="cl"><div class="d"></div>Estimación</div>
+      <div class="g2">
+        <div class="fi">
+          <label class="rq">HH Planificadas</label>
+          <input type="number" id="nbHHp" placeholder="Ej: 2.5" step="0.25" min="0.25" oninput="clearErr(['nbHHp'])">
         </div>
         <div class="fi">
           <label>Comentario</label>
-          <input type="text" id="tCom" placeholder="Notas adicionales (opcional)">
+          <input type="text" id="nbComS" placeholder="Opcional">
         </div>
       </div>
-      <div id="alProgSimple" style="margin-top:8px"></div>
+      <div class="al info" style="margin-top:8px"><span class="al-ico">📅</span><div class="al-txt">Este bloque quedará en estado <strong>Por Iniciar</strong>. Podrás programarlo desde la Agenda.</div></div>
     </div>
 
-    <!-- PROGRAMACIÓN (compuesta) -->
-    <div class="card" id="cardProgComp" style="display:none">
-      <div class="cl"><div class="d"></div>Programación — Bloques ${tip('Agrega cada bloque de trabajo. Puedes también programar arrastrando desde la Agenda.')}</div>
-      <div id="bloquesContainer"></div>
-      <button class="btn sm ghost" style="margin-top:8px" onclick="agregarBloque()">
-        <span class="bt">＋ Agregar bloque</span>
+    <div class="card">
+      <button class="btn w" id="btnGuardarNB" onclick="guardarNuevoBloque()">
+        <span class="sp"></span><span class="st"></span><span class="bt">Guardar bloque</span>
       </button>
-      <div class="fi" style="margin-top:10px">
-        <label>Comentario</label>
-        <input type="text" id="tComC" placeholder="Notas adicionales (opcional)">
-      </div>
     </div>
-
-    <!-- EXPRESS: tiempo ejecutado ahora -->
-    <div class="card" id="cardExp" style="display:none">
-      <div class="cl"><div class="d"></div>Tiempo ejecutado ${tip('Ingresa horario real. Se crea bloque confirmado y la tarea queda cerrada.')}</div>
-      <div class="g2">
-        <div class="fi">
-          <label class="rq">Hora inicio</label>
-          <input type="time" id="tHinE" value="${hora}" oninput="calcHHN();updAlExp()">
-        </div>
-        <div class="fi">
-          <label class="rq">Hora término</label>
-          <input type="time" id="tHterE" oninput="calcHHN();updAlExp()">
-        </div>
-        <div class="fi fw">
-          <div class="hhp"><div class="hhpl"><div class="l">HH calculadas</div><div class="s">Bloque confirmado · Tarea cerrada</div></div>
-            <div class="hhv e" id="hhN">--</div></div>
-        </div>
-      </div>
-      <div id="alExp" style="margin-top:8px"></div>
-    </div>
-
-    <button class="btn w" id="btnT" onclick="guardarTarea()">
-      <div class="sp"></div><div class="st"></div><span class="bt" id="btnTTxt">Guardar</span>
-    </button>
   </div>`;
+}
+
+let nbTipo = '';
+let nbEisUrgente = null;
+let nbEisImportante = null;
+
+function setNBTipo(tipo) {
+  nbTipo = tipo;
+  document.getElementById('ttE').style.borderColor = tipo==='express' ? 'var(--amber)' : 'var(--border)';
+  document.getElementById('ttS').style.borderColor = tipo==='simple'  ? 'var(--navy)'  : 'var(--border)';
+  document.getElementById('nbTipoMsg').textContent = tipo==='express'
+    ? '⚡ Express: registra algo que ya hiciste.' : '📋 Simple: crea el bloque y prográmalo desde la Agenda.';
+  document.getElementById('fmNuevoBloque').style.display = 'block';
+  document.getElementById('cardNBExpress').style.display = tipo==='express' ? 'block' : 'none';
+  document.getElementById('cardNBSimple').style.display  = tipo==='simple'  ? 'block' : 'none';
+}
+
+function setNBEis(dim, val) {
+  if (dim==='u') {
+    nbEisUrgente = val;
+    document.getElementById('nbEisUS').classList.toggle('on', val===true);
+    document.getElementById('nbEisUN').classList.toggle('on', val===false);
+  } else {
+    nbEisImportante = val;
+    document.getElementById('nbEisIS').classList.toggle('on', val===true);
+    document.getElementById('nbEisIN').classList.toggle('on', val===false);
+  }
+}
+
+function nbCalcHH() {
+  const ini = document.getElementById('nbHIni')?.value;
+  const fin = document.getElementById('nbHFin')?.value;
+  if (ini && fin) {
+    const hh = calcHHRaw(ini, fin);
+    document.getElementById('nbHHr').value = hh > 0 ? fmtHH(hh) + ' h' : '';
+  }
+}
+
+async function guardarNuevoBloque() {
+  if (!nbTipo) { toast('Selecciona un tipo de bloque','warn'); return; }
+
+  const resp  = document.getElementById('nbResp').value.trim();
+  const sol   = document.getElementById('nbSol').value;
+  const tit   = document.getElementById('nbTit').value.trim();
+  const area  = document.getElementById('nbAre').value;
+  const tip   = document.getElementById('nbTip').value;
+
+  const required = ['nbSol','nbTit','nbAre','nbTip'];
+  const missing = required.filter(id => !document.getElementById(id)?.value?.trim());
+
+  if (nbEisUrgente === null) { toast('Indica si el bloque es urgente','warn'); return; }
+  if (nbEisImportante === null) { toast('Indica si el bloque es importante','warn'); return; }
+
+  let hhReal = 0, fechaReal = '', horaInicio = '', horaFin = '', hhPlan = 0, comentario = '';
+
+  if (nbTipo === 'express') {
+    const fR  = document.getElementById('nbFechaR').value;
+    const hIni = document.getElementById('nbHIni').value;
+    const hFin = document.getElementById('nbHFin').value;
+    comentario = document.getElementById('nbComE').value.trim();
+    if (!fR)   missing.push('nbFechaR');
+    if (!hIni) missing.push('nbHIni');
+    if (!hFin) missing.push('nbHFin');
+    if (missing.length === 0) {
+      fechaReal  = fR;
+      horaInicio = hIni;
+      horaFin    = hFin;
+      hhReal     = calcHHRaw(hIni, hFin);
+      if (hhReal <= 0) { toast('La hora fin debe ser mayor que la hora inicio','warn'); return; }
+    }
+  } else {
+    const hhp = parseFloat(document.getElementById('nbHHp').value);
+    comentario = document.getElementById('nbComS').value.trim();
+    if (!hhp || hhp <= 0) missing.push('nbHHp');
+    else hhPlan = hhp;
+  }
+
+  if (missing.length > 0) {
+    markErr(missing);
+    toast('Completa todos los campos obligatorios','warn');
+    return;
+  }
+
+  const bloque = {
+    tipoIngreso:  nbTipo === 'express' ? 'Express' : 'Simple',
+    tipoBloque:   tip,
+    titulo:       tit,
+    area,
+    solicitante:  sol,
+    responsable:  resp,
+    urgente:      nbEisUrgente  ? 'Si' : 'No',
+    importante:   nbEisImportante ? 'Si' : 'No',
+    comentario,
+    estado:       nbTipo === 'express' ? 'Confirmado' : 'Por Iniciar',
+    fechaReal,
+    horaInicio,
+    horaFin,
+    hhReal,
+    hhPlan,
+    fechaProg:       '',
+    horaInicioProg:  '',
+    horaFinProg:     '',
+  };
+
+  const btn = document.getElementById('btnGuardarNB');
+  btn.classList.add('ld');
+  try {
+    const r = await apiPost({accion:'insertar', bloque});
+    if (!r.ok) { toast('Error al guardar: '+(r.error||''),'err'); return; }
+    if (nbTipo === 'express') {
+      await apiPost({accion:'actualizarUltimoRegistro', usuario:SESSION.usuario});
+    }
+    await loadData(true);
+    const tipoGuardado = nbTipo;
+    nbTipo = ''; nbEisUrgente = null; nbEisImportante = null;
+    toast(tipoGuardado==='express'?'✅ Bloque Express guardado y confirmado':'✅ Bloque Simple creado. Prográmalo desde la Agenda','ok');
+    goSub('A','bloques');
+  } catch(e) {
+    toast('Error de conexión','err');
+  } finally {
+    btn.classList.remove('ld');
+  }
 }
 
 
@@ -3503,21 +3317,18 @@ function vCRegistros() {
   return`
   <div class="ph"><div class="pt"><div class="rb"></div>Gestión de Registros</div></div>
   <div class="sb2">
-    <input type="text" id="srQ" placeholder="🔍 Texto, #ID, solicitante…" oninput="buscarReg()" style="flex:1;min-width:160px">
+    <input type="text" id="srQ" placeholder="🔍 Título, #ID, solicitante…" oninput="buscarReg()" style="flex:1;min-width:160px">
     <select id="srP" onchange="buscarReg()"><option value="">Todos los responsables</option>
       <option>Luis Sanchez</option><option>Luis Diaz</option><option>Yamila Silva</option></select>
     <select id="srE" onchange="buscarReg()"><option value="">Todos los estados</option>
-      <option>Por Iniciar</option><option>Programada</option><option>En Proceso</option>
-      <option>Listo</option><option>Standby</option><option>Cancelado</option></select>
-    <select id="srT" onchange="buscarReg()"><option value="">Todos los tipos</option></select>
+      <option>Por Iniciar</option><option>Programado</option><option>En Proceso</option>
+      <option>Confirmado</option><option>Standby</option><option>Cancelado</option></select>
+    <select id="srTi" onchange="buscarReg()"><option value="">Todos los tipos</option>
+      <option>Express</option><option>Simple</option></select>
     <select id="srA" onchange="buscarReg()"><option value="">Todas las áreas</option></select>
   </div>
-  <div class="tabs" style="margin-bottom:10px">
-    <button class="tab on" id="rpT" onclick="switchRegTab('t')">Tareas</button>
-    <button class="tab" id="rpS" onclick="switchRegTab('s')">Bloques</button>
-  </div>
-  <div id="sr-t"><div class="sr" id="srCnt">—</div><div id="srLT"></div></div>
-  <div id="sr-s" style="display:none"><div class="sr" id="srCntS">—</div><div id="srLS"></div></div>`;
+  <div class="sr" id="srCnt">—</div>
+  <div id="srLB"></div>`;
 }
 
 
@@ -4146,104 +3957,72 @@ function buscarReg(){
   const q=(document.getElementById('srQ')?.value||'').toLowerCase();
   const p=document.getElementById('srP')?.value||'';
   const e=document.getElementById('srE')?.value||'';
-  const t=document.getElementById('srT')?.value||'';
+  const ti=document.getElementById('srTi')?.value||'';
   const a=document.getElementById('srA')?.value||'';
-  if(regTab==='t'){
-    let r=[...TAREAS];
-    if(q)r=r.filter(x=>x.tarea?.toLowerCase().includes(q)||String(x.id).includes(q)||x.solicitante?.toLowerCase().includes(q)||x.comentario?.toLowerCase().includes(q));
-    if(p)r=r.filter(x=>x.nombre===p);if(e)r=r.filter(x=>x.estado===e);
-    if(t)r=r.filter(x=>x.tipo===t);if(a)r=r.filter(x=>x.area===a);
-    const c=document.getElementById('srCnt');if(c)c.textContent=`${r.length} tarea${r.length!==1?'s':''} encontrada${r.length!==1?'s':''}`;
-    renderRegT(r);
-  } else {
-    let r=[...SESIONES];
-    if(q)r=r.filter(x=>x.tareaNombre?.toLowerCase().includes(q)||String(x.tareaId).includes(q));
-    if(p)r=r.filter(x=>x.responsable===p);
-    const c=document.getElementById('srCntS');if(c)c.textContent=`${r.length} bloque${r.length!==1?'s':''} encontrado${r.length!==1?'s':''}`;
-    renderRegS(r);
-  }
+  let r=[...BLOQUES].sort((x,y)=>Number(y.id)-Number(x.id));
+  if(q)r=r.filter(x=>x.titulo?.toLowerCase().includes(q)||String(x.id).includes(q)||x.solicitante?.toLowerCase().includes(q)||x.comentario?.toLowerCase().includes(q));
+  if(p)r=r.filter(x=>x.responsable===p);
+  if(e)r=r.filter(x=>x.estado===e);
+  if(ti)r=r.filter(x=>x.tipoIngreso===ti);
+  if(a)r=r.filter(x=>x.area===a);
+  const c=document.getElementById('srCnt');if(c)c.textContent=`${r.length} bloque${r.length!==1?'s':''} encontrado${r.length!==1?'s':''}`;
+  renderRegB(r);
 }
 
-function renderRegT(lista){
-  const c=document.getElementById('srLT');if(!c)return;
+function renderRegB(lista){
+  const c=document.getElementById('srLB');if(!c)return;
   if(!lista.length){c.innerHTML='<div class="emp"><span class="ei">🔍</span>Sin resultados</div>';return;}
-  c.innerHTML=lista.slice(0,60).map(t=>`
-    <div class="ri" id="ri-${t.id}">
+  c.innerHTML=lista.slice(0,60).map(b=>`
+    <div class="ri" id="ri-${b.id}">
       <div class="ri-info">
-        <div class="ri-t">#${t.id} · ${t.tarea}</div>
-        <div class="ri-m">${t.nombre} · ${t.tipo||'—'} · ${t.area||'—'} · HHP:${t.hhPlan||'—'} HHR:${t.hhReal||'0'} · <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span></div>
-        <div class="ef" id="ef-${t.id}">
+        <div class="ri-t">#${b.id} · ${b.titulo}</div>
+        <div class="ri-m">${b.responsable} · ${b.tipoIngreso||'—'} · ${b.tipoBloque||'—'} · ${b.area||'—'} · HHP:${b.hhPlan||'—'} HHR:${b.hhReal||'0'} · <span class="badge ${BADGE[b.estado]||'bi'}">${b.estado}</span></div>
+        <div class="ef" id="ef-${b.id}">
           <div class="eg">
-            <div class="efi fw"><label>Descripción</label><textarea id="et_tar_${t.id}" rows="2">${t.tarea||''}</textarea></div>
-            <div class="efi"><label>Responsable</label><select id="et_nom_${t.id}">
-              ${['Luis Sanchez','Luis Diaz','Yamila Silva'].map(n=>`<option ${n===t.nombre?'selected':''}>${n}</option>`).join('')}</select></div>
-            <div class="efi"><label>Solicitante</label><select id="et_sol_${t.id}">
-              <option value="">—</option>${opts('Solicitante',t.solicitante)}</select></div>
-            <div class="efi"><label>Estado</label><select id="et_est_${t.id}">
-              ${(LISTAS['Estado']||['Por Iniciar','Programada','En Proceso','Listo','Standby','Cancelado']).map(e=>`<option ${e===t.estado?'selected':''}>${e}</option>`).join('')}</select></div>
-            <div class="efi"><label>Área</label><select id="et_are_${t.id}"><option value="">—</option>${opts('Area',t.area)}</select></div>
-            <div class="efi"><label>Tipo</label><select id="et_tip_${t.id}"><option value="">—</option>${opts('Tipo',t.tipo)}</select></div>
-            <div class="efi"><label>HH Plan</label><input type="number" id="et_hhp_${t.id}" value="${t.hhPlan||''}" step="0.25" min="0"></div>
-            <div class="efi"><label>F. Límite</label><input type="date" id="et_fco_${t.id}" value="${t.fechaComp||''}"></div>
-            <div class="efi fw"><label>Comentario</label><input type="text" id="et_com_${t.id}" value="${t.comentario||''}"></div>
+            <div class="efi fw"><label>Título</label><textarea id="eb_tit_${b.id}" rows="2">${b.titulo||''}</textarea></div>
+            <div class="efi"><label>Responsable</label><select id="eb_res_${b.id}">
+              ${['Luis Sanchez','Luis Diaz','Yamila Silva'].map(n=>`<option ${n===b.responsable?'selected':''}>${n}</option>`).join('')}</select></div>
+            <div class="efi"><label>Solicitante</label><select id="eb_sol_${b.id}">
+              <option value="">—</option>${opts('Solicitante',b.solicitante)}</select></div>
+            <div class="efi"><label>Tipo Ingreso</label><select id="eb_tin_${b.id}">
+              <option ${b.tipoIngreso==='Express'?'selected':''}>Express</option>
+              <option ${b.tipoIngreso==='Simple'?'selected':''}>Simple</option></select></div>
+            <div class="efi"><label>Tipo Bloque</label><select id="eb_tip_${b.id}">
+              <option value="">—</option>${opts('Tipo_Bloque',b.tipoBloque)}</select></div>
+            <div class="efi"><label>Área</label><select id="eb_are_${b.id}">
+              <option value="">—</option>${opts('Area',b.area)}</select></div>
+            <div class="efi"><label>Urgente</label><select id="eb_urg_${b.id}">
+              <option ${b.urgente==='Si'?'selected':''}>Si</option>
+              <option ${b.urgente==='No'?'selected':''}>No</option></select></div>
+            <div class="efi"><label>Importante</label><select id="eb_imp_${b.id}">
+              <option ${b.importante==='Si'?'selected':''}>Si</option>
+              <option ${b.importante==='No'?'selected':''}>No</option></select></div>
+            <div class="efi"><label>Estado</label><select id="eb_est_${b.id}">
+              ${['Por Iniciar','Programado','En Proceso','Confirmado','Standby','Cancelado'].map(e=>`<option ${e===b.estado?'selected':''}>${e}</option>`).join('')}</select></div>
+            <div class="efi"><label>HH Plan</label><input type="number" id="eb_hhp_${b.id}" value="${b.hhPlan||''}" step="0.25" min="0"></div>
+            <div class="efi fw"><label>Comentario</label><input type="text" id="eb_com_${b.id}" value="${b.comentario||''}"></div>
           </div>
           <div class="eb">
-            <button class="btn ghost sm" onclick="cefT(${t.id})"><span class="bt">Cancelar</span></button>
-            <button class="btn sm" onclick="savEdT(${t.id})"><span class="st"></span><span class="bt">Guardar</span></button>
+            <button class="btn ghost sm" onclick="cefT(${b.id})"><span class="bt">Cancelar</span></button>
+            <button class="btn sm" onclick="savEdB(${b.id})"><span class="st"></span><span class="bt">Guardar</span></button>
           </div>
         </div>
-        <div class="cd" id="cd-${t.id}">
-          <p>⚠️ ¿Eliminar tarea #${t.id} y todas sus sesiones?</p>
+        <div class="cd" id="cd-${b.id}">
+          <p>⚠️ ¿Eliminar bloque #${b.id}?</p>
           <div style="display:flex;gap:6px">
-            <button class="btn ghost sm" onclick="ccd('T',${t.id})"><span class="bt">Cancelar</span></button>
-            <button class="btn danger sm" onclick="delT(${t.id})"><span class="bt">Sí, eliminar</span></button>
+            <button class="btn ghost sm" onclick="ccd('T',${b.id})"><span class="bt">Cancelar</span></button>
+            <button class="btn danger sm" onclick="delB(${b.id})"><span class="bt">Sí, eliminar</span></button>
           </div>
         </div>
       </div>
       <div class="ri-acts">
-        <button class="be" onclick="abrirModal(${t.id})">Editar</button>
-        <button class="bd" onclick="togCd('T',${t.id})">Eliminar</button>
+        <button class="be" onclick="togEf(${b.id})">Editar</button>
+        <button class="bd" onclick="togCd('T',${b.id})">Eliminar</button>
       </div>
     </div>`).join('');
 }
 
-function renderRegS(lista){
-  const c=document.getElementById('srLS');if(!c)return;
-  if(!lista.length){c.innerHTML='<div class="emp"><span class="ei">🔍</span>Sin sesiones</div>';return;}
-  c.innerHTML=lista.slice(0,60).map((s,i)=>`
-    <div class="ri" id="ris-${i}">
-      <div class="ri-info">
-        <div class="ri-t">Tarea #${s.tareaId} · ${(s.tareaNombre||'').substring(0,45)}${(s.tareaNombre||'').length>45?'…':''}</div>
-        <div class="ri-m">${s.responsable} · ${dateStr(s.fecha)} · ${s.inicio||''}–${s.termino||''} · ${s.hh||0}h${s.esExtra==='Sí'?' · ⏰ Extra':''}</div>
-        <div class="ef" id="efs-${i}">
-          <div class="eg">
-            <div class="efi"><label>Fecha</label><input type="date" id="es_fec_${i}" value="${dateStr(s.fecha)}"></div>
-            <div class="efi"><label>Responsable</label><select id="es_nom_${i}">
-              ${['Luis Sanchez','Luis Diaz','Yamila Silva'].map(n=>`<option ${n===s.responsable?'selected':''}>${n}</option>`).join('')}</select></div>
-            <div class="efi"><label>Inicio</label><input type="time" id="es_ini_${i}" value="${s.inicio||''}" oninput="rcS(${i})"></div>
-            <div class="efi"><label>Término</label><input type="time" id="es_ter_${i}" value="${s.termino||''}" oninput="rcS(${i})"></div>
-            <div class="efi"><label>HH</label><input type="number" id="es_hh_${i}" value="${s.hh||''}" step="0.25" min="0"></div>
-            <div class="efi fw"><label>Comentario</label><input type="text" id="es_com_${i}" value="${s.comentario||''}"></div>
-          </div>
-          <div class="eb">
-            <button class="btn ghost sm" onclick="cefS(${i})"><span class="bt">Cancelar</span></button>
-            <button class="btn sm" onclick="savEdS(${i},'${s.tareaId}','${dateStr(s.fecha)}','${s.inicio||''}')"><span class="st"></span><span class="bt">Guardar</span></button>
-          </div>
-        </div>
-        <div class="cd" id="cds-${i}">
-          <p>⚠️ ¿Eliminar sesión de ${s.hh}h del ${dateStr(s.fecha)}?</p>
-          <div style="display:flex;gap:6px">
-            <button class="btn ghost sm" onclick="ccd('S',${i})"><span class="bt">Cancelar</span></button>
-            <button class="btn danger sm" onclick="delS(${i},'${s.tareaId}','${dateStr(s.fecha)}','${s.inicio||''}',${s.hh||0})"><span class="bt">Sí</span></button>
-          </div>
-        </div>
-      </div>
-      <div class="ri-acts">
-        <button class="be" onclick="togEfS(${i})">Editar</button>
-        <button class="bd" onclick="togCd('S',${i})">Eliminar</button>
-      </div>
-    </div>`).join('');
-}
+function renderRegS(lista){ /* legacy stub — sessions removed */ }
 
 function togEf(id){const e=document.getElementById('ef-'+id),d=document.getElementById('cd-'+id);d?.classList.remove('op');e?.classList.toggle('op');}
 
@@ -4259,57 +4038,52 @@ function ccd(t,id){document.getElementById(t==='T'?`cd-${id}`:`cds-${id}`)?.clas
 
 function rcS(i){const a=document.getElementById('es_ini_'+i)?.value,b=document.getElementById('es_ter_'+i)?.value,h=document.getElementById('es_hh_'+i);if(a&&b&&h)h.value=calcHHRaw(a,b).toFixed(2);}
 
-async function savEdT(id){
-  const idx=TAREAS.findIndex(t=>String(t.id)===String(id));
-  const campos={1:document.getElementById('et_nom_'+id)?.value||'',2:document.getElementById('et_tar_'+id)?.value||'',3:document.getElementById('et_sol_'+id)?.value||'',4:document.getElementById('et_are_'+id)?.value||'',5:document.getElementById('et_tip_'+id)?.value||'',8:parseFloat(document.getElementById('et_hhp_'+id)?.value)||'',10:document.getElementById('et_fco_'+id)?.value||'',11:document.getElementById('et_est_'+id)?.value||'',12:document.getElementById('et_com_'+id)?.value||''};
-  await apiPost({accion:'actualizar',tabla:'Tareas',id,campos});
-  const m={'1':'nombre','2':'tarea','3':'solicitante','4':'area','5':'tipo','8':'hhPlan','10':'fechaComp','11':'estado','12':'comentario'};
-  if(idx>-1)Object.entries(campos).forEach(([c,v])=>{if(m[c])TAREAS[idx][m[c]]=v;});
-  cefT(id);toast('Tarea actualizada','ok');buscarReg();
+async function savEdB(id){
+  const campos={
+    1:document.getElementById('eb_tin_'+id)?.value||'',
+    2:document.getElementById('eb_tip_'+id)?.value||'',
+    3:document.getElementById('eb_tit_'+id)?.value||'',
+    4:document.getElementById('eb_are_'+id)?.value||'',
+    5:document.getElementById('eb_sol_'+id)?.value||'',
+    6:document.getElementById('eb_res_'+id)?.value||'',
+    7:document.getElementById('eb_urg_'+id)?.value||'',
+    8:document.getElementById('eb_imp_'+id)?.value||'',
+    9:document.getElementById('eb_com_'+id)?.value||'',
+    10:document.getElementById('eb_est_'+id)?.value||'',
+    15:parseFloat(document.getElementById('eb_hhp_'+id)?.value)||''
+  };
+  await apiPost({accion:'actualizar',id,campos});
+  const idx=BLOQUES.findIndex(b=>String(b.id)===String(id));
+  if(idx>-1){
+    const b=BLOQUES[idx];
+    b.tipoIngreso=campos[1];b.tipoBloque=campos[2];b.titulo=campos[3];
+    b.area=campos[4];b.solicitante=campos[5];b.responsable=campos[6];
+    b.urgente=campos[7];b.importante=campos[8];b.comentario=campos[9];
+    b.estado=campos[10];b.hhPlan=campos[15];
+  }
+  cefT(id);toast('Bloque actualizado','ok');buscarReg();
 }
 
-async function delT(id){
-  await apiPost({accion:'eliminar',tabla:'Tareas',id});
-  await apiPost({accion:'eliminarPorTareaId',tabla:'Sesiones',id});
-  const idx=TAREAS.findIndex(t=>String(t.id)===String(id));
-  if(idx>-1)TAREAS.splice(idx,1);
-  SESIONES=SESIONES.filter(s=>String(s.tareaId)!==String(id));
+async function delB(id){
+  await apiPost({accion:'eliminar',id});
+  const idx=BLOQUES.findIndex(b=>String(b.id)===String(id));
+  if(idx>-1)BLOQUES.splice(idx,1);
   invalidateCache();
-  toast('Tarea eliminada','ok');buscarReg();
-  // Refresh calendar if visible
+  toast('Bloque eliminado','ok');buscarReg();
   if(document.getElementById('calWrap'))calRender();
 }
 
-async function savEdS(i,tareaId,fechaOrig,inicioOrig){
-  const campos={fecha:document.getElementById('es_fec_'+i)?.value||'',responsable:document.getElementById('es_nom_'+i)?.value||'',inicio:document.getElementById('es_ini_'+i)?.value||'',termino:document.getElementById('es_ter_'+i)?.value||'',hh:parseFloat(document.getElementById('es_hh_'+i)?.value)||0,comentario:document.getElementById('es_com_'+i)?.value||''};
-  await apiPost({accion:'actualizarSesion',tabla:'Sesiones',tareaId,fechaOrig,inicioOrig,campos});
-  if(SESIONES[i])Object.assign(SESIONES[i],campos);
-  cefS(i);toast('Sesión actualizada','ok');buscarReg();
-}
-
-async function delS(i,tareaId,fecha,inicio,hh){
-  await apiPost({accion:'eliminarSesion',tabla:'Sesiones',tareaId,fecha,inicio});
-  const ti=TAREAS.findIndex(t=>String(t.id)===String(tareaId));
-  if(ti>-1){const nH=Math.max(0,Math.round(((parseFloat(TAREAS[ti].hhReal)||0)-hh)*100)/100);const nN=Math.max(0,(parseInt(TAREAS[ti].nSes)||1)-1);await apiPost({accion:'actualizar',tabla:'Tareas',id:tareaId,campos:{13:nH,14:nN}});TAREAS[ti].hhReal=nH;TAREAS[ti].nSes=nN;}
-  SESIONES.splice(i,1);invalidateCache();toast('Sesión eliminada','ok');buscarReg();
-}
+async function savEdS(){ /* legacy — sessions removed */ }
+async function delS(){ /* legacy — sessions removed */ }
 
 let regTab='t';
 function initRegistros(){
-  const t=document.getElementById('srT'),a=document.getElementById('srA');
-  (LISTAS['Tipo']||[]).forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;t?.appendChild(o);});
+  const a=document.getElementById('srA');
   (LISTAS['Area']||[]).forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;a?.appendChild(o);});
   buscarReg();
 }
 
-function switchRegTab(tab){
-  regTab=tab;
-  document.getElementById('sr-t').style.display=tab==='t'?'block':'none';
-  document.getElementById('sr-s').style.display=tab==='s'?'block':'none';
-  document.getElementById('rpT')?.classList.toggle('on',tab==='t');
-  document.getElementById('rpS')?.classList.toggle('on',tab==='s');
-  buscarReg();
-}
+function switchRegTab(tab){ buscarReg(); }
 
 
 
@@ -4431,10 +4205,10 @@ function initConfig(){
 
 
 async function ponerStandby(tid) {
-  const t = TAREAS.find(x=>String(x.id)===String(tid)); if(!t)return;
+  const t = BLOQUES.find(x=>String(x.id)===String(tid)); if(!t)return;
   openModal(`
     <div class="mt"><div class="rb"></div>Poner en Standby</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">#${t.id} · ${t.tarea}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">#${t.id} · ${t.titulo}</div>
     <div class="efi" style="margin-bottom:14px">
       <label>Motivo del standby *</label>
       <textarea id="standbyMotivo" rows="2" style="background:var(--inp);border:1.5px solid var(--border);
@@ -4451,37 +4225,37 @@ async function ponerStandby(tid) {
 async function confirmarStandby(tid) {
   const motivo = document.getElementById('standbyMotivo')?.value?.trim();
   if(!motivo){toast('Escribe el motivo del standby','er');return;}
-  const t = TAREAS.find(x=>String(x.id)===String(tid)); if(!t)return;
-  const campos = {11:'Standby',12:(t.comentario?t.comentario+' | ':'')+'[Standby '+todayStr()+': '+motivo+']'};
-  await apiPost({accion:'actualizar',tabla:'Tareas',id:tid,campos});
-  const idx = TAREAS.findIndex(x=>String(x.id)===String(tid));
-  if(idx>-1){TAREAS[idx].estado='Standby';TAREAS[idx].comentario=campos[12];}
+  const t = BLOQUES.find(x=>String(x.id)===String(tid)); if(!t)return;
+  const campos = {10:'Standby',9:(t.comentario?t.comentario+' | ':'')+'[Standby '+todayStr()+': '+motivo+']'};
+  await apiPost({accion:'actualizar',id:tid,campos});
+  const idx = BLOQUES.findIndex(x=>String(x.id)===String(tid));
+  if(idx>-1){BLOQUES[idx].estado='Standby';BLOQUES[idx].comentario=campos[9];}
   invalidateCache();
   cerrarModal();
-  toast('Tarea en Standby','ok');
+  toast('Bloque en Standby','ok');
   calRefreshTray(SESSION.nombre);
 }
 
 async function retomarStandby(tid) {
-  const t = TAREAS.find(x=>String(x.id)===String(tid)); if(!t)return;
+  const t = BLOQUES.find(x=>String(x.id)===String(tid)); if(!t)return;
   const now = new Date().toISOString().slice(0,16).replace('T',' ');
-  const com = (t.comentario||'') + ' | [Retomada '+now+']';
-  const campos = {11:'Por Iniciar',15:'',12:com}; // clear fechaEjecucion too
-  await apiPost({accion:'actualizar',tabla:'Tareas',id:tid,campos});
-  const idx = TAREAS.findIndex(x=>String(x.id)===String(tid));
-  if(idx>-1){TAREAS[idx].estado='Por Iniciar';TAREAS[idx].fechaEjecucion='';TAREAS[idx].comentario=com;}
+  const com = (t.comentario||'') + ' | [Retomado '+now+']';
+  const campos = {10:'Por Iniciar',9:com};
+  await apiPost({accion:'actualizar',id:tid,campos});
+  const idx = BLOQUES.findIndex(x=>String(x.id)===String(tid));
+  if(idx>-1){BLOQUES[idx].estado='Por Iniciar';BLOQUES[idx].comentario=com;}
   invalidateCache();
   cerrarModal();
-  toast('Tarea retomada - ahora puedes programarla','ok');
+  toast('Bloque retomado - ahora puedes programarlo','ok');
   calRefreshTray(SESSION.nombre);
 }
 
 
 async function cancelarTarea(tid) {
-  const t = TAREAS.find(x=>String(x.id)===String(tid)); if(!t)return;
+  const t = BLOQUES.find(x=>String(x.id)===String(tid)); if(!t)return;
   openModal(`
-    <div class="mt"><div class="rb"></div>Cancelar tarea</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">#${t.id} · ${t.tarea}</div>
+    <div class="mt"><div class="rb"></div>Cancelar bloque</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">#${t.id} · ${t.titulo}</div>
     <div class="al d" style="margin-bottom:12px"><span class="al-ico">⚠️</span>
       <div class="al-txt">Esta acción no se puede deshacer. La tarea quedará como Cancelada.</div></div>
     <div class="efi" style="margin-bottom:14px">
@@ -4500,20 +4274,20 @@ async function cancelarTarea(tid) {
 async function confirmarCancelacion(tid) {
   const motivo = document.getElementById('cancelMotivo')?.value?.trim();
   if(!motivo){toast('Escribe el motivo','er');return;}
-  const t = TAREAS.find(x=>String(x.id)===String(tid)); if(!t)return;
-  const com = (t.comentario?t.comentario+' | ':'')+'[Cancelada '+todayStr()+': '+motivo+']';
-  await apiPost({accion:'actualizar',tabla:'Tareas',id:tid,campos:{11:'Cancelado',12:com}});
-  const idx = TAREAS.findIndex(x=>String(x.id)===String(tid));
-  if(idx>-1){TAREAS[idx].estado='Cancelado';TAREAS[idx].comentario=com;}
+  const t = BLOQUES.find(x=>String(x.id)===String(tid)); if(!t)return;
+  const com = (t.comentario?t.comentario+' | ':'')+'[Cancelado '+todayStr()+': '+motivo+']';
+  await apiPost({accion:'actualizar',id:tid,campos:{10:'Cancelado',9:com}});
+  const idx = BLOQUES.findIndex(x=>String(x.id)===String(tid));
+  if(idx>-1){BLOQUES[idx].estado='Cancelado';BLOQUES[idx].comentario=com;}
   invalidateCache();
   cerrarModal();
-  toast('Tarea cancelada','ok');
+  toast('Bloque cancelado','ok');
 }
 
 
-function cfReprogramar(tid) {
-  goSub('A','agenda');
-  setTimeout(()=>abrirModalProgramar(tid), 400);
+function cfReprogramar(bid) {
+  cerrarModal();
+  setTimeout(() => abrirModalProgramarBloque(bid, null, null, null), 150);
 }
 
 
@@ -4521,14 +4295,14 @@ function showCumplDetail(persona, taskIds) {
   const el = document.getElementById('drCumpl'); if(!el)return;
   if(el._persona===persona&&el.style.display!=='none'){el.style.display='none';return;}
   el._persona=persona;
-  const tasks = taskIds.map(id=>TAREAS.find(x=>String(x.id)===String(id))).filter(Boolean);
+  const tasks = taskIds.map(id=>BLOQUES.find(x=>String(x.id)===String(id))).filter(Boolean);
   el.innerHTML=`<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:5px">
     Bloques sin confirmar — ${shortName(persona)}</div>
-    <div class="tl">${tasks.map(t=>`
+    <div class="tl">${tasks.map(b=>`
       <div class="ti2" onclick="goSub('A','confirmar')">
-        <span class="tid">#${t.id}</span>
-        <div class="tn2"><div class="tna">${t.tarea}</div>
-        <div class="tme">Prog: ${t.fechaEjecucion} · HHP:${t.hhPlan||'—'}h</div></div>
+        <span class="tid">#${b.id}</span>
+        <div class="tn2"><div class="tna">${b.titulo}</div>
+        <div class="tme">Prog: ${b.fechaProg||'—'} · HHP:${b.hhPlan||'—'}h</div></div>
         <span class="badge bpr">Sin confirmar</span>
       </div>`).join('')||'<div class="emp">Sin pendientes</div>'}
     </div>`;
@@ -4537,18 +4311,16 @@ function showCumplDetail(persona, taskIds) {
 
 
 function showCumplDetailAll(taskIds) {
-  // Show in the cumpl detail area if exists, otherwise show modal
   const el = document.getElementById('drCumpl');
   if (!el) {
-    // Show as modal
-    const tasks = taskIds.map(id=>TAREAS.find(x=>String(x.id)===String(id))).filter(Boolean);
+    const tasks = taskIds.map(id=>BLOQUES.find(x=>String(x.id)===String(id))).filter(Boolean);
     openModal(`
       <div class="mt"><div class="rb"></div>Bloques sin confirmar hoy</div>
-      <div class="tl">${tasks.map(t=>`
-        <div class="ti2" onclick="abrirModal(${t.id})">
-          <span class="tid">#${t.id}</span>
-          <div class="tn2"><div class="tna">${t.tarea}</div>
-          <div class="tme">${shortName(t.nombre)} · Prog: ${t.fechaEjecucion} · HHP:${t.hhPlan||'—'}h</div></div>
+      <div class="tl">${tasks.map(b=>`
+        <div class="ti2" onclick="abrirModalBloque(${b.id})">
+          <span class="tid">#${b.id}</span>
+          <div class="tn2"><div class="tna">${b.titulo}</div>
+          <div class="tme">${shortName(b.responsable)} · Prog: ${b.fechaProg||'—'} · HHP:${b.hhPlan||'—'}h</div></div>
           <span class="badge bpr">Sin confirmar</span>
         </div>`).join('')||'<div class="emp">Sin pendientes</div>'}
       </div>
@@ -4558,13 +4330,13 @@ function showCumplDetailAll(taskIds) {
   }
   if(el.style.display!=='none'&&el._showing==='all'){el.style.display='none';return;}
   el._showing='all';
-  const tasks = taskIds.map(id=>TAREAS.find(x=>String(x.id)===String(id))).filter(Boolean);
+  const tasks = taskIds.map(id=>BLOQUES.find(x=>String(x.id)===String(id))).filter(Boolean);
   el.innerHTML=`<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:5px">Bloques sin confirmar hoy</div>
-    <div class="tl">${tasks.map(t=>`
+    <div class="tl">${tasks.map(b=>`
       <div class="ti2" onclick="goSub('A','confirmar')">
-        <span class="tid">#${t.id}</span>
-        <div class="tn2"><div class="tna">${t.tarea}</div>
-        <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'}h</div></div>
+        <span class="tid">#${b.id}</span>
+        <div class="tn2"><div class="tna">${b.titulo}</div>
+        <div class="tme">${shortName(b.responsable)} · HHP:${b.hhPlan||'—'}h</div></div>
         <span class="badge bpr">Sin confirmar</span>
       </div>`).join('')||'<div class="emp">Sin pendientes</div>'}
     </div>`;
@@ -4619,13 +4391,11 @@ function ctrlRenderDay() {
   const totalWorkHrs=(workEnd-workStart)-(lunchEnd-lunchStart);
 
   // Per user analysis
+  const hoyStr = new Date().toISOString().split('T')[0];
+  const nowMin = new Date().getHours()*60+new Date().getMinutes();
   const userRows = users.map(p => {
-    // Scheduled tasks this day
-    const tarProg=TAREAS.filter(t=>t.nombre===p&&t.fechaEjecucion===ds&&!['Cancelado'].includes(t.estado));
-    // Confirmed sessions this day
-    const sesCon=SESIONES.filter(s=>s.responsable===p&&(s._dn||normSessDate(s))===ds&&s.comentario!=='[Bloque planificado]');
-    // Planned blocks
-    const blkPlan=SESIONES.filter(s=>s.responsable===p&&(s._dn||normSessDate(s))===ds&&s.comentario==='[Bloque planificado]');
+    const bProg = BLOQUES.filter(b=>b.responsable===p&&b.estado==='Programado'&&b.fechaProg===ds);
+    const bConf = BLOQUES.filter(b=>b.responsable===p&&b.estado==='Confirmado'&&b.fechaReal===ds);
 
     // ── Part 1: Unscheduled hours (checkGaps) ────────────────────────────
     const gaps=checkGaps(p,ds);
@@ -4634,15 +4404,11 @@ function ctrlRenderDay() {
       try{return s+calcHHRaw(ini.trim(),ter.trim());}catch(e){return s;}
     },0);
 
-    // ── Part 2: Unconfirmed blocks (past time) ───────────────────────────
-    const nowMin=new Date().getHours()*60+new Date().getMinutes();
-    const sinConf=tarProg.filter(t=>{
-      if(ds>new Date().toISOString().split('T')[0]) return false; // future day
-      if(['Listo'].includes(t.estado)) return false;
-      const blk=blkPlan.find(s=>String(s.tareaId)===String(t.id));
-      if(!blk) return false; // no planned block
-      const blkEnd=t2m(normTime(blk.termino)||'23:59');
-      return ds<new Date().toISOString().split('T')[0]||(ds===new Date().toISOString().split('T')[0]&&blkEnd<=nowMin);
+    // ── Part 2: Unconfirmed programmed blocks whose end time has passed ──
+    const sinConf=bProg.filter(b=>{
+      if(ds>hoyStr) return false;
+      const end=t2m(b.horaFinProg||'23:59');
+      return ds<hoyStr||(ds===hoyStr&&end<=nowMin);
     });
 
     const allOk=gaps.length===0&&sinConf.length===0;
@@ -4659,9 +4425,9 @@ function ctrlRenderDay() {
       <div style="margin-top:6px">
         <div style="font-weight:600;color:var(--red);font-size:11px;margin-bottom:3px">
           ⚠️ ${sinConf.length} bloque${sinConf.length!==1?'s':''} sin confirmar:</div>
-        ${sinConf.map(t=>`<div style="font-size:11px;background:#f8d7da;border-radius:4px;padding:3px 8px;margin-bottom:2px;display:flex;justify-content:space-between;cursor:pointer"
-          onclick="abrirModal(${t.id})">
-          <span>#${t.id} ${t.tarea.substring(0,25)}</span>
+        ${sinConf.map(b=>`<div style="font-size:11px;background:#f8d7da;border-radius:4px;padding:3px 8px;margin-bottom:2px;display:flex;justify-content:space-between;cursor:pointer"
+          onclick="abrirModalBloque(${b.id})">
+          <span>#${b.id} ${b.titulo.substring(0,25)}</span>
           <span style="color:var(--red);font-size:10px">→ Confirmar</span>
         </div>`).join('')}
       </div>`:'';
@@ -4670,7 +4436,7 @@ function ctrlRenderDay() {
       border-radius:8px;padding:10px 12px;margin-bottom:8px;background:${allOk?'#f0faf4':'#fff'}">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div style="font-weight:600;font-size:13px">${shortName(p)}</div>
-        <div style="font-size:11px;color:var(--muted)">${totalWorkHrs}h jornada · ${tarProg.length} tarea${tarProg.length!==1?'s':''} prog.</div>
+        <div style="font-size:11px;color:var(--muted)">${totalWorkHrs}h jornada · ${bProg.length+bConf.length} bloque${bProg.length+bConf.length!==1?'s':''} prog.</div>
         <span style="font-size:16px">${allOk?'✅':gaps.length>0&&sinConf.length>0?'🔴':gaps.length>0?'🟡':'🟠'}</span>
       </div>
       ${gapHtml}${confHtml}
