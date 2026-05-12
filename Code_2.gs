@@ -28,7 +28,7 @@ function inicializar() {
 // ── Helpers ─────────────────────────────────────────────────────
 function fmtFecha(v) {
   if (!v) return '';
-  if (v instanceof Date) return Utilities.formatDate(v, 'America/Santiago', 'yyyy-MM-dd');
+  if (v instanceof Date) return Utilities.formatDate(v, 'UTC', 'yyyy-MM-dd');
   return String(v).substring(0, 10);
 }
 
