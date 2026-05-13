@@ -2982,20 +2982,23 @@ function vBloques() {
 
   const rows = arr => arr.length === 0
     ? '<div class="emp"><span class="ei">📋</span>Sin bloques</div>'
-    : `<div class="tl">${arr.map(b=>{
+    : '<div class="tl">' + arr.map(b=>{
         const isTmp = String(b.id).startsWith('tmp_');
         const est   = getEstadoEfectivo(b);
-        return `<div class="ti2" onclick="${isTmp?'':` abrirModalBloque(${b.id})`}">
-          <span class="tid" style="${isTmp?'color:var(--muted);font-style:italic':''}">${isTmp?'#…':'#'+b.id}</span>
-          <div class="tn2">
-            <div class="tna">${b.titulo}</div>
-            <div class="tme">${b.tipoBloque||'—'} · ${b.area||'—'} · ${b.fechaReal||b.fechaProg||b.fechaIngreso||'—'}</div>
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-            <span class="badge ${BADGE[est]||'bi'}">${est}</span>
-            <span class="badge ${b.tipoIngreso==='Express'?'bex':'bpr'}" style="font-size:8px">${b.tipoIngreso}</span>
-          </div>
-        </div>`;}).join('')}</div>`;
+        const onclick = isTmp ? '' : 'abrirModalBloque(' + b.id + ')';
+        const idLabel = isTmp ? '#…' : '#' + b.id;
+        const idStyle = isTmp ? 'color:var(--muted);font-style:italic' : '';
+        return '<div class="ti2" onclick="' + onclick + '">'
+          + '<span class="tid" style="' + idStyle + '">' + idLabel + '</span>'
+          + '<div class="tn2">'
+          + '<div class="tna">' + b.titulo + '</div>'
+          + '<div class="tme">' + (b.tipoBloque||'—') + ' · ' + (b.area||'—') + ' · ' + (b.fechaReal||b.fechaProg||b.fechaIngreso||'—') + '</div>'
+          + '</div>'
+          + '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">'
+          + '<span class="badge ' + (BADGE[est]||'bi') + '">' + est + '</span>'
+          + '<span class="badge ' + (b.tipoIngreso==='Express'?'bex':'bpr') + '" style="font-size:8px">' + b.tipoIngreso + '</span>'
+          + '</div></div>';
+      }).join('') + '</div>';
 
   return `
   <div class="ph"><div class="pt"><div class="rb"></div>Mis Bloques</div></div>
@@ -4970,4 +4973,18 @@ function mSetUrg(val) {
   _mUrg = val;
   const si = document.getElementById('mUrgSi');
   const no = document.getElementById('mUrgNo');
-  if(si) { si.style.background=val?'#fee2e2':'var(--off)'; si.style.borderColor=val?'var(--red)':'var(--border
+  if(si) { si.style.background=val?'#fee2e2':'var(--off)'; si.style.borderColor=val?'var(--red)':'var(--border)'; }
+  if(no) { no.style.background=!val?'#d4edda':'var(--off)'; no.style.borderColor=!val?'var(--green)':'var(--border)'; }
+}
+
+function mSetImp(val) {
+  _mImp = val;
+  const si = document.getElementById('mImpSi');
+  const no = document.getElementById('mImpNo');
+  if(si) { si.style.background=val?'#fff3cd':'var(--off)'; si.style.borderColor=val?'var(--amber)':'var(--border)'; }
+  if(no) { no.style.background=!val?'#d4edda':'var(--off)'; no.style.borderColor=!val?'var(--green)':'var(--border)'; }
+}
+
+</script>
+</body>
+</html>
