@@ -4353,14 +4353,18 @@ function addSolArea() {
   const n = document.getElementById('saNom')?.value?.trim();
   const a = document.getElementById('saArea')?.value;
   if (!n || !a) { toast('Completa nombre y área','warn'); return; }
+  // Agregar/actualizar en SolArea
   if (!LISTAS['SolArea']) LISTAS['SolArea'] = [];
-  // Actualizar si ya existe
   const idx = LISTAS['SolArea'].findIndex(v => v.split('|')[0].trim() === n);
   if (idx > -1) LISTAS['SolArea'][idx] = `${n}|${a}`;
   else LISTAS['SolArea'].push(`${n}|${a}`);
+  // Agregar también a la lista Solicitante si no existe
+  if (!LISTAS['Solicitante']) LISTAS['Solicitante'] = [];
+  if (!LISTAS['Solicitante'].includes(n)) LISTAS['Solicitante'].push(n);
   document.getElementById('saNom').value = '';
   document.getElementById('saArea').value = '';
   renderSolAreaAdmin();
+  toast(`✅ ${n} agregado — recuerda guardar`,'ok');
 }
 
 function delSolArea(i) { LISTAS['SolArea'].splice(i,1); renderSolAreaAdmin(); }
