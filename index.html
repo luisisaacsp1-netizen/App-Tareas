@@ -1503,17 +1503,21 @@ function abrirModalProgramarBloque(bloqueId, prefDate=null, prefIni=null, prefTe
       </select>
       <input type="text" id="schMotivoOtro" placeholder="Especifica el motivo…"
         style="display:none;margin-top:6px;background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;width:100%;box-sizing:border-box">
-    </div>
-    <script>document.getElementById('schMotivo')?.addEventListener('change',function(){
-      const o=document.getElementById('schMotivoOtro');
-      if(o) o.style.display=this.value==='Otro'?'block':'none';
-    });</script>` : ''}
+    </div>` : ''}
     <div class="ma">
       <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>
       <button class="btn" style="background:var(--green)" onclick="confirmarProgramacionBloque('${bloqueId}',${!!b.fechaProg})">
         <span class="st"></span><span class="bt">${b.fechaProg ? 'Reprogramar' : 'Programar'}</span>
       </button>
     </div>`);
+  // Conectar evento "Otro" sin inline script
+  setTimeout(() => {
+    const sel = document.getElementById('schMotivo');
+    const inp = document.getElementById('schMotivoOtro');
+    if (sel && inp) sel.addEventListener('change', () => {
+      inp.style.display = sel.value === 'Otro' ? 'block' : 'none';
+    });
+  }, 50);
 }
 
 function schBloqueUpdTer() {
