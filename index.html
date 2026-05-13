@@ -3184,6 +3184,13 @@ async function guardarNuevoBloque() {
   clearFormError('nbFormError');
   if (!nbTipo) { toast('Selecciona Express o Simple primero','warn'); return; }
 
+  // Leer valores del formulario
+  const resp = document.getElementById('nbResp')?.value?.trim() || SESSION.nombre;
+  const sol  = document.getElementById('nbSol')?.value?.trim()  || '';
+  const tit  = document.getElementById('nbTit')?.value?.trim()  || '';
+  const area = document.getElementById('nbAre')?.value?.trim()  || '';
+  const tip  = document.getElementById('nbTip')?.value?.trim()  || '';
+
   // Mapa id → etiqueta legible
   const LABELS = {
     nbSol:'Solicitante', nbTit:'Título/Descripción', nbAre:'Área', nbTip:'Tipo de bloque',
