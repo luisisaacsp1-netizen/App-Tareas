@@ -560,6 +560,8 @@ const SCHEDULE = {1:[8,17,12,13],2:[8,18,12,13],3:[8,17,12,13],4:[8,18,12,13],5:
 
 // Per-person lunch map — populated dynamically from API
 let LUNCH_MAP = {};
+// Daily overrides: key = "nombre|fecha" → {ini, fin, start, end}
+let LUNCH_OVERRIDES = {};
 
 function hhmm2dec(hhmm) {
   if (!hhmm) return 13;
@@ -567,11 +569,25 @@ function hhmm2dec(hhmm) {
   return h + (m || 0) / 60;
 }
 
-function getLunchFor(nombre) {
-  const entry = LUNCH_MAP[nombre];
-  if (entry) return entry;
-  // Fallback si aún no cargaron los datos
-  return { start: 13, end: 14, ini: '13:00', fin: '14:00' };
+function lunchEntry(ini, fin) {
+  return { ini, fin, start: hhmm2dec(ini), end: hhmm2dec(fin) };
+}
+
+function getLunchFor(nombre, fecha) {
+  // 1. Override diario
+  if (fecha && LUNCH_OVERRIDES[`${nombre}|${fecha}`])
+    return LUNCH_OVERRIDES[`${nombre}|${fecha}`];
+  // 2. Predeterminado del usuario
+  if (LUNCH_MAP[nombre]) return LUNCH_MAP[nombre];
+  return lunchEntry('13:00', '14:00');
+}
+
+function buildLunchOverrides() {
+  LUNCH_OVERRIDES = {};
+  (LISTAS['AlmuerzoOv'] || []).forEach(v => {
+    const p = v.split('|'); // nombre|fecha|ini|fin
+    if (p.length === 4) LUNCH_OVERRIDES[`${p[0]}|${p[1]}`] = lunchEntry(p[2], p[3]);
+  });
 }
 const BADGE = {'Por Iniciar':'bi','Programada':'bpr','En Proceso':'bp','Listo':'bl','Standby':'bs','Cancelado':'bc'};
 const ESTADO_COLS = {
@@ -852,6 +868,7 @@ async function loadData(forceRefresh=false) {
     SESSION.almuerzoIni = LUNCH_MAP[SESSION.nombre].ini;
     SESSION.almuerzoFin = LUNCH_MAP[SESSION.nombre].fin;
   }
+  buildLunchOverrides();
   try {
     sessionStorage.setItem('ot_cache', JSON.stringify({bloques:BLOQUES, listas:LISTAS}));
     sessionStorage.setItem('ot_cache_time', String(Date.now()));
@@ -1322,14 +1339,21 @@ function calRender() {
     }).join('');
 
     // Bloque de almuerzo
-    const lDec = getLunchFor(person);
+    const lDec = getLunchFor(person, ds);
+    const hasOv = !!LUNCH_OVERRIDES[`${person}|${ds}`];
     const lTopPx  = Math.max(0, (lDec.start - hStart) * HOUR_H);
     const lHpx    = Math.max(20, (lDec.end - lDec.start) * HOUR_H);
-    const lunchBlock = !isSat ? `<div style="position:absolute;left:2px;right:2px;top:${lTopPx}px;height:${lHpx}px;
-      background:#fef9ec;border-left:3px solid #e8a317;border-radius:4px;
-      padding:2px 5px;font-size:9px;font-weight:700;color:#856404;
-      z-index:4;pointer-events:none;overflow:hidden">
-      🍽 Almuerzo<br><span style="font-weight:400">${lDec.ini||''}–${lDec.fin||''}</span>
+    const isMe = person === SESSION.nombre;
+    const lunchBlock = !isSat ? `<div
+      style="position:absolute;left:2px;right:2px;top:${lTopPx}px;height:${lHpx}px;
+        background:${hasOv?'#fff8e1':'#fef9ec'};border-left:3px solid ${hasOv?'#f59e0b':'#e8a317'};
+        border-radius:4px;padding:2px 5px;font-size:9px;font-weight:700;color:#856404;
+        z-index:4;overflow:hidden;${isMe?'cursor:pointer;':'pointer-events:none;'}"
+      title="${isMe?'Clic para editar este día':''}"
+      onclick="${isMe?`abrirModalAlmuerzoFecha('${person}','${ds}')`:''}"
+    >
+      🍽 Almuerzo${hasOv?' ✎':''}
+      <br><span style="font-weight:400">${lDec.ini}–${lDec.fin}</span>
     </div>` : '';
 
     // Now line
@@ -4481,6 +4505,68 @@ function abrirModalAlmuerzo() {
         <span class="st"></span><span class="bt">Guardar</span>
       </button>
     </div>`);
+}
+
+function abrirModalAlmuerzoFecha(nombre, fecha) {
+  const ov = LUNCH_OVERRIDES[`${nombre}|${fecha}`];
+  const def = LUNCH_MAP[nombre] || lunchEntry('13:00','14:00');
+  const ini = ov ? ov.ini : def.ini;
+  const fin = ov ? ov.fin : def.fin;
+  const fechaLabel = new Date(fecha+'T12:00:00').toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long'});
+  openModal(`
+    <div class="mt"><div class="rb"></div>🍽 Almuerzo — ${fechaLabel}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+      Ajusta el horario solo para este día. El resto de la semana mantiene el predeterminado
+      (${def.ini}–${def.fin}).
+    </div>
+    <div class="g2" style="margin-bottom:14px">
+      <div class="efi">
+        <label class="rq">Hora inicio</label>
+        <input type="time" id="ovIni" value="${ini}"
+          style="background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:8px;font-size:14px;width:100%">
+      </div>
+      <div class="efi">
+        <label class="rq">Hora fin</label>
+        <input type="time" id="ovFin" value="${fin}"
+          style="background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:8px;font-size:14px;width:100%">
+      </div>
+    </div>
+    <div class="ma">
+      ${ov ? `<button class="btn ghost danger" onclick="eliminarAlmuerzoOvLocal('${nombre}','${fecha}')">
+        <span class="bt">↩ Restaurar predeterminado</span></button>` : `<button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>`}
+      <button class="btn" style="background:var(--green)" onclick="guardarAlmuerzoOvLocal('${nombre}','${fecha}')">
+        <span class="st"></span><span class="bt">Guardar para este día</span>
+      </button>
+    </div>`);
+}
+
+async function guardarAlmuerzoOvLocal(nombre, fecha) {
+  const ini = document.getElementById('ovIni')?.value;
+  const fin = document.getElementById('ovFin')?.value;
+  if (!ini || !fin) { toast('Completa ambos horarios','warn'); return; }
+  if (t2m(fin) <= t2m(ini)) { toast('La hora fin debe ser posterior al inicio','warn'); return; }
+  LUNCH_OVERRIDES[`${nombre}|${fecha}`] = lunchEntry(ini, fin);
+  // Sync LISTAS['AlmuerzoOv'] para que persista en cache
+  if (!LISTAS['AlmuerzoOv']) LISTAS['AlmuerzoOv'] = [];
+  const idx = LISTAS['AlmuerzoOv'].findIndex(v => v.startsWith(`${nombre}|${fecha}|`));
+  const val = `${nombre}|${fecha}|${ini}|${fin}`;
+  if (idx > -1) LISTAS['AlmuerzoOv'][idx] = val; else LISTAS['AlmuerzoOv'].push(val);
+  cerrarModal();
+  toast(`🍽 Almuerzo del ${fecha} actualizado`,'ok');
+  calRender();
+  apiPost({accion:'guardarAlmuerzoOv', nombre, fecha, ini, fin})
+    .catch(() => toast('Error al guardar','er'));
+}
+
+async function eliminarAlmuerzoOvLocal(nombre, fecha) {
+  delete LUNCH_OVERRIDES[`${nombre}|${fecha}`];
+  if (LISTAS['AlmuerzoOv'])
+    LISTAS['AlmuerzoOv'] = LISTAS['AlmuerzoOv'].filter(v => !v.startsWith(`${nombre}|${fecha}|`));
+  cerrarModal();
+  toast('↩ Restaurado al predeterminado','ok');
+  calRender();
+  apiPost({accion:'eliminarAlmuerzoOv', nombre, fecha})
+    .catch(() => toast('Error al guardar','er'));
 }
 
 async function guardarHorarioAlmuerzo() {
