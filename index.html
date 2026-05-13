@@ -712,6 +712,30 @@ function validate(fields) {
   return miss;
 }
 function clearErr(ids){ids.forEach(id=>document.getElementById(id)?.classList.remove('err'));}
+function markErr(ids){
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.add('err'); el.addEventListener('input', ()=>el.classList.remove('err'), {once:true}); }
+  });
+  // Scroll al primer campo con error
+  const first = ids.map(id=>document.getElementById(id)).find(Boolean);
+  if (first) first.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+// Muestra un banner de error dentro del formulario con la lista de campos faltantes
+function showFormError(containerId, labels) {
+  let el = document.getElementById(containerId);
+  if (!el) return;
+  if (!labels || labels.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#b91c1c">
+    <strong>⚠ Faltan campos obligatorios:</strong>
+    <ul style="margin:6px 0 0 16px;padding:0">${labels.map(l=>`<li>${l}</li>`).join('')}</ul>
+  </div>`;
+}
+function clearFormError(containerId) {
+  const el = document.getElementById(containerId);
+  if (el) el.innerHTML = '';
+}
 
 // Active user name (impersonation-aware)
 function activeUser() { return SESSION.nombre; }
@@ -877,6 +901,15 @@ async function loadData(forceRefresh=false) {
 }
 
 
+
+// Sincroniza el estado actual de BLOQUES/LISTAS en sessionStorage sin llamar a la API
+function syncCache() {
+  try {
+    sessionStorage.setItem('ot_cache', JSON.stringify({bloques:BLOQUES, listas:LISTAS}));
+    sessionStorage.setItem('ot_cache_time', String(Date.now()));
+  } catch(e) {}
+  _updateAlertCount();
+}
 
 function _updateAlertCount() {
   const sinProg = BLOQUES.filter(b => b.estado === 'Por Iniciar').length;
@@ -1611,19 +1644,14 @@ async function confirmarProgramacionBloque(bloqueId, esReprog) {
   toast(`✅ Bloque #${b.id} ${esReprog?'reprogramado':'programado'}: ${fec} ${ini}–${ter}`,'ok');
   calRender();
 
-  // Sync en background
-  (async () => {
-    try {
-      if (esReprog) {
-        await apiPost({accion:'reprogramar', bloqueId:b.id, titulo:b.titulo, responsable:b.responsable,
-          fechaOriginal:b.fechaProg, horaInicioOriginal:b.horaInicioProg, horaFinOriginal:b.horaFinProg,
-          fechaNueva:fec, horaInicioNueva:ini, horaFinNueva:ter, motivo, esUrgencia:false, reprogramadoPor:SESSION.nombre});
-      } else {
-        await apiPost({accion:'actualizar', id:b.id, campos:{10:'Programado', 16:fec, 17:ini, 18:ter}});
-      }
-      await loadData(true);
-    } catch(e) { toast('Error al guardar — recarga la app','er'); }
-  })();
+  syncCache();
+  // Sync en background — sin bloquear UI
+  const syncPromise = esReprog
+    ? apiPost({accion:'reprogramar', bloqueId:b.id, titulo:b.titulo, responsable:b.responsable,
+        fechaOriginal:b.fechaProg, horaInicioOriginal:b.horaInicioProg, horaFinOriginal:b.horaFinProg,
+        fechaNueva:fec, horaInicioNueva:ini, horaFinNueva:ter, motivo, esUrgencia:false, reprogramadoPor:SESSION.nombre})
+    : apiPost({accion:'actualizar', id:b.id, campos:{10:'Programado', 16:fec, 17:ini, 18:ter}});
+  syncPromise.catch(() => toast('Error al guardar — recarga la app','er'));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1739,13 +1767,10 @@ async function cfAccion(bid) {
   toast('✅ Bloque confirmado','ok');
   document.getElementById('main').innerHTML = vConfirmarBloque();
 
-  (async () => {
-    try {
-      await apiPost({accion:'actualizar', id:bid, campos});
-      await apiPost({accion:'actualizarUltimoRegistro', usuario:SESSION.usuario});
-      await loadData(true);
-    } catch(e) { toast('Error al guardar — recarga la app','er'); }
-  })();
+  syncCache();
+  apiPost({accion:'actualizar', id:bid, campos})
+    .then(() => apiPost({accion:'actualizarUltimoRegistro', usuario:SESSION.usuario}))
+    .catch(() => toast('Error al guardar — recarga la app','er'));
 }
 
 function cfAccionEstado(bid, accion) {
@@ -1792,19 +1817,15 @@ async function cfConfirmEstado(bid, accion) {
   toast(`Bloque #${bid}: ${nuevoEstado}`,'ok');
   document.getElementById('main').innerHTML=vConfirmarBloque();
 
-  (async () => {
-    try {
-      const campos={10:nuevoEstado};
-      if(accion==='reprog') {
-        campos[16]=''; campos[17]=''; campos[18]='';
-        await apiPost({accion:'reprogramar', bloqueId:b.id, titulo:b.titulo, responsable:b.responsable,
-          fechaOriginal:b.fechaProg, horaInicioOriginal:b.horaInicioProg, horaFinOriginal:b.horaFinProg,
-          fechaNueva:'', horaInicioNueva:'', horaFinNueva:'', motivo, esUrgencia:false, reprogramadoPor:SESSION.nombre});
-      }
-      await apiPost({accion:'actualizar', id:bid, campos});
-      await loadData(true);
-    } catch(e) { toast('Error al guardar — recarga la app','er'); }
-  })();
+  syncCache();
+  const campos={10:nuevoEstado};
+  const chain = accion==='reprog'
+    ? apiPost({accion:'reprogramar', bloqueId:b.id, titulo:b.titulo, responsable:b.responsable,
+        fechaOriginal:b.fechaProg, horaInicioOriginal:b.horaInicioProg, horaFinOriginal:b.horaFinProg,
+        fechaNueva:'', horaInicioNueva:'', horaFinNueva:'', motivo, esUrgencia:false, reprogramadoPor:SESSION.nombre})
+        .then(() => { campos[16]=''; campos[17]=''; campos[18]=''; return apiPost({accion:'actualizar', id:bid, campos}); })
+    : apiPost({accion:'actualizar', id:bid, campos});
+  chain.catch(() => toast('Error al guardar — recarga la app','er'));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2906,10 +2927,13 @@ function abrirModalBloque(id) {
 
 async function cancelarBloque(id) {
   if (!confirm('¿Cancelar este bloque?')) return;
-  await apiPost({accion:'actualizar', id, campos:{10:'Cancelado'}});
-  await loadData(true);
+  const idx = BLOQUES.findIndex(b => String(b.id) === String(id));
+  if (idx > -1) BLOQUES[idx] = {...BLOQUES[idx], estado:'Cancelado'};
   cerrarModal();
   toast('Bloque cancelado','ok');
+  syncCache();
+  apiPost({accion:'actualizar', id, campos:{10:'Cancelado'}})
+    .catch(() => toast('Error al cancelar — recarga la app','er'));
 }
 
 async function cargarReprogModalBloque(id) {
@@ -3095,6 +3119,7 @@ function vNuevoBloque() {
     </div>
 
     <div class="card">
+      <div id="nbFormError"></div>
       <button class="btn w" id="btnGuardarNB" onclick="guardarNuevoBloque()">
         <span class="sp"></span><span class="st"></span><span class="bt">Guardar bloque</span>
       </button>
@@ -3156,24 +3181,22 @@ function nbCalcHH() {
 }
 
 async function guardarNuevoBloque() {
-  if (!nbTipo) { toast('Selecciona un tipo de bloque','warn'); return; }
+  clearFormError('nbFormError');
+  if (!nbTipo) { toast('Selecciona Express o Simple primero','warn'); return; }
 
-  const resp  = document.getElementById('nbResp').value.trim();
-  const sol   = document.getElementById('nbSol').value;
-  const tit   = document.getElementById('nbTit').value.trim();
-  const area  = document.getElementById('nbAre').value;
-  const tip   = document.getElementById('nbTip').value;
+  // Mapa id → etiqueta legible
+  const LABELS = {
+    nbSol:'Solicitante', nbTit:'Título/Descripción', nbAre:'Área', nbTip:'Tipo de bloque',
+    nbFechaR:'Fecha de ejecución', nbHIni:'Hora inicio', nbHFin:'Hora fin', nbHHp:'HH Planificadas'
+  };
 
   const required = ['nbSol','nbTit','nbAre','nbTip'];
   const missing = required.filter(id => !document.getElementById(id)?.value?.trim());
 
-  if (nbEisUrgente === null) { toast('Indica si el bloque es urgente','warn'); return; }
-  if (nbEisImportante === null) { toast('Indica si el bloque es importante','warn'); return; }
-
   let hhReal = 0, fechaReal = '', horaInicio = '', horaFin = '', hhPlan = 0, comentario = '';
 
   if (nbTipo === 'express') {
-    const fR  = document.getElementById('nbFechaR').value;
+    const fR   = document.getElementById('nbFechaR').value;
     const hIni = document.getElementById('nbHIni').value;
     const hFin = document.getElementById('nbHFin').value;
     comentario = document.getElementById('nbComE').value.trim();
@@ -3181,11 +3204,12 @@ async function guardarNuevoBloque() {
     if (!hIni) missing.push('nbHIni');
     if (!hFin) missing.push('nbHFin');
     if (missing.length === 0) {
-      fechaReal  = fR;
-      horaInicio = hIni;
-      horaFin    = hFin;
-      hhReal     = calcHHRaw(hIni, hFin);
-      if (hhReal <= 0) { toast('La hora fin debe ser mayor que la hora inicio','warn'); return; }
+      fechaReal  = fR; horaInicio = hIni; horaFin = hFin;
+      hhReal = calcHHRaw(hIni, hFin);
+      if (hhReal <= 0) {
+        showFormError('nbFormError', ['La hora fin debe ser posterior a la hora inicio']);
+        markErr(['nbHIni','nbHFin']); return;
+      }
     }
   } else {
     const hhp = parseFloat(document.getElementById('nbHHp').value);
@@ -3194,9 +3218,15 @@ async function guardarNuevoBloque() {
     else hhPlan = hhp;
   }
 
-  if (missing.length > 0) {
+  // Validar Eisenhower
+  const eisMissing = [];
+  if (nbEisUrgente === null)   eisMissing.push('Urgente (Sí / No)');
+  if (nbEisImportante === null) eisMissing.push('Importante (Sí / No)');
+
+  const allMissing = missing.map(id => LABELS[id] || id).concat(eisMissing);
+  if (allMissing.length > 0) {
     markErr(missing);
-    toast('Completa todos los campos obligatorios','warn');
+    showFormError('nbFormError', allMissing);
     return;
   }
 
@@ -3221,24 +3251,44 @@ async function guardarNuevoBloque() {
     horaFinProg:     '',
   };
 
-  const btn = document.getElementById('btnGuardarNB');
-  btn.classList.add('ld');
-  try {
-    const r = await apiPost({accion:'insertar', bloque});
-    if (!r.ok) { toast('Error al guardar: '+(r.error||''),'err'); return; }
-    if (nbTipo === 'express') {
-      await apiPost({accion:'actualizarUltimoRegistro', usuario:SESSION.usuario});
-    }
-    await loadData(true);
-    const tipoGuardado = nbTipo;
-    nbTipo = ''; nbEisUrgente = null; nbEisImportante = null;
-    toast(tipoGuardado==='express'?'✅ Bloque Express guardado y confirmado':'✅ Bloque Simple creado. Prográmalo desde la Agenda','ok');
-    goSub('A','bloques');
-  } catch(e) {
-    toast('Error de conexión','err');
-  } finally {
-    btn.classList.remove('ld');
-  }
+  // Optimistic insert — UI responde al instante
+  const tempId = `tmp_${Date.now()}`;
+  const tempBloque = {
+    id: tempId, tipoIngreso: bloque.tipoIngreso, tipoBloque: bloque.tipoBloque,
+    titulo: bloque.titulo, area: bloque.area, solicitante: bloque.solicitante,
+    responsable: bloque.responsable, urgente: bloque.urgente, importante: bloque.importante,
+    comentario: bloque.comentario, estado: bloque.estado,
+    fechaReal: bloque.fechaReal||'', horaInicio: bloque.horaInicio||'', horaFin: bloque.horaFin||'',
+    hhReal: parseFloat(bloque.hhReal)||0, hhPlan: parseFloat(bloque.hhPlan)||0,
+    fechaProg:'', horaInicioProg:'', horaFinProg:'', fechaIngreso: todayStr()
+  };
+  BLOQUES.unshift(tempBloque);
+  clearFormError('nbFormError');
+  const tipoGuardado = nbTipo;
+  nbTipo = ''; nbEisUrgente = null; nbEisImportante = null;
+  syncCache();
+  toast(tipoGuardado==='express'?'✅ Bloque Express guardado y confirmado':'✅ Bloque Simple creado. Prográmalo desde la Agenda','ok');
+  goSub('A','bloques');
+
+  // Sync en background — reemplaza tempId con el ID real
+  apiPost({accion:'insertar', bloque})
+    .then(r => {
+      if (r?.ok) {
+        const ti = BLOQUES.findIndex(b => b.id === tempId);
+        if (ti > -1) BLOQUES[ti].id = r.id;
+        if (tipoGuardado === 'express') apiPost({accion:'actualizarUltimoRegistro', usuario:SESSION.usuario});
+        syncCache();
+      } else {
+        BLOQUES = BLOQUES.filter(b => b.id !== tempId);
+        syncCache();
+        toast('Error al guardar: '+(r?.error||''),'er');
+      }
+    })
+    .catch(() => {
+      BLOQUES = BLOQUES.filter(b => b.id !== tempId);
+      syncCache();
+      toast('Error de conexión — intenta de nuevo','er');
+    });
 }
 
 
@@ -4326,7 +4376,15 @@ function nuevoUsuario(){
     </div>`);
 }
 
-async function guardarListas(){const items=[];Object.entries(LISTAS).forEach(([t,vs])=>vs.forEach(v=>items.push({tipo:t,valor:v})));await apiPost({accion:'guardarLista',items});toast('Listas guardadas','ok');}
+function guardarListas(){
+  const items=[];
+  Object.entries(LISTAS).forEach(([t,vs])=>vs.forEach(v=>items.push({tipo:t,valor:v})));
+  syncCache();
+  toast('Guardando listas…','ok');
+  apiPost({accion:'guardarLista',items})
+    .then(()=>toast('✅ Listas guardadas','ok'))
+    .catch(()=>toast('Error al guardar listas','er'));
+}
 
 function renderSolAreaAdmin() {
   const el = document.getElementById('solAreaAdmin'); if (!el) return;
