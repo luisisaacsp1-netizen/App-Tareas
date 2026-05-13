@@ -864,6 +864,12 @@ async function loadData(forceRefresh=false) {
       if (cached && Date.now() - cachedTime < 600000) {
         const d = JSON.parse(cached);
         BLOQUES = d.bloques; LISTAS = d.listas;
+        if (d.lunchMap) LUNCH_MAP = d.lunchMap;
+        buildLunchOverrides();
+        if (SESSION?.nombre && LUNCH_MAP[SESSION.nombre]) {
+          SESSION.almuerzoIni = LUNCH_MAP[SESSION.nombre].ini;
+          SESSION.almuerzoFin = LUNCH_MAP[SESSION.nombre].fin;
+        }
         _updateAlertCount();
         return;
       }
@@ -902,10 +908,10 @@ async function loadData(forceRefresh=false) {
 
 
 
-// Sincroniza el estado actual de BLOQUES/LISTAS en sessionStorage sin llamar a la API
+// Sincroniza el estado actual de BLOQUES/LISTAS/LUNCH_MAP en sessionStorage sin llamar a la API
 function syncCache() {
   try {
-    sessionStorage.setItem('ot_cache', JSON.stringify({bloques:BLOQUES, listas:LISTAS}));
+    sessionStorage.setItem('ot_cache', JSON.stringify({bloques:BLOQUES, listas:LISTAS, lunchMap:LUNCH_MAP}));
     sessionStorage.setItem('ot_cache_time', String(Date.now()));
   } catch(e) {}
   _updateAlertCount();
