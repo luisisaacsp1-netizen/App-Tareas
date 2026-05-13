@@ -641,10 +641,39 @@ function toast(msg, type='ok') {
 function opts(tipo, sel='') {
   return (LISTAS[tipo]||[]).map(v=>`<option value="${v}" ${v===sel?'selected':''}>${v}</option>`).join('');
 }
+// Autocomplete input con datalist nativo
+function ac(tipo, id, placeholder='', extra='') {
+  const dl = (LISTAS[tipo]||[]).map(v=>`<option value="${v}">`).join('');
+  return `<input type="text" id="${id}" list="dl_${id}" autocomplete="off" placeholder="${placeholder}" ${extra}><datalist id="dl_${id}">${dl}</datalist>`;
+}
+// Construye mapa SolArea desde LISTAS['SolArea']
+function getSolAreaMap() {
+  const map = {};
+  (LISTAS['SolArea']||[]).forEach(v => {
+    const p = v.split('|'); if (p.length>=2) map[p[0].trim()] = p[1].trim();
+  });
+  return map;
+}
 function t2m(t) { const[h,m]=t.split(':').map(Number); return h*60+m; }
 function m2t(m) { return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
 function calcHHRaw(ini,ter) { let d=t2m(ter)-t2m(ini); if(d<0)d+=1440; return Math.round(d/60*100)/100; }
 function fmtHH(h) { return h!=null?Math.round(parseFloat(h)*10)/10:'—'; }
+function getEstadoEfectivo(b) {
+  if (b.estado !== 'Programado') return b.estado;
+  if (!b.fechaProg || !b.horaInicioProg || !b.horaFinProg) return b.estado;
+  if (b.fechaProg !== todayStr()) return b.estado;
+  const now = new Date(); const nowMin = now.getHours()*60 + now.getMinutes();
+  if (nowMin >= t2m(b.horaInicioProg) && nowMin < t2m(b.horaFinProg)) return 'En Proceso';
+  return b.estado;
+}
+function bloqueYaTermino(b) {
+  if (!b.fechaProg || !b.horaFinProg) return false;
+  const hoy = todayStr();
+  if (b.fechaProg < hoy) return true;
+  if (b.fechaProg > hoy) return false;
+  const now = new Date();
+  return now.getHours()*60 + now.getMinutes() >= t2m(b.horaFinProg);
+}
 function dateStr(d) { return d instanceof Date?d.toISOString().split('T')[0]:String(d||'').substring(0,10); }
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 function mondayStr() {
@@ -1251,7 +1280,9 @@ function calRender() {
     const events = daySessions.map(b => {
       const topPx    = Math.max(0, (t2m(b._ini)/60 - hStart) * HOUR_H);
       const heightPx = Math.max(20, calcHHRaw(b._ini, b._ter) * HOUR_H);
-      const evtCls   = b.estado === 'Confirmado' ? 'done' : 'planned';
+      const est      = getEstadoEfectivo(b);
+      const evtCls   = est === 'Confirmado' ? 'done' : est === 'En Proceso' ? 'inprogress' : 'planned';
+      const icon     = est === 'Confirmado' ? ' ✅' : est === 'En Proceso' ? ' ⏳' : ' 📋';
       return `<div class="cal-event ${evtCls}"
         draggable="true"
         style="top:${topPx}px;height:${heightPx}px"
@@ -1260,7 +1291,7 @@ function calRender() {
         ondragend="this.classList.remove('dragging')"
         onclick="event.stopPropagation();abrirModalBloque(${b.id})">
         <div class="cal-event-title">#${b.id} ${(b.titulo||'').substring(0,18)}</div>
-        <div class="cal-event-time">${b._ini}–${b._ter}${b.estado==='Confirmado'?' ✅':' 📋'}</div>
+        <div class="cal-event-time">${b._ini}–${b._ter}${icon}</div>
       </div>`;
     }).join('');
 
@@ -1468,9 +1499,15 @@ function abrirModalProgramarBloque(bloqueId, prefDate=null, prefIni=null, prefTe
     <div class="efi" style="margin-bottom:10px">
       <label class="rq">Motivo reprogramación</label>
       <select id="schMotivo" style="background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:8px 22px 8px 9px;font-size:13px;width:100%">
-        <option value="">— seleccionar —</option>${opts('MotivoReprog')}
+        <option value="">— seleccionar —</option>${opts('MotivoReprog')||['Cambio de prioridad','Falta de recursos','Cambio de agenda cliente','Imprevisto operativo','Otro'].map(v=>`<option value="${v}">${v}</option>`).join('')}
       </select>
-    </div>` : ''}
+      <input type="text" id="schMotivoOtro" placeholder="Especifica el motivo…"
+        style="display:none;margin-top:6px;background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;width:100%;box-sizing:border-box">
+    </div>
+    <script>document.getElementById('schMotivo')?.addEventListener('change',function(){
+      const o=document.getElementById('schMotivoOtro');
+      if(o) o.style.display=this.value==='Otro'?'block':'none';
+    });</script>` : ''}
     <div class="ma">
       <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>
       <button class="btn" style="background:var(--green)" onclick="confirmarProgramacionBloque('${bloqueId}',${!!b.fechaProg})">
@@ -1489,10 +1526,12 @@ function schBloqueUpdTer() {
 }
 
 async function confirmarProgramacionBloque(bloqueId, esReprog) {
-  const fec    = document.getElementById('schDate')?.value;
-  const ini    = document.getElementById('schIni')?.value;
-  const ter    = document.getElementById('schTer')?.value;
-  const motivo = document.getElementById('schMotivo')?.value || '';
+  const fec     = document.getElementById('schDate')?.value;
+  const ini     = document.getElementById('schIni')?.value;
+  const ter     = document.getElementById('schTer')?.value;
+  const mSel    = document.getElementById('schMotivo')?.value || '';
+  const mOtro   = document.getElementById('schMotivoOtro')?.value?.trim() || '';
+  const motivo  = mSel === 'Otro' ? (mOtro || 'Otro') : mSel;
 
   if (!fec || !ini || !ter) { toast('Completa fecha y horario','warn'); return; }
   if (esReprog && !motivo) { toast('Indica el motivo de reprogramación','warn'); return; }
@@ -1500,26 +1539,26 @@ async function confirmarProgramacionBloque(bloqueId, esReprog) {
   const b = BLOQUES.find(x => String(x.id) === String(bloqueId));
   if (!b) return;
 
-  if (esReprog) {
-    await apiPost({accion:'reprogramar',
-      bloqueId: b.id, titulo: b.titulo, responsable: b.responsable,
-      fechaOriginal: b.fechaProg, horaInicioOriginal: b.horaInicioProg, horaFinOriginal: b.horaFinProg,
-      fechaNueva: fec, horaInicioNueva: ini, horaFinNueva: ter,
-      motivo, esUrgencia: false, reprogramadoPor: SESSION.nombre,
-    });
-  } else {
-    await apiPost({accion:'actualizar', id:b.id, campos:{
-      10: 'Programado',
-      16: fec,
-      17: ini,
-      18: ter,
-    }});
-  }
-
-  await loadData(true);
+  // Optimistic update — UI responde inmediatamente
+  const idx = BLOQUES.findIndex(x => String(x.id) === String(bloqueId));
+  if (idx > -1) BLOQUES[idx] = {...BLOQUES[idx], estado:'Programado', fechaProg:fec, horaInicioProg:ini, horaFinProg:ter};
   cerrarModal();
   toast(`✅ Bloque #${b.id} ${esReprog?'reprogramado':'programado'}: ${fec} ${ini}–${ter}`,'ok');
   calRender();
+
+  // Sync en background
+  (async () => {
+    try {
+      if (esReprog) {
+        await apiPost({accion:'reprogramar', bloqueId:b.id, titulo:b.titulo, responsable:b.responsable,
+          fechaOriginal:b.fechaProg, horaInicioOriginal:b.horaInicioProg, horaFinOriginal:b.horaFinProg,
+          fechaNueva:fec, horaInicioNueva:ini, horaFinNueva:ter, motivo, esUrgencia:false, reprogramadoPor:SESSION.nombre});
+      } else {
+        await apiPost({accion:'actualizar', id:b.id, campos:{10:'Programado', 16:fec, 17:ini, 18:ter}});
+      }
+      await loadData(true);
+    } catch(e) { toast('Error al guardar — recarga la app','er'); }
+  })();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1531,7 +1570,7 @@ function vConfirmarBloque(overridePers=null) {
   const me  = SESSION.nombre;
 
   const pendientes = BLOQUES
-    .filter(b => b.responsable === me && b.estado === 'Programado' && b.fechaProg <= hoy)
+    .filter(b => b.responsable === me && b.estado === 'Programado' && bloqueYaTermino(b))
     .sort((a,b) => a.fechaProg > b.fechaProg ? 1 : -1);
 
   const BADGE = {
@@ -1626,11 +1665,22 @@ async function cfAccion(bid) {
   const campos = {10:'Confirmado', 11:fec, 12:ini, 13:ter, 14:hh};
   if (com) campos[9] = com;
 
-  await apiPost({accion:'actualizar', id:bid, campos});
-  await apiPost({accion:'actualizarUltimoRegistro', usuario:SESSION.usuario});
-  await loadData(true);
+  // Optimistic update
+  const idx = BLOQUES.findIndex(x => String(x.id) === String(bid));
+  if (idx > -1) {
+    BLOQUES[idx] = {...BLOQUES[idx], estado:'Confirmado', fechaReal:fec, horaInicio:ini, horaFin:ter, hhReal:hh};
+    if (com) BLOQUES[idx].comentario = com;
+  }
   toast('✅ Bloque confirmado','ok');
   document.getElementById('main').innerHTML = vConfirmarBloque();
+
+  (async () => {
+    try {
+      await apiPost({accion:'actualizar', id:bid, campos});
+      await apiPost({accion:'actualizarUltimoRegistro', usuario:SESSION.usuario});
+      await loadData(true);
+    } catch(e) { toast('Error al guardar — recarga la app','er'); }
+  })();
 }
 
 function cfAccionEstado(bid, accion) {
@@ -1666,21 +1716,30 @@ async function cfConfirmEstado(bid, accion) {
   let nuevoEstado='Por Iniciar';
   if(accion==='standby') nuevoEstado='Standby';
   else if(accion==='cancelar') nuevoEstado='Cancelado';
-  else nuevoEstado='Por Iniciar';
-  const campos={10:nuevoEstado};
-  if(accion==='reprog') {
-    campos[16]=''; campos[17]=''; campos[18]=''; // clear fechaProg/horarios
-    await apiPost({accion:'reprogramar',
-      bloqueId:b.id, titulo:b.titulo, responsable:b.responsable,
-      fechaOriginal:b.fechaProg, horaInicioOriginal:b.horaInicioProg, horaFinOriginal:b.horaFinProg,
-      fechaNueva:'', horaInicioNueva:'', horaFinNueva:'',
-      motivo, esUrgencia:false, reprogramadoPor:SESSION.nombre});
+
+  // Optimistic update
+  const idx=BLOQUES.findIndex(x=>String(x.id)===String(bid));
+  if(idx>-1) {
+    BLOQUES[idx]={...BLOQUES[idx], estado:nuevoEstado};
+    if(accion==='reprog'){BLOQUES[idx].fechaProg='';BLOQUES[idx].horaInicioProg='';BLOQUES[idx].horaFinProg='';}
   }
-  await apiPost({accion:'actualizar', id:bid, campos});
-  await loadData(true);
   cerrarModal();
   toast(`Bloque #${bid}: ${nuevoEstado}`,'ok');
   document.getElementById('main').innerHTML=vConfirmarBloque();
+
+  (async () => {
+    try {
+      const campos={10:nuevoEstado};
+      if(accion==='reprog') {
+        campos[16]=''; campos[17]=''; campos[18]='';
+        await apiPost({accion:'reprogramar', bloqueId:b.id, titulo:b.titulo, responsable:b.responsable,
+          fechaOriginal:b.fechaProg, horaInicioOriginal:b.horaInicioProg, horaFinOriginal:b.horaFinProg,
+          fechaNueva:'', horaInicioNueva:'', horaFinNueva:'', motivo, esUrgencia:false, reprogramadoPor:SESSION.nombre});
+      }
+      await apiPost({accion:'actualizar', id:bid, campos});
+      await loadData(true);
+    } catch(e) { toast('Error al guardar — recarga la app','er'); }
+  })();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2744,7 +2803,7 @@ function abrirModalBloque(id) {
     : `<div style="color:var(--muted);font-size:12px">Sin ejecutar</div>`;
 
   const isProgramable = ['Por Iniciar','Programado'].includes(b.estado);
-  const canConfirm = b.estado === 'Programado';
+  const canConfirm = b.estado === 'Programado' && bloqueYaTermino(b);
   const isConfirmado = b.estado === 'Confirmado';
 
   openModal(`
@@ -2885,7 +2944,7 @@ function vNuevoBloque() {
         </div>
         <div class="fi">
           <label class="rq">Solicitante</label>
-          <select id="nbSol" onchange="clearErr(['nbSol'])"><option value="">— seleccionar —</option>${opts('Solicitante')}</select>
+          ${ac('Solicitante','nbSol','Escribe o selecciona…','oninput="nbSolChange()" onchange="nbSolChange()" style="width:100%"')}
         </div>
         <div class="fi fw">
           <label class="rq">Título / Descripción</label>
@@ -2899,7 +2958,7 @@ function vNuevoBloque() {
       <div class="g2">
         <div class="fi">
           <label class="rq">Área</label>
-          <select id="nbAre" onchange="clearErr(['nbAre'])"><option value="">— seleccionar —</option>${opts('Area')}</select>
+          ${ac('Area','nbAre','Escribe o selecciona…','oninput="clearErr([\'nbAre\'])" style="width:100%"')}
         </div>
         <div class="fi">
           <label class="rq">Tipo de bloque</label>
@@ -2996,15 +3055,32 @@ function setNBTipo(tipo) {
 function setNBEis(dim, val) {
   if (dim==='u') {
     nbEisUrgente = val;
-    document.getElementById('nbEisUS').classList.toggle('on', val===true);
-    document.getElementById('nbEisUN').classList.toggle('on', val===false);
+    document.getElementById('nbEisUS').className = 'eis-opt' + (val===true  ? ' on-yes' : '');
+    document.getElementById('nbEisUN').className = 'eis-opt' + (val===false ? ' on-no'  : '');
   } else {
     nbEisImportante = val;
-    document.getElementById('nbEisIS').classList.toggle('on', val===true);
-    document.getElementById('nbEisIN').classList.toggle('on', val===false);
+    document.getElementById('nbEisIS').className = 'eis-opt' + (val===true  ? ' on-yes' : '');
+    document.getElementById('nbEisIN').className = 'eis-opt' + (val===false ? ' on-no'  : '');
   }
 }
 
+function nbSolChange() {
+  clearErr(['nbSol']);
+  const sol = document.getElementById('nbSol')?.value?.trim();
+  const areaEl = document.getElementById('nbAre');
+  if (!sol || !areaEl) return;
+  // 1. Mapa estático SolArea
+  const map = getSolAreaMap();
+  if (map[sol]) { areaEl.value = map[sol]; return; }
+  // 2. Fallback: área más frecuente del historial
+  if (areaEl.value) return;
+  const counts = {};
+  BLOQUES.filter(b => b.solicitante === sol && b.area).forEach(b => {
+    counts[b.area] = (counts[b.area]||0)+1;
+  });
+  const top = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+  if (top) areaEl.value = top[0];
+}
 function nbCalcHH() {
   const ini = document.getElementById('nbHIni')?.value;
   const fin = document.getElementById('nbHFin')?.value;
@@ -3385,6 +3461,18 @@ function vCConfig() {
     <div class="cl"><div class="d"></div>Costos por hora ${tip('Valores en CLP por hora trabajada. Se usan en el dashboard de costos.')}</div>
     ${costosRows}
     <button class="btn sm" onclick="guardarCostos()"><span class="bt">Guardar costos</span></button>
+  </div>
+  <div class="card">
+    <div class="cl"><div class="d"></div>Solicitantes y Área predeterminada ${tip('Cuando se selecciona un solicitante en el formulario, el Área se completa automáticamente.')}</div>
+    <div id="solAreaAdmin"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <input type="text" id="saNom" placeholder="Nombre solicitante" style="flex:1;min-width:120px;background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px">
+      <select id="saArea" style="flex:1;min-width:120px;background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px">
+        <option value="">— Área —</option>${opts('Area')}
+      </select>
+      <button class="btn sm" onclick="addSolArea()"><span class="bt">+ Agregar</span></button>
+    </div>
+    <button class="btn sm" style="margin-top:10px" onclick="guardarSolArea()"><span class="bt">💾 Guardar</span></button>
   </div>
   <div class="card">
     <div class="cl"><div class="d"></div>Listas desplegables</div>
@@ -4175,6 +4263,48 @@ function nuevoUsuario(){
 
 async function guardarListas(){const items=[];Object.entries(LISTAS).forEach(([t,vs])=>vs.forEach(v=>items.push({tipo:t,valor:v})));await apiPost({accion:'guardarLista',items});toast('Listas guardadas','ok');}
 
+function renderSolAreaAdmin() {
+  const el = document.getElementById('solAreaAdmin'); if (!el) return;
+  const entries = LISTAS['SolArea'] || [];
+  if (!entries.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:6px 0">Sin registros. Agrega solicitantes abajo.</div>'; return; }
+  el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr>
+      <th style="text-align:left;padding:5px 8px;color:var(--muted);font-weight:600">Solicitante</th>
+      <th style="text-align:left;padding:5px 8px;color:var(--muted);font-weight:600">Área predeterminada</th>
+      <th style="width:30px"></th>
+    </tr></thead>
+    <tbody>${entries.map((v,i) => {
+      const [n,a] = v.split('|');
+      return `<tr style="border-top:1px solid var(--border)">
+        <td style="padding:5px 8px">${n||''}</td>
+        <td style="padding:5px 8px">${a||''}</td>
+        <td><button class="le-del" onclick="delSolArea(${i})">✕</button></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+function addSolArea() {
+  const n = document.getElementById('saNom')?.value?.trim();
+  const a = document.getElementById('saArea')?.value;
+  if (!n || !a) { toast('Completa nombre y área','warn'); return; }
+  if (!LISTAS['SolArea']) LISTAS['SolArea'] = [];
+  // Actualizar si ya existe
+  const idx = LISTAS['SolArea'].findIndex(v => v.split('|')[0].trim() === n);
+  if (idx > -1) LISTAS['SolArea'][idx] = `${n}|${a}`;
+  else LISTAS['SolArea'].push(`${n}|${a}`);
+  document.getElementById('saNom').value = '';
+  document.getElementById('saArea').value = '';
+  renderSolAreaAdmin();
+}
+
+function delSolArea(i) { LISTAS['SolArea'].splice(i,1); renderSolAreaAdmin(); }
+
+async function guardarSolArea() {
+  await guardarListas();
+  toast('✅ Solicitantes guardados','ok');
+}
+
 function cambiarLista(t){listaTab=t;document.querySelectorAll('#lTabs .tab').forEach(b=>b.classList.toggle('on',b.id===`lpill-${t}`));renderListaEd(t);}
 
 function renderListaEd(t){const items=LISTAS[t]||[];const ed=document.getElementById('lEditor');if(!ed)return;
@@ -4199,8 +4329,9 @@ async function guardarCostos(){
 }
 
 function initConfig(){
-  const keys=Object.keys(LISTAS);
+  const keys=Object.keys(LISTAS).filter(k=>k!=='SolArea');
   if(keys.length>0){cambiarLista(keys[0]);}
+  renderSolAreaAdmin();
 }
 
 
