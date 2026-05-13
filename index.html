@@ -558,15 +558,20 @@ const API = 'https://script.google.com/macros/s/AKfycbxSIUXdvPuizbBeMIUo29MEp_TR
 if (API.includes('REPLACE')) console.warn('⚠️ API URL not configured - check index.html');
 const SCHEDULE = {1:[8,17,12,13],2:[8,18,12,13],3:[8,17,12,13],4:[8,18,12,13],5:[8,17,12,13]};
 
-// Per-person lunch defaults (start, end in hours) - can be overridden
-const LUNCH_DEFAULTS = {
-  'Luis Sanchez': {start:13.5, end:14.5},  // 13:30-14:30
-  'Luis Diaz':    {start:13,   end:14},     // 13:00-14:00
-  'Yamila Silva': {start:14,   end:15},     // 14:00-15:00
-};
+// Per-person lunch map — populated dynamically from API
+let LUNCH_MAP = {};
+
+function hhmm2dec(hhmm) {
+  if (!hhmm) return 13;
+  const [h, m] = String(hhmm).split(':').map(Number);
+  return h + (m || 0) / 60;
+}
 
 function getLunchFor(nombre) {
-  return LUNCH_DEFAULTS[nombre] || {start:13, end:14};
+  const entry = LUNCH_MAP[nombre];
+  if (entry) return entry;
+  // Fallback si aún no cargaron los datos
+  return { start: 13, end: 14, ini: '13:00', fin: '14:00' };
 }
 const BADGE = {'Por Iniciar':'bi','Programada':'bpr','En Proceso':'bp','Listo':'bl','Standby':'bs','Cancelado':'bc'};
 const ESTADO_COLS = {
@@ -788,7 +793,7 @@ async function doLogin() {
   try {
     const r=await apiGet({accion:'login',usuario:user,password:pass});
     if(!r.ok){err.textContent=r.error||'Credenciales incorrectas';return;}
-    SESSION={usuario:r.usuario,nombre:r.nombre,rol:r.rol};
+    SESSION={usuario:r.usuario,nombre:r.nombre,rol:r.rol,almuerzoIni:r.almuerzoIni||'13:00',almuerzoFin:r.almuerzoFin||'14:00'};
     VIEW_AS=null;
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('appShell').style.display='block';
@@ -824,12 +829,29 @@ async function loadData(forceRefresh=false) {
       }
     } catch(e) {}
   }
-  const [bloqueRows, listas] = await Promise.all([
+  const [bloqueRows, listas, almuerzos] = await Promise.all([
     apiGet({accion:'leer'}),
     apiGet({accion:'listas'}),
+    apiGet({accion:'almuerzos'}),
   ]);
   LISTAS = listas || {};
   BLOQUES = Array.isArray(bloqueRows) ? bloqueRows : [];
+  // Construir LUNCH_MAP desde API
+  if (almuerzos && typeof almuerzos === 'object') {
+    LUNCH_MAP = {};
+    Object.entries(almuerzos).forEach(([nombre, v]) => {
+      LUNCH_MAP[nombre] = {
+        ini: v.ini, fin: v.fin,
+        start: hhmm2dec(v.ini),
+        end:   hhmm2dec(v.fin)
+      };
+    });
+  }
+  // Asegurar que el usuario actual tiene su horario actualizado en SESSION
+  if (SESSION?.nombre && LUNCH_MAP[SESSION.nombre]) {
+    SESSION.almuerzoIni = LUNCH_MAP[SESSION.nombre].ini;
+    SESSION.almuerzoFin = LUNCH_MAP[SESSION.nombre].fin;
+  }
   try {
     sessionStorage.setItem('ot_cache', JSON.stringify({bloques:BLOQUES, listas:LISTAS}));
     sessionStorage.setItem('ot_cache_time', String(Date.now()));
@@ -1082,13 +1104,17 @@ function vAgenda() {
 
   <div class="cal-wrap" id="calWrap"></div>
 
-  <div class="cal-legend" style="margin-top:6px">
-    <span style="font-size:10px;color:var(--muted);font-weight:600">LEYENDA:</span>
-    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#e0f2fe;border-left:3px solid #075985"></div><span>Programado</span></div>
-    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fff3cd;border-left:3px solid #856404"></div><span>En Proceso</span></div>
-    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#d4edda;border-left:3px solid #1a7a4a"></div><span>Completado</span></div>
-    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#f8d7da;border-left:3px solid #c0392b"></div><span>Vencido</span></div>
-    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#e2d9f3;border-left:3px solid #4a1f8c"></div><span>Express</span></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:6px">
+    <div class="cal-legend">
+      <span style="font-size:10px;color:var(--muted);font-weight:600">LEYENDA:</span>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#e0f2fe;border-left:3px solid #075985"></div><span>Programado</span></div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fff3cd;border-left:3px solid #856404"></div><span>En Proceso</span></div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#d4edda;border-left:3px solid #1a7a4a"></div><span>Completado</span></div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fef9ec;border-left:3px solid #e8a317"></div><span>Almuerzo</span></div>
+    </div>
+    <button class="btn sm ghost" onclick="abrirModalAlmuerzo()" style="font-size:11px">
+      🍽 Configurar almuerzo
+    </button>
   </div>`;
 }
 
@@ -1295,6 +1321,17 @@ function calRender() {
       </div>`;
     }).join('');
 
+    // Bloque de almuerzo
+    const lDec = getLunchFor(person);
+    const lTopPx  = Math.max(0, (lDec.start - hStart) * HOUR_H);
+    const lHpx    = Math.max(20, (lDec.end - lDec.start) * HOUR_H);
+    const lunchBlock = !isSat ? `<div style="position:absolute;left:2px;right:2px;top:${lTopPx}px;height:${lHpx}px;
+      background:#fef9ec;border-left:3px solid #e8a317;border-radius:4px;
+      padding:2px 5px;font-size:9px;font-weight:700;color:#856404;
+      z-index:4;pointer-events:none;overflow:hidden">
+      🍽 Almuerzo<br><span style="font-weight:400">${lDec.ini||''}–${lDec.fin||''}</span>
+    </div>` : '';
+
     // Now line
     let nowLine = '';
     if (isToday) {
@@ -1305,7 +1342,7 @@ function calRender() {
     }
 
     return `<div class="cal-col ${isSat?'sat-col':''}" style="position:relative">
-      ${cells}${events}${nowLine}
+      ${cells}${lunchBlock}${events}${nowLine}
     </div>`;
   }).join('');
 
@@ -4419,6 +4456,51 @@ async function confirmarCancelacion(tid) {
   toast('Bloque cancelado','ok');
 }
 
+
+function abrirModalAlmuerzo() {
+  const ini = SESSION.almuerzoIni || '13:00';
+  const fin = SESSION.almuerzoFin || '14:00';
+  openModal(`
+    <div class="mt"><div class="rb"></div>🍽 Horario de almuerzo</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+      Configura tu bloque de almuerzo personal. Se mostrará reservado en tu agenda cada día.
+    </div>
+    <div class="g2" style="margin-bottom:14px">
+      <div class="efi">
+        <label class="rq">Hora inicio</label>
+        <input type="time" id="alIni" value="${ini}" style="background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:8px;font-size:14px;width:100%">
+      </div>
+      <div class="efi">
+        <label class="rq">Hora fin</label>
+        <input type="time" id="alFin" value="${fin}" style="background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:8px;font-size:14px;width:100%">
+      </div>
+    </div>
+    <div class="ma">
+      <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>
+      <button class="btn" style="background:var(--green)" onclick="guardarHorarioAlmuerzo()">
+        <span class="st"></span><span class="bt">Guardar</span>
+      </button>
+    </div>`);
+}
+
+async function guardarHorarioAlmuerzo() {
+  const ini = document.getElementById('alIni')?.value;
+  const fin = document.getElementById('alFin')?.value;
+  if (!ini || !fin) { toast('Completa ambos horarios','warn'); return; }
+  if (t2m(fin) <= t2m(ini)) { toast('La hora fin debe ser posterior al inicio','warn'); return; }
+
+  // Actualizar local inmediatamente
+  SESSION.almuerzoIni = ini;
+  SESSION.almuerzoFin = fin;
+  LUNCH_MAP[SESSION.nombre] = { ini, fin, start: hhmm2dec(ini), end: hhmm2dec(fin) };
+  cerrarModal();
+  toast('🍽 Almuerzo actualizado','ok');
+  calRender();
+
+  // Guardar en Sheets en background
+  apiPost({accion:'guardarAlmuerzo', usuario:SESSION.usuario, ini, fin})
+    .catch(() => toast('Error al guardar — intenta de nuevo','er'));
+}
 
 function cfReprogramar(bid) {
   cerrarModal();
