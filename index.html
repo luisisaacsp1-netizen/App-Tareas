@@ -996,6 +996,7 @@ const SECS = {
       {id:'dRend',    ico:'⚡',  lbl:'Rendimiento', adminOnly:true},
       {id:'dCostos',  ico:'💰', lbl:'Costos', adminOnly:true},
       {id:'dGlobal',  ico:'🗂',  lbl:'Vista Global'},
+      {id:'dReporte', ico:'📊', lbl:'Reporte Productividad', adminOnly:true},
     ]
   },
   C: {
@@ -1101,6 +1102,9 @@ async function goSub(sec, sub) {
     case 'dGlobal':
       main.innerHTML=vGlobal();
       setTimeout(()=>applyDashFilter('global'),80); break;
+    case 'dReporte':
+      main.innerHTML=vDashReporte();
+      setTimeout(()=>applyDashFilter('reporte'),80); break;
     // SECTION C
     case 'cRegistros':  main.innerHTML=vCRegistros(); setTimeout(()=>initRegistros(),50); break;
     case 'cUsuarios':   main.innerHTML=`<div class="skel-card"><div class="skel skel-line" style="width:40%;height:20px;margin-bottom:16px"></div>
@@ -1112,7 +1116,7 @@ async function goSub(sec, sub) {
     <div class="skel" style="height:70px;border-radius:8px"></div>
     <div class="skel" style="height:70px;border-radius:8px"></div>
   </div></div>`;
-                        vCUsuarios().then(h=>{main.innerHTML=h;}); break;
+                        (async()=>{const h=await vCUsuarios();if(currentSub==='cUsuarios')main.innerHTML=h;})(); break;
     case 'cConfig':     main.innerHTML=vCConfig(); setTimeout(()=>initConfig(),50); break;
   }
 }
@@ -2016,15 +2020,17 @@ function showBarDrill(field, value) {
   if(existing&&existing.getAttribute('data-val')===value&&existing.style.display==='block'){
     existing.style.display='none';return;
   }
-  const matchTareas = TAREAS.filter(t=>String(t[field]||'')===String(value));
+  const fmap = {nombre:'responsable',tipo:'tipoBloque',tarea:'titulo',area:'area'};
+  const bfield = fmap[field]||field;
+  const matchTareas = BLOQUES.filter(b=>String(b[bfield]||'')===String(value));
   const html2 = `<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">${value}</div>
-    <div class="tl">${matchTareas.slice(0,10).map(t=>`
-      <div class="ti2" onclick="abrirModal(${t.id})">
-        <span class="tid">#${t.id}</span>
-        <div class="tn2"><div class="tna">${t.tarea}</div>
-        <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'} HHR:${t.hhReal||'0'}</div></div>
-        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
-      </div>`).join('')||'<div class="emp">Sin tareas</div>'}
+    <div class="tl">${matchTareas.slice(0,10).map(b=>`
+      <div class="ti2" onclick="abrirModalBloque(${b.id})">
+        <span class="tid">#${b.id}</span>
+        <div class="tn2"><div class="tna">${b.titulo||''}</div>
+        <div class="tme">${shortName(b.responsable)} · HHP:${b.hhPlan||'—'} HHR:${b.hhReal||'0'}</div></div>
+        <span class="badge ${BADGE[b.estado]||'bi'}">${b.estado}</span>
+      </div>`).join('')||'<div class="emp">Sin bloques</div>'}
     </div>`;
   // Re-render drill in a fixed location
   let drill = document.getElementById(drillId);
@@ -2055,20 +2061,20 @@ function showEisDrill(cuadrante) {
   const el=document.getElementById('drEisDist'); if(!el)return;
   if(el.getAttribute('data-q')===cuadrante&&el.classList.contains('op')){el.classList.remove('op');return;}
   el.setAttribute('data-q',cuadrante);
-  const map={'Urgente+Importante':t=>t.urgente==='Si'&&t.importante==='Si',
-    'Importante, no urgente':t=>t.urgente!=='Si'&&t.importante==='Si',
-    'Urgente, no importante':t=>t.urgente==='Si'&&t.importante!=='Si',
-    'Ni urgente ni importante':t=>t.urgente!=='Si'&&t.importante!=='Si'};
+  const map={'Urgente+Importante':b=>b.urgente==='Si'&&b.importante==='Si',
+    'Importante, no urgente':b=>b.urgente!=='Si'&&b.importante==='Si',
+    'Urgente, no importante':b=>b.urgente==='Si'&&b.importante!=='Si',
+    'Ni urgente ni importante':b=>b.urgente!=='Si'&&b.importante!=='Si'};
   const fn=map[cuadrante]||map['Ni urgente ni importante'];
-  const items=TAREAS.filter(fn);
-  el.innerHTML=`<div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:6px">${cuadrante} (${items.length} tareas)</div>
-    <div class="tl">${items.slice(0,10).map(t=>`
-      <div class="ti2" onclick="abrirModal(${t.id})">
-        <span class="tid">#${t.id}</span>
-        <div class="tn2"><div class="tna">${t.tarea}</div>
-        <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'}</div></div>
-        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
-      </div>`).join('')||'<div class="emp">Sin tareas</div>'}
+  const items=BLOQUES.filter(fn);
+  el.innerHTML=`<div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:6px">${cuadrante} (${items.length} bloques)</div>
+    <div class="tl">${items.slice(0,10).map(b=>`
+      <div class="ti2" onclick="abrirModalBloque(${b.id})">
+        <span class="tid">#${b.id}</span>
+        <div class="tn2"><div class="tna">${b.titulo||''}</div>
+        <div class="tme">${shortName(b.responsable)} · HHP:${b.hhPlan||'—'}</div></div>
+        <span class="badge ${BADGE[b.estado]||'bi'}">${b.estado}</span>
+      </div>`).join('')||'<div class="emp">Sin bloques</div>'}
     </div>`;
   el.classList.add('op');
 }
@@ -2191,8 +2197,27 @@ async function applyDashFilter(id) {
       <div class="skel" style="height:80px;border-radius:8px"></div>
     </div></div>`;
   try {
-    const data = await apiGet({accion:'dashboard', desde:f.desde, hasta:f.hasta});
-    cont.innerHTML = renderDashBloques(data, f);
+    let html = '';
+    if (id === 'plan') {
+      html = buildDashPlanLevel(f, DASH_LEVELS['plan']||'op');
+      cont.innerHTML = html;
+      setTimeout(()=>{if(typeof ctrlDiarioInit==='function')ctrlDiarioInit();},50);
+    } else if (id === 'global') {
+      html = buildDashGlobal(f);
+      cont.innerHTML = html;
+    } else if (id === 'rend') {
+      html = await buildDashRendLevel(f, DASH_LEVELS['rend']||'op');
+      cont.innerHTML = html;
+    } else if (id === 'costos') {
+      html = buildDashCostosLevel(f, DASH_LEVELS['costos']||'op');
+      cont.innerHTML = html;
+    } else if (id === 'reporte') {
+      html = buildDashReporte(f);
+      cont.innerHTML = html;
+    } else {
+      const data = await apiGet({accion:'dashboard', desde:f.desde, hasta:f.hasta});
+      cont.innerHTML = renderDashBloques(data, f);
+    }
   } catch(e) {
     cont.innerHTML = `<div class="al d"><span class="al-ico">⚠️</span><div class="al-txt">Error al cargar dashboard: ${e.message}</div></div>`;
   }
@@ -2330,8 +2355,8 @@ function buildDashPlanTactico(f) {
     leadTime = Math.round(totalDays / conAmbas.length * 10) / 10;
   }
 
-  // Reprogramaciones del mes
-  const reprogs = SESIONES.filter(s => s.comentario?.includes('[Reprog]') || s.motivoExtra?.length > 0).length;
+  // Reprogramaciones del mes (use BLOQUES with motivoReprog or vecesReprog)
+  const reprogs = BLOQUES.filter(b => f.users.includes(b.responsable) && ((b.vecesReprog||0)>0 || (b.motivoReprog&&b.motivoReprog.trim()!==''))).length;
 
   // Distribución Eisenhower del mes
   const urgImp  = tareas.filter(t=>t.urgente==='Si'&&t.importante==='Si').length;
@@ -2406,36 +2431,33 @@ function buildDashPlanEstrategico(f) {
 // ── RENDIMIENTO LEVELS ────────────────────────────────────────────────────
 async function buildDashRendLevel(f, level) {
   if (level === 'op')  return buildDashRendOp(f);
-  if (level === 'tac') return await buildDashRend(f); // existing = táctico
+  if (level === 'tac') return buildDashRendTactico(f);
   return buildDashRendEstrategico(f);
 }
 
 function buildDashRendOp(f) {
   const hoy = todayStr();
-  const sesHoy = SESIONES.filter(s => f.users.includes(s.responsable) && dateStr(s.fecha)===hoy && s.comentario!=='[Bloque planificado]');
-  const tarHoy = TAREAS.filter(t => f.users.includes(t.nombre) && t.fechaEjecucion===hoy && !['Listo','Cancelado'].includes(t.estado));
-  const hhHoy  = sesHoy.reduce((s,se)=>s+(parseFloat(se.hh)||0),0);
-  const hhPlanHoy = tarHoy.reduce((s,t)=>s+(parseFloat(t.hhPlan)||0),0);
+  // Use BLOQUES directly
+  const blkHoy = BLOQUES.filter(b => f.users.includes(b.responsable) && (b.fechaProg===hoy||b.fechaReal===hoy));
+  const confHoyB = blkHoy.filter(b=>b.estado==='Confirmado');
+  const hhHoy = confHoyB.reduce((s,b)=>s+(parseFloat(b.hhReal)||0),0);
+  const hhPlanHoy = blkHoy.reduce((s,b)=>s+(parseFloat(b.hhPlan)||0),0);
   const tasaHoy = hhPlanHoy > 0 ? Math.round(hhHoy/hhPlanHoy*100) : 0;
-
-  // Bloques confirmados vs programados hoy
-  const confHoy    = tarHoy.filter(t=>sesHoy.some(s=>String(s.tareaId)===String(t.id))).length;
-  const progHoy    = tarHoy.length;
-  const pendHoy    = tarHar => tarHoy.filter(t=>!sesHoy.some(s=>String(s.tareaId)===String(t.id)));
+  const confHoy = confHoyB.length, progHoy = blkHoy.length;
 
   const cumplRows = f.users.map(p => {
     const dow = new Date(hoy+'T12:00:00').getDay();
     if (!SCHEDULE[dow]) return `<div class="cuc" style="background:var(--off);border-color:var(--border)">
       <div class="cud" style="background:var(--muted)"></div>
       <div><div class="cun">${shortName(p)}</div><div class="cuf">📅 No laborable</div></div></div>`;
-    const pSes = sesHoy.filter(s=>s.responsable===p);
-    const pTar = tarHoy.filter(t=>t.nombre===p);
-    const pConf = pTar.filter(t=>pSes.some(s=>String(s.tareaId)===String(t.id))).length;
-    const gaps  = checkGaps(p, hoy);
-    const cls   = pConf===pTar.length&&gaps.length===0?'cu-v':gaps.length>0?'cu-r':'cu-a';
+    const pBlk = blkHoy.filter(b=>b.responsable===p);
+    const pConf = pBlk.filter(b=>b.estado==='Confirmado').length;
+    const pHH = pBlk.reduce((s,b)=>s+(parseFloat(b.hhReal)||0),0);
+    const gaps = checkGaps(p, hoy);
+    const cls = pConf===pBlk.length&&gaps.length===0?'cu-v':gaps.length>0?'cu-r':'cu-a';
     return `<div class="cuc ${cls}"><div class="cud"></div>
       <div><div class="cun">${shortName(p)}</div>
-      <div class="cuf">${pConf}/${pTar.length} bloq. confirmados · ${pSes.reduce((s,se)=>s+(parseFloat(se.hh)||0),0).toFixed(1)}h ejecutadas</div></div>
+      <div class="cuf">${pConf}/${pBlk.length} bloq. confirmados · ${pHH.toFixed(1)}h ejecutadas</div></div>
     </div>`;
   }).join('');
 
@@ -2445,21 +2467,55 @@ function buildDashRendOp(f) {
     <div class="kpi"><div class="kv ${tasaHoy>=80?'pos':tasaHoy>=50?'warn':'neg'}">${tasaHoy}%</div>
       <div class="kl">Tasa de ejecución hoy ${tip('HH ejecutadas / HH planificadas para hoy × 100.')}</div></div>
     <div class="kpi"><div class="kv">${confHoy}/${progHoy}</div><div class="kl">Bloques confirmados hoy</div></div>
-    <div class="kpi"><div class="kv">${sesHoy.filter(s=>s.esExtra==='Sí').reduce((s,se)=>s+(parseFloat(se.hh)||0),0).toFixed(1)}h</div>
+    <div class="kpi"><div class="kv">0h</div>
       <div class="kl">HH extra hoy</div></div>
   </div>
   <div class="card"><div class="cl"><div class="d"></div>Estado de ejecución — Hoy</div>
     <div class="cug">${cumplRows}</div></div>
   <div class="card"><div class="cl"><div class="d"></div>Bloques pendientes de confirmar hoy</div>
-    ${tarHoy.filter(t=>!sesHoy.some(s=>String(s.tareaId)===String(t.id))).length===0
+    ${blkHoy.filter(b=>b.estado!=='Confirmado'&&b.estado!=='Cancelado').length===0
       ? '<div class="emp">✅ Todos los bloques de hoy están confirmados</div>'
-      : `<div class="tl">${tarHoy.filter(t=>!sesHoy.some(s=>String(s.tareaId)===String(t.id))).map(t=>`
+      : `<div class="tl">${blkHoy.filter(b=>b.estado!=='Confirmado'&&b.estado!=='Cancelado').map(b=>`
         <div class="ti2" onclick="goSub('A','confirmar')">
-          <span class="tid">#${t.id}</span>
-          <div class="tn2"><div class="tna">${t.tarea}</div>
-          <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'}h</div></div>
+          <span class="tid">#${b.id}</span>
+          <div class="tn2"><div class="tna">${b.titulo||''}</div>
+          <div class="tme">${shortName(b.responsable)} · HHP:${b.hhPlan||'—'}h</div></div>
           <span class="badge bp">Pendiente</span>
         </div>`).join('')}</div>`}
+  </div>`;
+}
+
+function buildDashRendTactico(f) {
+  const bloques = BLOQUES.filter(b=>{
+    if(!f.users.includes(b.responsable))return false;
+    if(f.area&&b.area!==f.area)return false;
+    const fd=b.fechaProg||b.fechaIngreso||'';
+    if(f.desde&&fd<f.desde)return false;
+    if(f.hasta&&fd>f.hasta)return false;
+    return true;
+  });
+  const total=bloques.length||1;
+  const conf=bloques.filter(b=>b.estado==='Confirmado');
+  const totalHHP=bloques.reduce((s,b)=>s+(parseFloat(b.hhPlan)||0),0);
+  const totalHHR=conf.reduce((s,b)=>s+(parseFloat(b.hhReal)||0),0);
+  const tasa=totalHHP>0?Math.round(totalHHR/totalHHP*100):0;
+  // by person
+  const byPers={};
+  bloques.forEach(b=>{const p=b.responsable||'?';if(!byPers[p])byPers[p]={plan:0,real:0};byPers[p].plan+=parseFloat(b.hhPlan)||0;byPers[p].real+=parseFloat(b.hhReal)||0;});
+  const maxR=Math.max(...Object.values(byPers).map(x=>x.real),1);
+  return `
+  <div class="kg4" style="margin-bottom:14px">
+    <div class="kpi"><div class="kv">${bloques.length}</div><div class="kl">Bloques en período</div></div>
+    <div class="kpi"><div class="kv">${conf.length}</div><div class="kl">Bloques confirmados</div></div>
+    <div class="kpi"><div class="kv">${totalHHR.toFixed(1)}h</div><div class="kl">HH ejecutadas</div></div>
+    <div class="kpi"><div class="kv ${tasa>=80?'pos':tasa>=50?'warn':'neg'}">${tasa}%</div><div class="kl">Tasa ejecución HHP vs HHR</div></div>
+  </div>
+  <div class="cw"><div class="ct">HH por persona</div>
+    ${Object.entries(byPers).sort((a,b)=>b[1].real-a[1].real).map(([p,v])=>`
+    <div class="br"><div class="bl2">${shortName(p)}</div>
+      <div class="bt2"><div class="bf t" style="width:${Math.round(v.real/maxR*100)}%"></div></div>
+      <div class="bv">${v.real.toFixed(1)}h real / ${v.plan.toFixed(1)}h plan</div>
+    </div>`).join('')||'<div class="emp">Sin datos</div>'}
   </div>`;
 }
 
@@ -2474,11 +2530,7 @@ function buildDashRendEstrategico(f) {
     byMonth[m].real += parseFloat(t.hhReal)||0;
     if(t.estado==='Listo') byMonth[m].done++;
   });
-  SESIONES.filter(s=>f.users.includes(s.responsable)&&s.esExtra==='Sí').forEach(s=>{
-    const m=(dateStr(s.fecha)||'').substring(0,7); if(!m)return;
-    if(!byMonth[m]) byMonth[m]={plan:0,real:0,done:0,total:0,extra:0};
-    byMonth[m].extra += parseFloat(s.hh)||0;
-  });
+  // extra hours: not tracked in BLOQUES model, skip
   const meses = Object.keys(byMonth).sort();
 
   return `
@@ -2508,7 +2560,7 @@ function buildDashRendEstrategico(f) {
 // ── COSTOS LEVELS ─────────────────────────────────────────────────────────
 function buildDashCostosLevel(f, level) {
   if (level === 'op')  return buildDashCostosOp(f);
-  if (level === 'tac') return buildDashCostos(f); // existing = táctico
+  if (level === 'tac') return buildDashCostosEstrategico(f);
   return buildDashCostosEstrategico(f);
 }
 
@@ -2533,8 +2585,8 @@ function buildDashCostosOp(f) {
 
   // Costo urgencias vs planificado
   const sesUrg = sesiones.filter(s=>{
-    const t=TAREAS.find(x=>String(x.id)===String(s.tareaId));
-    return t?.urgente==='Si'&&t?.importante==='Si';
+    const b=BLOQUES.find(x=>String(x.id)===String(s.tareaId));
+    return b?.urgente==='Si'&&b?.importante==='Si';
   });
   const costoUrg = sesUrg.reduce((sum,s)=>{
     const c=costos[s.responsable]||{normal:10000,extra:14000};
@@ -2591,18 +2643,16 @@ function buildDashCostosEstrategico(f) {
   const costos = {...defC,...COSTOS};
   const fmt = v => '$'+Math.round(v).toLocaleString('es-CL');
 
-  // Cost by month
+  // Cost by month (use BLOQUES directly)
   const byMonth = {};
-  SESIONES.filter(s=>f.users.includes(s.responsable)).forEach(s=>{
-    const m=(dateStr(s.fecha)||'').substring(0,7); if(!m)return;
+  BLOQUES.filter(b=>f.users.includes(b.responsable)).forEach(b=>{
+    const m=(b.fechaProg||b.fechaIngreso||'').substring(0,7); if(!m)return;
     if(!byMonth[m]) byMonth[m]={normal:0,extra:0,urgs:0};
-    const c=costos[s.responsable]||{normal:10000,extra:14000};
-    const hh=parseFloat(s.hh)||0;
-    const isE=s.esExtra==='Sí';
-    const costo=hh*(isE?c.extra:c.normal);
-    if(isE)byMonth[m].extra+=costo;else byMonth[m].normal+=costo;
-    const t=TAREAS.find(x=>String(x.id)===String(s.tareaId));
-    if(t?.urgente==='Si'&&t?.importante==='Si') byMonth[m].urgs+=costo;
+    const c=costos[b.responsable]||{normal:10000,extra:14000};
+    const hh=parseFloat(b.hhReal)||0;
+    const costo=hh*c.normal;
+    byMonth[m].normal+=costo;
+    if(b.urgente==='Si'&&b.importante==='Si') byMonth[m].urgs+=costo;
   });
   const meses=Object.keys(byMonth).sort();
 
@@ -2673,33 +2723,30 @@ async function aiSend() {
   // Build context from current data
   const hoy = todayStr();
   const lunes = mondayStr();
-  const misTareas = TAREAS.filter(t => t.nombre === SESSION?.nombre);
-  const semSes = SESIONES.filter(s =>
-    s.responsable === SESSION?.nombre && dateStr(s.fecha) >= lunes
-  );
-  const hhSem = semSes.reduce((s, se) => s + (parseFloat(se.hh)||0), 0);
+  const misBloques = BLOQUES.filter(b => b.responsable === SESSION?.nombre);
+  const hhSem = misBloques.filter(b=>(b.fechaReal||b.fechaProg||'')>=lunes)
+    .reduce((s,b)=>s+(parseFloat(b.hhReal)||0), 0);
 
   // Team summary
-  const teamSummary = ['Luis Sanchez','Luis Diaz','Yamila Silva'].map(p => {
-    const pT = TAREAS.filter(t => t.nombre === p);
-    const act = pT.filter(t => !['Listo','Cancelado'].includes(t.estado));
-    const listo = pT.filter(t => t.estado === 'Listo').length;
-    const sinProg = act.filter(t => !t.fechaEjecucion).length;
-    const hhReal = SESIONES.filter(s => s.responsable === p && dateStr(s.fecha) >= lunes)
-      .reduce((s,se) => s+(parseFloat(se.hh)||0), 0);
-    return `${p}: ${act.length} activas, ${listo} completadas, ${sinProg} sin programar, ${hhReal.toFixed(1)}h esta semana`;
+  const allUsers = LISTAS['Responsable']||['Luis Sanchez','Luis Diaz','Yamila Silva'];
+  const teamSummary = allUsers.map(p => {
+    const pB = BLOQUES.filter(b => b.responsable === p);
+    const act = pB.filter(b => !['Confirmado','Cancelado'].includes(b.estado));
+    const listo = pB.filter(b => b.estado === 'Confirmado').length;
+    const sinProg = act.filter(b => !b.fechaProg).length;
+    const hhReal = pB.filter(b=>(b.fechaReal||b.fechaProg||'')>=lunes)
+      .reduce((s,b)=>s+(parseFloat(b.hhReal)||0), 0);
+    return `${p}: ${act.length} activos, ${listo} confirmados, ${sinProg} sin programar, ${hhReal.toFixed(1)}h esta semana`;
   }).join('\n');
 
-  const urgentes = TAREAS.filter(t =>
-    t.urgente==='Si' && t.importante==='Si' && !['Listo','Cancelado'].includes(t.estado)
+  const urgentes = BLOQUES.filter(b =>
+    b.urgente==='Si' && b.importante==='Si' && !['Confirmado','Cancelado'].includes(b.estado)
   ).length;
-  const vencidas = TAREAS.filter(t =>
-    t.fechaComp && dateStr(t.fechaComp) < hoy && !['Listo','Cancelado'].includes(t.estado)
-  ).length;
-  const sinProgramar = TAREAS.filter(t => {
+  const vencidas = 0; // not tracked in bloques model
+  const sinProgramar = BLOQUES.filter(b => {
     const ayer = new Date(); ayer.setDate(ayer.getDate()-1);
-    return !t.fechaEjecucion && !['Listo','Cancelado'].includes(t.estado) &&
-           t.fechaIngreso <= ayer.toISOString().split('T')[0];
+    return !b.fechaProg && !['Confirmado','Cancelado'].includes(b.estado) &&
+           (b.fechaIngreso||'') <= ayer.toISOString().split('T')[0];
   }).length;
 
   const context = `
@@ -2714,11 +2761,11 @@ ALERTAS GENERALES:
 - Tareas urgentes+importantes activas: ${urgentes}
 - Tareas vencidas: ${vencidas}
 - Tareas sin programar (>1 día): ${sinProgramar}
-- Total tareas activas: ${TAREAS.filter(t=>!['Listo','Cancelado'].includes(t.estado)).length}
+- Total bloques activos: ${BLOQUES.filter(b=>!['Confirmado','Cancelado'].includes(b.estado)).length}
 
-MIS TAREAS (${SESSION?.nombre}):
-- Activas: ${misTareas.filter(t=>!['Listo','Cancelado'].includes(t.estado)).length}
-- Completadas total: ${misTareas.filter(t=>t.estado==='Listo').length}
+MIS BLOQUES (${SESSION?.nombre}):
+- Activos: ${misBloques.filter(b=>!['Confirmado','Cancelado'].includes(b.estado)).length}
+- Confirmados total: ${misBloques.filter(b=>b.estado==='Confirmado').length}
 - HH ejecutadas esta semana: ${hhSem.toFixed(1)}h
 
 Responde de forma concisa, directa y en español. Máximo 150 palabras.
@@ -3367,7 +3414,7 @@ function buildDashPlan(f) {
 
   // Carga futura por persona
   const cargaCards=f.users.map(p=>{
-    const pT=TAREAS.filter(t=>t.nombre===p&&!['Listo','Cancelado'].includes(t.estado));
+    const pT=BLOQUES.filter(b=>b.responsable===p&&!['Confirmado','Cancelado'].includes(b.estado)).map(b=>({id:b.id,tarea:b.titulo||'',nombre:b.responsable||'',hhPlan:b.hhPlan||0,hhReal:b.hhReal||0,estado:b.estado||''}));
     const comprometidas=pT.reduce((s,t)=>s+Math.max(0,(parseFloat(t.hhPlan)||0)-(parseFloat(t.hhReal)||0)),0);
     // Available hours next 5 work days
     let dispHrs=0;const d=new Date();
@@ -3475,31 +3522,31 @@ function buildDashPlan(f) {
     const days=[0,1,2].map(d=>{const dt=new Date(today);dt.setDate(today.getDate()+d);return dt.toISOString().split('T')[0];});
     const labels=['Hoy','Mañana','Pasado mañana'];
     const cards=days.map((ds,i)=>{
-      const dt2=TAREAS.filter(t=>f.users.includes(t.nombre)&&t.fechaEjecucion===ds&&!['Listo','Cancelado'].includes(t.estado));
-      const hhComp=dt2.reduce((s,t)=>s+Math.max(0,(parseFloat(t.hhPlan)||0)-(parseFloat(t.hhReal)||0)),0);
+      const dt2=BLOQUES.filter(b=>f.users.includes(b.responsable)&&(b.fechaProg===ds||b.fechaReal===ds)&&!['Confirmado','Cancelado'].includes(b.estado));
+      const hhComp=dt2.reduce((s,b)=>s+Math.max(0,(parseFloat(b.hhPlan)||0)-(parseFloat(b.hhReal)||0)),0);
       const dow=new Date(ds+'T12:00').getDay();
       const dispHrs=SCHEDULE[dow]?SCHEDULE[dow][1]-SCHEDULE[dow][0]-1:0;
       const pct=dispHrs>0?Math.round(hhComp/dispHrs*100):0;
       const cls=pct<70?'ok':pct<100?'warn':'over';
-      const tareasList=dt2.map(t=>`<div class="ti2" onclick="abrirModal(${t.id})">
-        <span class="tid">#${t.id}</span>
-        <div class="tn2"><div class="tna">${t.tarea}</div>
-        <div class="tme">${shortName(t.nombre)} · ${t.tipo||'—'} · HHP:${t.hhPlan||'—'}h</div></div>
-        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
+      const tareasList=dt2.map(b=>`<div class="ti2" onclick="abrirModalBloque(${b.id})">
+        <span class="tid">#${b.id}</span>
+        <div class="tn2"><div class="tna">${b.titulo||''}</div>
+        <div class="tme">${shortName(b.responsable)} · ${b.tipoBloque||'—'} · HHP:${b.hhPlan||'—'}h</div></div>
+        <span class="badge ${BADGE[b.estado]||'bi'}">${b.estado}</span>
       </div>`).join('');
       const barW=Math.min(100,pct);
       return `<div class="carga-card">
         <div class="carga-head">
           <div>
             <div class="carga-name">${labels[i]}</div>
-            <div style="font-size:10px;color:var(--muted)">${ds} · ${dt2.length} tarea${dt2.length!==1?'s':''} · ${Math.round(hhComp*10)/10}h pendientes</div>
+            <div style="font-size:10px;color:var(--muted)">${ds} · ${dt2.length} bloque${dt2.length!==1?'s':''} · ${Math.round(hhComp*10)/10}h pendientes</div>
           </div>
           <div class="carga-pct ${cls}">${pct}%</div>
         </div>
         <div class="carga-bar"><div class="carga-fill ${cls}" style="width:${barW}%"></div></div>
         ${dt2.length>0?`<button class="btn sm ghost" style="margin-top:6px"
-          onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.textContent=d.style.display==='none'?'▼ Ver tareas (${dt2.length})':'▲ Ocultar'">
-          ▼ Ver tareas (${dt2.length})</button>
+          onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.textContent=d.style.display==='none'?'▼ Ver bloques (${dt2.length})':'▲ Ocultar'">
+          ▼ Ver bloques (${dt2.length})</button>
           <div style="display:none;margin-top:6px"><div class="tl">${tareasList}</div></div>`:''}
       </div>`;
     }).join('');
@@ -3920,6 +3967,8 @@ function calcTerminoSimple() {
 
 // ── Dashboard utilities ──
 function getDashFilter(id) {
+  // Reporte uses its own filter controls
+  if (id === 'reporte') return getDashFilterReporte();
   // Non-admin: always filter to own data only
   if(SESSION.rol!=='admin') {
     const desde=document.getElementById(`${id}-d`)?.value||mondayStr();
@@ -3927,8 +3976,9 @@ function getDashFilter(id) {
     return{users:[SESSION.nombre],area:'',tipo:'',est:'',desde,hasta};
   }
   const users=[...document.querySelectorAll(`#fb-${id} .uchk`)].filter(c=>c.checked).map(c=>c.value);
+  const allUsers = LISTAS['Responsable']||['Luis Sanchez','Luis Diaz','Yamila Silva'];
   return{
-    users: users.length>0?users:['Luis Sanchez','Luis Diaz','Yamila Silva'],
+    users: users.length>0?users:allUsers,
     area:  document.getElementById(`${id}-area`)?.value||'',
     tipo:  document.getElementById(`${id}-tipo`)?.value||'',
     est:   document.getElementById(`${id}-est`)?.value||'',
@@ -3954,26 +4004,40 @@ function dashPeriodo(id, p, btn) {
 }
 
 function filtrarTareas(f) {
-  return TAREAS.filter(t=>{
-    if(!f.users.includes(t.nombre))return false;
-    if(f.area&&t.area!==f.area)return false;
-    if(f.tipo&&t.tipo!==f.tipo)return false;
-    if(f.est&&t.estado!==f.est)return false;
-    const fi=dateStr(t.fechaIngreso);
-    if(f.desde&&fi<f.desde)return false;
-    if(f.hasta&&fi>f.hasta)return false;
-    return true;
-  });
-}
-
-function filtrarSesiones(f) {
-  return SESIONES.filter(s=>{
-    if(!f.users.includes(s.responsable))return false;
-    const fd=dateStr(s.fecha);
+  const users = f.users||[];
+  return BLOQUES.filter(b=>{
+    if(users.length>0&&!users.includes(b.responsable))return false;
+    if(f.area&&b.area!==f.area)return false;
+    if(f.tipo&&b.tipoBloque!==f.tipo)return false;
+    if(f.est&&b.estado!==f.est)return false;
+    const fd=b.fechaProg||b.fechaIngreso||'';
     if(f.desde&&fd<f.desde)return false;
     if(f.hasta&&fd>f.hasta)return false;
     return true;
-  });
+  }).map(b=>({
+    id:b.id, tarea:b.titulo||'', nombre:b.responsable||'',
+    tipo:b.tipoBloque||'', area:b.area||'',
+    urgente:b.urgente||'', importante:b.importante||'',
+    hhPlan:b.hhPlan||0, hhReal:b.hhReal||0,
+    estado:b.estado||'', fechaIngreso:b.fechaIngreso||'',
+    fechaEjecucion:b.fechaProg||b.fechaReal||'',
+    fechaComp:b.fechaProg||'', solicitante:b.solicitante||''
+  }));
+}
+
+function filtrarSesiones(f) {
+  const users = f.users||[];
+  return BLOQUES.filter(b=>{
+    if(users.length>0&&!users.includes(b.responsable))return false;
+    const fd=b.fechaReal||b.fechaProg||'';
+    if(f.desde&&fd<f.desde)return false;
+    if(f.hasta&&fd>f.hasta)return false;
+    return true;
+  }).map(b=>({
+    responsable:b.responsable||'', fecha:b.fechaReal||b.fechaProg||'',
+    hh:b.hhReal||0, tareaId:b.id,
+    comentario:b.notas||'', esExtra:'', motivoExtra:''
+  }));
 }
 
 function bar(items, cls='', maxOverride=null) {
@@ -4008,15 +4072,17 @@ function showBarDrill(field, value) {
   if(existing&&existing.getAttribute('data-val')===value&&existing.style.display==='block'){
     existing.style.display='none';return;
   }
-  const matchTareas = TAREAS.filter(t=>String(t[field]||'')===String(value));
+  const fmap = {nombre:'responsable',tipo:'tipoBloque',tarea:'titulo',area:'area'};
+  const bfield = fmap[field]||field;
+  const matchTareas = BLOQUES.filter(b=>String(b[bfield]||'')===String(value));
   const html2 = `<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">${value}</div>
-    <div class="tl">${matchTareas.slice(0,10).map(t=>`
-      <div class="ti2" onclick="abrirModal(${t.id})">
-        <span class="tid">#${t.id}</span>
-        <div class="tn2"><div class="tna">${t.tarea}</div>
-        <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'} HHR:${t.hhReal||'0'}</div></div>
-        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
-      </div>`).join('')||'<div class="emp">Sin tareas</div>'}
+    <div class="tl">${matchTareas.slice(0,10).map(b=>`
+      <div class="ti2" onclick="abrirModalBloque(${b.id})">
+        <span class="tid">#${b.id}</span>
+        <div class="tn2"><div class="tna">${b.titulo||''}</div>
+        <div class="tme">${shortName(b.responsable)} · HHP:${b.hhPlan||'—'} HHR:${b.hhReal||'0'}</div></div>
+        <span class="badge ${BADGE[b.estado]||'bi'}">${b.estado}</span>
+      </div>`).join('')||'<div class="emp">Sin bloques</div>'}
     </div>`;
   // Re-render drill in a fixed location
   let drill = document.getElementById(drillId);
@@ -4031,28 +4097,6 @@ function showBarDrill(field, value) {
   const bar=event.currentTarget||event.target;
   const cw=bar.closest('.cw');
   if(cw&&!cw.querySelector('#'+drillId))cw.appendChild(drill);
-}
-
-function showEisDrill(cuadrante) {
-  const el=document.getElementById('drEisDist'); if(!el)return;
-  if(el.getAttribute('data-q')===cuadrante&&el.classList.contains('op')){el.classList.remove('op');return;}
-  el.setAttribute('data-q',cuadrante);
-  const map={'Urgente+Importante':t=>t.urgente==='Si'&&t.importante==='Si',
-    'Importante, no urgente':t=>t.urgente!=='Si'&&t.importante==='Si',
-    'Urgente, no importante':t=>t.urgente==='Si'&&t.importante!=='Si',
-    'Ni urgente ni importante':t=>t.urgente!=='Si'&&t.importante!=='Si'};
-  const fn=map[cuadrante]||map['Ni urgente ni importante'];
-  const items=TAREAS.filter(fn);
-  el.innerHTML=`<div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:6px">${cuadrante} (${items.length} tareas)</div>
-    <div class="tl">${items.slice(0,10).map(t=>`
-      <div class="ti2" onclick="abrirModal(${t.id})">
-        <span class="tid">#${t.id}</span>
-        <div class="tn2"><div class="tna">${t.tarea}</div>
-        <div class="tme">${shortName(t.nombre)} · HHP:${t.hhPlan||'—'}</div></div>
-        <span class="badge ${BADGE[t.estado]||'bi'}">${t.estado}</span>
-      </div>`).join('')||'<div class="emp">Sin tareas</div>'}
-    </div>`;
-  el.classList.add('op');
 }
 
 function toggleCargaDetail(key) {
@@ -4154,10 +4198,10 @@ function buildDashGlobal(f) {
 
 function refreshUnscheduledTray() {
   const me = SESSION.nombre;
-  const unscheduled = TAREAS.filter(t=>
-    t.nombre===me &&
-    !t.fechaEjecucion &&
-    !['Listo','Cancelado'].includes(t.estado)
+  const unscheduled = BLOQUES.filter(b=>
+    b.responsable===me &&
+    !b.fechaProg &&
+    !['Confirmado','Cancelado'].includes(b.estado)
   );
   // Try both IDs (calTray is the current one in vAgenda)
   const tray = document.getElementById('calTray') || document.getElementById('unscheduledTray');
@@ -4165,17 +4209,17 @@ function refreshUnscheduledTray() {
   if(!tray||!list) return;
   if(unscheduled.length>0){
     tray.style.display='block';
-    list.innerHTML=unscheduled.map(t=>`
+    list.innerHTML=unscheduled.map(b=>`
       <div draggable="true"
         style="background:var(--navy);color:#fff;border-radius:6px;padding:6px 10px;
           cursor:grab;font-size:11px;font-weight:600;display:flex;flex-direction:column;gap:2px;
           min-width:140px;max-width:200px;user-select:none"
-        onclick="abrirModalProgramar('${t.id}')"
-        ondragstart="startTrayDrag(event,'${t.id}')"
+        onclick="abrirModalProgramar('${b.id}')"
+        ondragstart="startTrayDrag(event,'${b.id}')"
         ondragend="endTrayDrag(event)"
         title="Clic para programar">
-        <span style="font-size:9px;opacity:.6">#${t.id} · ${t.hhPlan||'—'}h plan · ${t.tipo||'—'}</span>
-        <span>${t.tarea.substring(0,28)}${t.tarea.length>28?'…':''}</span>
+        <span style="font-size:9px;opacity:.6">#${b.id} · ${b.hhPlan||'—'}h plan · ${b.tipoBloque||'—'}</span>
+        <span>${(b.titulo||'').substring(0,28)}${(b.titulo||'').length>28?'…':''}</span>
       </div>`).join('');
   } else {
     tray.style.display='none';
@@ -4189,7 +4233,314 @@ function switchVG(v) {
   applyDashFilter('global');
 }
 
+// ══════════════════════════════════════════════════════════
+// REPORTE DE PRODUCTIVIDAD
+// ══════════════════════════════════════════════════════════
+function vDashReporte() {
+  const hoy=todayStr(), lun=mondayStr();
+  const userOpts = (LISTAS['Responsable']||['Luis Sanchez','Luis Diaz','Yamila Silva'])
+    .map(u=>`<option value="${u}">${u}</option>`).join('');
+  return `
+  <div class="ph"><div class="pt"><div class="rb"></div>Reporte de Productividad</div>
+    <div class="pd">Análisis de KPIs de gestión del equipo con semáforos de alerta automáticos.</div></div>
+  <div class="fb" id="fb-reporte">
+    <div class="fb-f"><label>Persona</label>
+      <select id="reporte-persona"><option value="">Todas</option>${userOpts}</select></div>
+    <div class="fb-f"><label>Área</label>
+      <select id="reporte-area"><option value="">Todas</option>${opts('Area')}</select></div>
+    <div class="fb-f"><label>Período</label>
+      <div class="tabs" style="margin-bottom:0">
+        <button class="tab on" onclick="dashPeriodo('reporte','semana',this)">Semana</button>
+        <button class="tab" onclick="dashPeriodo('reporte','hoy',this)">Hoy</button>
+        <button class="tab" onclick="dashPeriodo('reporte','mes',this)">Mes</button>
+        <button class="tab" onclick="dashPeriodo('reporte','libre',this)">Libre</button>
+      </div>
+    </div>
+    <div id="reporte-libre" style="display:none;gap:6px;align-items:flex-end">
+      <div class="fb-f"><label>Desde</label><input type="date" id="reporte-d" value="${lun}"></div>
+      <div class="fb-f"><label>Hasta</label><input type="date" id="reporte-h" value="${hoy}"></div>
+    </div>
+    <button class="btn sm" style="align-self:flex-end;margin-left:auto" onclick="applyDashFilter('reporte')">
+      <span class="bt">Actualizar</span></button>
+  </div>
+  <div id="dash-content-reporte"></div>`;
+}
 
+function getDashFilterReporte() {
+  const persona = document.getElementById('reporte-persona')?.value||'';
+  const area    = document.getElementById('reporte-area')?.value||'';
+  const desde   = document.getElementById('reporte-d')?.value||mondayStr();
+  const hasta   = document.getElementById('reporte-h')?.value||todayStr();
+  const allUsers = LISTAS['Responsable']||['Luis Sanchez','Luis Diaz','Yamila Silva'];
+  const users = persona ? [persona] : allUsers;
+  return { users, area, tipo:'', est:'', desde, hasta };
+}
+
+function semaforo(val, verde, amarillo, invertido=false) {
+  // invertido: menor = mejor (ej: reactividad)
+  let color, ico;
+  if (!invertido) {
+    if (val >= verde) { color='var(--green)'; ico='🟢'; }
+    else if (val >= amarillo) { color='var(--amber)'; ico='🟡'; }
+    else { color='var(--red)'; ico='🔴'; }
+  } else {
+    if (val <= verde) { color='var(--green)'; ico='🟢'; }
+    else if (val <= amarillo) { color='var(--amber)'; ico='🟡'; }
+    else { color='var(--red)'; ico='🔴'; }
+  }
+  return { color, ico };
+}
+
+function kpiCard(ico, titulo, valor, unidad, semaforoIco, semaforoColor, insight) {
+  return `
+  <div class="cw" style="border-left:4px solid ${semaforoColor}">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:18px">${ico}</span>
+      <div style="flex:1">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">${titulo}</div>
+        <div style="display:flex;align-items:baseline;gap:6px;margin-top:2px">
+          <span style="font-family:Montserrat,sans-serif;font-size:26px;font-weight:800;color:${semaforoColor}">${valor}</span>
+          <span style="font-size:12px;color:var(--muted)">${unidad}</span>
+          <span style="font-size:20px;margin-left:4px">${semaforoIco}</span>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--txt);line-height:1.5;padding-top:6px;border-top:1px solid var(--border)">${insight}</div>
+  </div>`;
+}
+
+function buildDashReporte(f) {
+  if (!f) f = getDashFilterReporte();
+  const bloques = BLOQUES.filter(b => {
+    if (f.users.length>0 && !f.users.includes(b.responsable)) return false;
+    if (f.area && b.area !== f.area) return false;
+    const fd = b.fechaProg || b.fechaIngreso || '';
+    if (f.desde && fd < f.desde) return false;
+    if (f.hasta && fd > f.hasta) return false;
+    return true;
+  });
+
+  if (bloques.length === 0) return `<div class="al w"><span class="al-ico">📭</span>
+    <div class="al-txt">No hay bloques para el período y filtros seleccionados.</div></div>`;
+
+  const total = bloques.length;
+  const periodoLabel = `${f.desde} → ${f.hasta}`;
+
+  // ── KPI 1: Distribución Eisenhower ──
+  const eis = {
+    ui: bloques.filter(b=>b.urgente==='Si'&&b.importante==='Si').length,
+    ni: bloques.filter(b=>b.urgente!=='Si'&&b.importante==='Si').length,
+    un: bloques.filter(b=>b.urgente==='Si'&&b.importante!=='Si').length,
+    nn: bloques.filter(b=>b.urgente!=='Si'&&b.importante!=='Si').length,
+  };
+  const pctNiPlanif = total>0 ? Math.round(eis.ni/total*100) : 0;
+  const semEis = semaforo(pctNiPlanif, 50, 30);
+  const eisInsight = pctNiPlanif >= 50
+    ? `✅ El ${pctNiPlanif}% del trabajo es Importante pero no urgente: el equipo opera de forma planificada.`
+    : pctNiPlanif >= 30
+    ? `⚠️ Solo el ${pctNiPlanif}% del trabajo es planificado estratégico. Hay margen de mejora en planificación.`
+    : `🚨 Solo el ${pctNiPlanif}% es trabajo planificado importante. La operación es mayormente reactiva.`;
+  const eisCard = `
+  <div class="cw" style="border-left:4px solid ${semEis.color};grid-column:1/-1">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span style="font-size:18px">🧭</span>
+      <div style="flex:1">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Distribución Eisenhower</div>
+        <div style="font-size:11px;color:var(--txt);margin-top:2px">${periodoLabel}</div>
+      </div>
+      <span style="font-size:20px">${semEis.ico}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      ${[
+        ['⚡ Urgente + Importante', eis.ui, 'var(--red)'],
+        ['📅 Importante, no urgente', eis.ni, 'var(--green)'],
+        ['👥 Urgente, no importante', eis.un, 'var(--amber)'],
+        ['🗑 Ni urgente ni importante', eis.nn, 'var(--muted)']
+      ].map(([l,v,c])=>`
+        <div style="background:var(--bg2);border-radius:6px;padding:8px">
+          <div style="font-size:10px;color:var(--muted);margin-bottom:4px">${l}</div>
+          <div style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:800;color:${c}">${v}</div>
+          <div style="font-size:10px;color:var(--muted)">${total>0?Math.round(v/total*100):0}%</div>
+        </div>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--txt);line-height:1.5;padding-top:6px;border-top:1px solid var(--border)">${eisInsight}</div>
+  </div>`;
+
+  // ── KPI 2: Índice de Reactividad ──
+  const urgentes = bloques.filter(b=>b.urgente==='Si').length;
+  const pctUrg = total>0 ? Math.round(urgentes/total*100) : 0;
+  const semUrg = semaforo(pctUrg, 30, 50, true);
+  const urgInsight = pctUrg <= 30
+    ? `✅ Solo el ${pctUrg}% del trabajo es urgente. Excelente nivel de planificación proactiva.`
+    : pctUrg <= 50
+    ? `⚠️ El ${pctUrg}% de los bloques son urgentes. Se recomienda reducir la reactividad aumentando la planificación semanal.`
+    : `🚨 El ${pctUrg}% del trabajo es urgente. La operación es altamente reactiva — revisar procesos de planificación y anticipación.`;
+
+  // ── KPI 3: Fragmentación ──
+  const fragmentados = bloques.filter(b=>(parseFloat(b.hhPlan)||0)<0.5).length;
+  const pctFrag = total>0 ? Math.round(fragmentados/total*100) : 0;
+  const semFrag = semaforo(pctFrag, 20, 40, true);
+  const fragInsight = pctFrag <= 20
+    ? `✅ Baja fragmentación (${pctFrag}%): los bloques tienen duración adecuada para trabajo profundo.`
+    : pctFrag <= 40
+    ? `⚠️ ${pctFrag}% de bloques duran menos de 30 min. Evalúa si se pueden agrupar tareas similares.`
+    : `🚨 Alta fragmentación: ${pctFrag}% de los bloques son menores a 30 minutos. Esto reduce la productividad por cambio constante de contexto.`;
+
+  // ── KPI 4: Precisión de Estimaciones ──
+  const conAmbos = bloques.filter(b=>(parseFloat(b.hhPlan)||0)>0 && (parseFloat(b.hhReal)||0)>0);
+  let precisionPct = 0, desviacion = 0;
+  if (conAmbos.length > 0) {
+    const errores = conAmbos.map(b=>Math.abs((parseFloat(b.hhReal)||0)-(parseFloat(b.hhPlan)||0))/(parseFloat(b.hhPlan)||1));
+    desviacion = Math.round((errores.reduce((s,e)=>s+e,0)/errores.length)*100);
+    precisionPct = Math.max(0, 100 - desviacion);
+  }
+  const semPrec = semaforo(precisionPct, 80, 60);
+  const precInsight = precisionPct >= 80
+    ? `✅ Precisión de estimaciones del ${precisionPct}%: las HH reales se ajustan bien a lo planificado.`
+    : precisionPct >= 60
+    ? `⚠️ Precisión del ${precisionPct}%. Se desvía en promedio un ${desviacion}% respecto a lo estimado. Revisar metodología de estimación.`
+    : `🚨 Precisión del ${precisionPct}%. Alta variabilidad entre HH planificadas y reales — las estimaciones no son confiables aún.`;
+  const precDisplay = conAmbos.length > 0 ? precisionPct+'%' : 'N/D';
+
+  // ── KPI 5: Carga por Persona ──
+  const cargaPers = {};
+  bloques.forEach(b=>{
+    const p = b.responsable||'Sin asignar';
+    if (!cargaPers[p]) cargaPers[p] = {plan:0,real:0,n:0};
+    cargaPers[p].plan += parseFloat(b.hhPlan)||0;
+    cargaPers[p].real += parseFloat(b.hhReal)||0;
+    cargaPers[p].n++;
+  });
+  const maxHH = Math.max(...Object.values(cargaPers).map(c=>c.real),1);
+  const cargaRows = Object.entries(cargaPers).sort((a,b)=>b[1].real-a[1].real).map(([p,c])=>{
+    const pct = maxHH > 0 ? Math.round(c.real/maxHH*100) : 0;
+    const sem = semaforo(c.real, 0, 0, false); // color based on balance
+    const balance = c.plan > 0 ? Math.round(c.real/c.plan*100) : 0;
+    const balColor = balance>=80&&balance<=120 ? 'var(--green)' : balance>=60&&balance<=140 ? 'var(--amber)' : 'var(--red)';
+    return `<div class="br">
+      <div class="bl2" title="${p}">${shortName(p)}</div>
+      <div class="bt2"><div class="bf t" style="width:${pct}%"></div></div>
+      <div class="bv" style="min-width:90px;text-align:right">
+        ${Math.round(c.real*10)/10}h real
+        <span style="font-size:10px;color:${balColor};margin-left:4px">(${balance}%)</span>
+      </div>
+    </div>`;
+  }).join('');
+  const cargaInsight = (()=>{
+    const entries = Object.entries(cargaPers);
+    if (entries.length < 2) return `Datos de una sola persona en el período.`;
+    const vals = entries.map(([,c])=>c.real);
+    const max = Math.max(...vals), min = Math.min(...vals);
+    const ratio = min > 0 ? Math.round(max/min*10)/10 : max;
+    if (ratio <= 1.5) return `✅ Carga equilibrada entre personas (ratio máx/mín: ${ratio}x).`;
+    if (ratio <= 2.5) return `⚠️ Diferencia de carga de ${ratio}x entre personas. Revisar distribución de trabajo.`;
+    return `🚨 Desequilibrio de carga de ${ratio}x. Una persona concentra mucho más trabajo que las demás.`;
+  })();
+
+  // ── KPI 6: Demanda por Área Solicitante ──
+  const demandaArea = {};
+  bloques.forEach(b=>{
+    const a = b.area||'Sin área';
+    if (!demandaArea[a]) demandaArea[a] = {n:0,hh:0};
+    demandaArea[a].n++;
+    demandaArea[a].hh += parseFloat(b.hhPlan)||0;
+  });
+  const maxDA = Math.max(...Object.values(demandaArea).map(d=>d.hh),1);
+  const areaRows = Object.entries(demandaArea).sort((a,b)=>b[1].hh-a[1].hh).map(([a,d])=>`
+    <div class="br">
+      <div class="bl2" title="${a}">${a.length>16?a.substring(0,15)+'…':a}</div>
+      <div class="bt2"><div class="bf r" style="width:${Math.round(d.hh/maxDA*100)}%"></div></div>
+      <div class="bv">${Math.round(d.hh*10)/10}h · ${d.n} bloq.</div>
+    </div>`).join('');
+  const topArea = Object.entries(demandaArea).sort((a,b)=>b[1].hh-a[1].hh)[0];
+  const demandaInsight = topArea
+    ? `El área <strong>${topArea[0]}</strong> concentra ${Math.round(topArea[1].hh*10)/10}h (${Math.round(topArea[1].hh/bloques.reduce((s,b)=>s+(parseFloat(b.hhPlan)||0),0)*100)}% del total). ${Object.keys(demandaArea).length} áreas activas en el período.`
+    : 'Sin datos de área suficientes.';
+
+  // ── KPI 7: Tareas Recurrentes ──
+  const tituloMap = {};
+  bloques.forEach(b=>{
+    const k = (b.titulo||'').toLowerCase().trim().substring(0,40);
+    if (!k) return;
+    tituloMap[k] = (tituloMap[k]||0)+1;
+  });
+  const recurrentes = Object.entries(tituloMap).filter(([,n])=>n>1).sort((a,b)=>b[1]-a[1]);
+  const nRecurrentes = recurrentes.reduce((s,[,n])=>s+n,0);
+  const pctRecurr = total>0 ? Math.round(nRecurrentes/total*100) : 0;
+  const semRecurr = semaforo(pctRecurr, 50, 70, true);
+  const recurrRows = recurrentes.slice(0,6).map(([t,n])=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:11px;color:var(--txt)">${t.substring(0,35)}${t.length>35?'…':''}</span>
+      <span style="font-family:Montserrat,sans-serif;font-size:13px;font-weight:700;color:var(--navy)">${n}×</span>
+    </div>`).join('');
+  const recurrInsight = recurrentes.length === 0
+    ? '✅ Sin tareas recurrentes detectadas en el período.'
+    : recurrentes.length <= 3
+    ? `⚠️ ${recurrentes.length} tipo(s) de tarea repetidos. Evalúa si alguna podría automatizarse.`
+    : `🚨 ${recurrentes.length} tipos de tareas se repiten (${pctRecurr}% del total). Alta carga operativa repetitiva — oportunidad de automatización o delegación.`;
+
+  // ── KPI 8: Reprogramaciones ──
+  const reprog = bloques.filter(b=>(b.vecesReprog||0)>0 || (b.motivoReprog&&b.motivoReprog.trim()!==''));
+  const pctReprog = total>0 ? Math.round(reprog.length/total*100) : 0;
+  const semReprog = semaforo(pctReprog, 10, 25, true);
+  const reprogInsight = pctReprog <= 10
+    ? `✅ Solo el ${pctReprog}% de los bloques fueron reprogramados. Buena adherencia a la planificación.`
+    : pctReprog <= 25
+    ? `⚠️ El ${pctReprog}% de los bloques requirieron reprogramación. Revisar causas para reducir interrupciones.`
+    : `🚨 El ${pctReprog}% de los bloques se reprogramaron. Alta inestabilidad en la planificación operativa.`;
+
+  return `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px">
+    ${eisCard}
+
+    ${kpiCard('⚡', 'Índice de Reactividad', pctUrg+'%', 'bloques urgentes',
+      semUrg.ico, semUrg.color, urgInsight)}
+
+    ${kpiCard('🔀', 'Fragmentación de Agenda', pctFrag+'%', 'bloques < 30 min',
+      semFrag.ico, semFrag.color, fragInsight)}
+
+    ${kpiCard('🎯', 'Precisión de Estimaciones', precDisplay, 'exactitud HHP vs HHR',
+      semPrec.ico, semPrec.color, precInsight)}
+
+    <!-- Carga por persona: card ancha -->
+    <div class="cw" style="grid-column:1/-1">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:18px">👤</span>
+        <div class="ct" style="margin:0">Carga por Persona</div>
+      </div>
+      ${cargaRows||'<div class="emp">Sin datos</div>'}
+      <div style="font-size:11px;color:var(--txt);line-height:1.5;padding-top:6px;border-top:1px solid var(--border);margin-top:8px">${cargaInsight}</div>
+    </div>
+
+    <!-- Demanda por área -->
+    <div class="cw">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:18px">🏢</span>
+        <div class="ct" style="margin:0">Demanda por Área</div>
+      </div>
+      ${areaRows||'<div class="emp">Sin datos</div>'}
+      <div style="font-size:11px;color:var(--txt);line-height:1.5;padding-top:6px;border-top:1px solid var(--border);margin-top:8px">${demandaInsight}</div>
+    </div>
+
+    <!-- Tareas recurrentes -->
+    <div class="cw" style="border-left:4px solid ${semRecurr.color}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:18px">🔁</span>
+        <div style="flex:1">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Tareas Recurrentes</div>
+          <div style="font-family:Montserrat,sans-serif;font-size:22px;font-weight:800;color:${semRecurr.color}">${recurrentes.length} <span style="font-size:12px;color:var(--muted);font-weight:400">tipos repetidos</span></div>
+        </div>
+        <span style="font-size:20px">${semRecurr.ico}</span>
+      </div>
+      ${recurrRows||''}
+      <div style="font-size:11px;color:var(--txt);line-height:1.5;padding-top:6px;border-top:1px solid var(--border);margin-top:8px">${recurrInsight}</div>
+    </div>
+
+    <!-- Reprogramaciones -->
+    ${kpiCard('📆', 'Reprogramaciones', pctReprog+'%', `${reprog.length} de ${total} bloques`,
+      semReprog.ico, semReprog.color, reprogInsight)}
+  </div>`;
+}
 
 function initRegistros(){
   const t=document.getElementById('srT'),a=document.getElementById('srA');
