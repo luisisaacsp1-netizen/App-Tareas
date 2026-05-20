@@ -1329,27 +1329,27 @@ function calRender() {
       if(b.estado==='En Proceso'  && (b.fechaProg===ds||b.fechaReal===ds)) return true;
       return false;
     });
-    // Build time intervals; merge overlaps to avoid double-counting
     const _useProg = b=>b.estado==='Programado'||b.estado==='Por Iniciar';
-    const timedIvs = dayBloques.map(b=>{
+    // Clip each block interval against work blocks (removes lunch + outside-hours time)
+    // then merge overlaps — ensures sesHH is measured in the same "space" as totalWork
+    const clippedIvs=[];
+    dayBloques.forEach(b=>{
       const ini=_useProg(b)?b.horaInicioProg:b.horaInicio;
       const ter=_useProg(b)?b.horaFinProg:b.horaFin;
-      if(ini&&ter&&ini.length===5&&ter.length===5){try{return[t2m(ini),t2m(ter)];}catch(e){return null;}}
-      return null;
-    }).filter(Boolean).sort((a,b2)=>a[0]-b2[0]);
-    // Hours from blocks with no time info → use hhPlan
-    const hhPlanOnly = dayBloques.filter(b=>{
-      const ini=_useProg(b)?b.horaInicioProg:b.horaInicio;
-      const ter=_useProg(b)?b.horaFinProg:b.horaFin;
-      return !(ini&&ter&&ini.length===5&&ter.length===5);
-    }).reduce((s,b)=>s+(parseFloat(b.hhPlan)||0),0);
-    // Merge overlapping intervals
+      if(ini&&ter&&ini.length===5&&ter.length===5){
+        try{
+          const bs=t2m(ini),be=t2m(ter);
+          if(blks)blks.forEach(w=>{const cs=Math.max(bs,w.start),ce=Math.min(be,w.end);if(ce>cs)clippedIvs.push([cs,ce]);});
+        }catch(e){}
+      }
+    });
+    clippedIvs.sort((a,b2)=>a[0]-b2[0]);
     const merged=[];
-    timedIvs.forEach(([s,e])=>{
+    clippedIvs.forEach(([s,e])=>{
       if(!merged.length||s>merged[merged.length-1][1])merged.push([s,e]);
       else merged[merged.length-1][1]=Math.max(merged[merged.length-1][1],e);
     });
-    const sesHH = merged.reduce((sum,[s,e])=>sum+(e-s)/60,0) + hhPlanOnly;
+    const sesHH=merged.reduce((sum,[s,e])=>sum+(e-s)/60,0);
     const sat = totalWork>0 ? Math.round(sesHH/totalWork*100) : 0;
     const satColor = sat>=80?'#e63329':sat>=60?'#c97a00':sat>0?'#1a7a4a':'';
     const satTxt = sat>0 ? `<div style="font-size:9px;color:${satColor};font-weight:700">${sat}%</div>` : '';
