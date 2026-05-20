@@ -1330,22 +1330,33 @@ function calRender() {
       return false;
     });
     const _useProg = b=>b.estado==='Programado'||b.estado==='Por Iniciar';
-    // Clip each block interval against work blocks (removes lunch + outside-hours time)
-    // then merge overlaps — ensures sesHH is measured in the same "space" as totalWork
-    const clippedIvs=[];
+    // Remove only the lunch break from each block interval (same exclusion as totalWork).
+    // Do NOT clip to work start/end — overtime before 08:00 or after 17/18h counts toward %.
+    // Then merge overlaps so the same minute is never double-counted.
+    const lunch = getLunchFor(person, ds);
+    const lS = Math.round(lunch.start*60); // lunch start in minutes
+    const lE = Math.round(lunch.end*60);   // lunch end in minutes
+    const allIvs=[];
     dayBloques.forEach(b=>{
       const ini=_useProg(b)?b.horaInicioProg:b.horaInicio;
       const ter=_useProg(b)?b.horaFinProg:b.horaFin;
       if(ini&&ter&&ini.length===5&&ter.length===5){
         try{
           const bs=t2m(ini),be=t2m(ter);
-          if(blks)blks.forEach(w=>{const cs=Math.max(bs,w.start),ce=Math.min(be,w.end);if(ce>cs)clippedIvs.push([cs,ce]);});
+          if(be<=bs)return;
+          // Split interval around lunch break
+          if(bs>=lE||be<=lS){
+            allIvs.push([bs,be]); // no overlap with lunch
+          }else{
+            if(bs<lS)allIvs.push([bs,lS]);   // portion before lunch
+            if(be>lE)allIvs.push([lE,be]);   // portion after lunch
+          }
         }catch(e){}
       }
     });
-    clippedIvs.sort((a,b2)=>a[0]-b2[0]);
+    allIvs.sort((a,b2)=>a[0]-b2[0]);
     const merged=[];
-    clippedIvs.forEach(([s,e])=>{
+    allIvs.forEach(([s,e])=>{
       if(!merged.length||s>merged[merged.length-1][1])merged.push([s,e]);
       else merged[merged.length-1][1]=Math.max(merged[merged.length-1][1],e);
     });
