@@ -134,10 +134,10 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;}body{font-f
 #appTopbar .h-impersonate{font-size:10px;background:var(--amber);color:#fff;padding:3px 10px;border-radius:4px;font-weight:700;font-family:Montserrat,sans-serif;}
 #appTopbar .h-out{font-size:11px;color:var(--muted);cursor:pointer;border:1px solid var(--border);padding:4px 10px;border-radius:4px;background:none;}
 #appTopbar .h-out:hover{color:var(--navy);border-color:var(--navy);}
-/* Make main full width under new layout */
-#appContent main{max-width:none;padding:12px 16px 40px;flex:1;overflow-y:auto;min-height:0;width:100%;}
-/* Agenda ocupa todo el alto — sin padding extra */
-#appContent main.agenda-mode{padding:0!important;overflow:hidden!important;display:flex;flex-direction:column;}
+/* Non-agenda sections: centered, readable width */
+#appContent main{max-width:900px;margin:0 auto;padding:16px 20px 50px;flex:1;overflow-y:auto;min-height:0;width:100%;}
+/* Agenda: full viewport, no padding */
+#appContent main.agenda-mode{max-width:none;margin:0;padding:0!important;overflow:hidden!important;display:flex;flex-direction:column;}
 header{display:none!important;}
 .h-logo{height:28px;object-fit:contain;}
 .h-right{display:flex;align-items:center;gap:10px;}
@@ -389,13 +389,13 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
   padding:6px 10px;border-top:1px solid var(--border);background:#fff;flex-shrink:0;}
 /* Right tray */
 .ag-tray{width:auto;background:#fff;border-left:1px solid var(--border);
-  display:flex;flex-direction:column;flex-shrink:0;}
+  display:flex;flex-direction:column;overflow:hidden;min-height:0;}
 .ag-tray-hdr{padding:9px 10px 8px;border-bottom:1px solid var(--border);
   display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
 .ag-tray-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);}
 .ag-tray-count{background:var(--navy);color:#fff;font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;}
-.ag-tray-hint{font-size:9px;color:var(--muted);padding:6px 10px 4px;border-bottom:1px dashed var(--border);}
-.ag-tray-body{flex:1;overflow-y:scroll;padding:7px;scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
+.ag-tray-hint{font-size:9px;color:var(--muted);padding:6px 10px 4px;border-bottom:1px dashed var(--border);flex-shrink:0;}
+.ag-tray-body{flex:1;overflow-y:auto;min-height:0;padding:7px;scrollbar-width:thin;scrollbar-color:#94a3b8 #e2e8f0;}
 /* Tray cards */
 .ag-tray-card{background:var(--off);border:1px solid var(--border);border-radius:6px;
   padding:8px 9px;margin-bottom:6px;cursor:grab;border-left:3px solid var(--navy);
@@ -755,9 +755,59 @@ function toggleFeriado(ds) {
   if (FERIADOS.has(ds)) FERIADOS.delete(ds); else FERIADOS.add(ds);
   saveFeriados();
   calRender();
+  agRenderFeriados();
   toast(FERIADOS.has(ds) ? `📅 ${ds} marcado como feriado` : `📅 ${ds} desmarcado`, 'ok');
 }
 function esFeriado(ds) { return FERIADOS.has(ds); }
+
+function agRenderFeriados() {
+  const el = document.getElementById('agFeriadosList');
+  if (!el) return;
+  const sorted = [...FERIADOS].sort();
+  if (sorted.length === 0) {
+    el.innerHTML = '<span style="font-style:italic">Sin feriados registrados</span>';
+    return;
+  }
+  el.innerHTML = sorted.map(ds => {
+    const d = new Date(ds+'T12:00:00');
+    const label = d.toLocaleDateString('es-CL',{day:'numeric',month:'short'});
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 0;border-bottom:1px dashed var(--border)">
+      <span>📅 ${label}</span>
+      <button onclick="toggleFeriado('${ds}');agRenderFeriados();" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px;padding:0 2px" title="Quitar feriado">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function abrirModalFeriado() {
+  openModal(`
+    <div class="mt"><div class="rb"></div>Agregar feriado</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Los días feriados aparecen bloqueados en el calendario (sin disponibilidad).</div>
+    <div class="efi fw" style="margin-bottom:14px">
+      <label class="rq">Fecha del feriado</label>
+      <input type="date" id="ferInput" value="${todayStr()}" style="background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;width:100%">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn ghost" onclick="cerrarModal()"><span class="bt">Cancelar</span></button>
+      <button class="btn" onclick="confirmarFeriado()"><span class="bt">Agregar</span></button>
+    </div>
+  `);
+}
+
+function confirmarFeriado() {
+  const ds = document.getElementById('ferInput')?.value;
+  if (!ds) return;
+  if (!FERIADOS.has(ds)) {
+    FERIADOS.add(ds);
+    saveFeriados();
+    calRender();
+    agRenderFeriados();
+    const d = new Date(ds+'T12:00:00');
+    toast('📅 Feriado agregado: ' + d.toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long'}), 'ok');
+  } else {
+    toast('Esa fecha ya está marcada como feriado', 'warn');
+  }
+  cerrarModal();
+}
 
 // ══════════════════════════════════════════════════════════
 // API
@@ -1373,6 +1423,13 @@ function vAgenda() {
       <div class="ag-v-item"   id="agvM" onclick="calSwitchView('mes');agSetVista('M')">🗓 Mes</div>
     </div>
 
+    <!-- Feriados -->
+    <div id="agFeriadosSection">
+      <div class="ag-sec-lbl">Feriados</div>
+      <div id="agFeriadosList" style="font-size:10px;color:var(--muted);margin-bottom:5px"></div>
+      <button class="btn sm ghost w" style="font-size:10px;width:100%" onclick="abrirModalFeriado()">+ Agregar feriado</button>
+    </div>
+
   </div>
 
   <!-- ── Centro: toolbar + calendario ── -->
@@ -1397,6 +1454,7 @@ function vAgenda() {
         <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#dcfce7;border-left:3px solid #15803d"></div><span>Completado</span></div>
         <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#f3e8ff;border-left:3px solid #7e22ce"></div><span>Express</span></div>
         <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fef9ec;border-left:3px solid #e8a317"></div><span>Almuerzo</span></div>
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fffbf0;border-left:3px solid #f59e0b"></div><span>Feriado</span></div>
       </div>
       <div id="agTodaySatBadge" style="font-size:10px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:4px;"></div>
       <button class="btn sm ghost" onclick="abrirModalAlmuerzo()" style="font-size:10px">🍽 Almuerzo</button>
@@ -1409,7 +1467,7 @@ function vAgenda() {
       <span class="ag-tray-title">📥 Por Iniciar</span>
       <span class="ag-tray-count" id="agTrayCount">0</span>
     </div>
-    <div class="ag-tray-hint">← Arrastrá al calendario</div>
+    <div class="ag-tray-hint">← Arrastra al calendario</div>
     <div class="ag-tray-body" id="calTrayList"></div>
   </div>
 
@@ -1612,7 +1670,7 @@ function initCal() {
   document.getElementById('main')?.classList.add('agenda-mode');
   calRender();
   calRefreshTray(SESSION.nombre);
-  setTimeout(() => { agRenderMiniCal(); agRenderEquipo(); agRenderTodaySat(); }, 50);
+  setTimeout(() => { agRenderMiniCal(); agRenderEquipo(); agRenderTodaySat(); agRenderFeriados(); }, 50);
 }
 
 function calSwitchView(v) {
@@ -1977,7 +2035,7 @@ function calRefreshTray(person) {
       onclick="abrirModalProgramarBloque('${b.id}')"
       ondragstart="calTrayDragStart(event,${b.id})"
       ondragend="this.style.opacity='1'"
-      title="Clic para programar / Arrastrá al calendario">
+      title="Clic para programar / Arrastra al calendario">
       <div class="ag-tc-drag">⠿ arrastrar</div>
       <div class="ag-tc-title">${b.titulo||'Sin título'}</div>
       <div class="ag-tc-meta">
@@ -3984,7 +4042,7 @@ async function vCUsuarios() {
   return`
   <div class="ph"><div class="pt"><div class="rb"></div>Usuarios del sistema</div></div>
   ${!fromApi?`<div style="background:#fef9c3;border:1px solid #fde68a;border-radius:6px;padding:8px 12px;font-size:11px;color:#92400e;margin-bottom:10px">
-    ⚠️ Datos aproximados — para ver usuarios exactos (con login/contraseña) republicá el script de Google Apps Script con el Code.gs actualizado.
+    ⚠️ Datos aproximados — para ver usuarios exactos (con login/contraseña) vuelve a publicar el script de Google Apps Script con el Code.gs actualizado.
   </div>`:''}
   <div class="card">
     <div class="cl"><div class="d"></div>Usuarios activos</div>
