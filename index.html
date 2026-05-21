@@ -578,6 +578,8 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
     <!-- Keep these hidden — logic still uses them internally -->
     <div class="sec-bar" id="secBar" style="display:none"></div>
     <div class="sub-bar" id="subBar" style="display:none"></div>
+    <span id="hName" style="display:none"></span>
+    <div id="impBanner" style="display:none"><span id="impName"></span></div>
 
     <main id="main"></main>
   </div>
@@ -943,7 +945,7 @@ async function doLogin() {
     VIEW_AS=null;
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('appShell').style.display='flex';
-    document.getElementById('hName').textContent=r.nombre;
+    const _hn=document.getElementById('hName');if(_hn)_hn.textContent=r.nombre;
     const tbU=document.getElementById('tbUser');if(tbU)tbU.innerHTML=`<strong>${r.nombre}</strong>`;
     // Show nav immediately, load data in background
     buildNav();
@@ -1067,7 +1069,7 @@ function logout() {
 function startImpersonate(nombre, usuario) {
   if(SESSION.rol!=='admin'){toast('Solo admin puede impersonar','er');return;}
   VIEW_AS={nombre,usuario};
-  document.getElementById('hName').textContent=SESSION.nombre+' → '+nombre;
+  const _hn2=document.getElementById('hName');if(_hn2)_hn2.textContent=SESSION.nombre+' → '+nombre;
   const tbU=document.getElementById('tbUser');if(tbU)tbU.innerHTML=`<strong>${SESSION.nombre} → ${nombre}</strong>`;
   const tbImp=document.getElementById('tbImpersonate');if(tbImp){tbImp.style.display='inline-block';tbImp.textContent=`👁 Viendo como ${nombre}`;}
   const imp=document.getElementById('impBanner');
@@ -1078,7 +1080,7 @@ function startImpersonate(nombre, usuario) {
 }
 function stopImpersonate() {
   VIEW_AS=null;
-  document.getElementById('hName').textContent=SESSION.nombre;
+  const _hn3=document.getElementById('hName');if(_hn3)_hn3.textContent=SESSION.nombre;
   const tbU=document.getElementById('tbUser');if(tbU)tbU.innerHTML=`<strong>${SESSION.nombre}</strong>`;
   const tbImp=document.getElementById('tbImpersonate');if(tbImp)tbImp.style.display='none';
   const imp=document.getElementById('impBanner');
