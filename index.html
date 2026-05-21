@@ -616,11 +616,10 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
   <!-- SIDEBAR — icon only, Teams-style -->
   <nav id="sidebar">
     <div class="sb-logo-btn">
-      <img src="logo.png" alt="OT" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" style="display:block;width:34px;height:34px;object-fit:contain;">
-      <div style="display:none;width:32px;height:32px;background:var(--red);border-radius:6px;align-items:center;justify-content:center;flex-direction:column;gap:0;">
-        <span style="font-family:Montserrat,sans-serif;font-size:10px;font-weight:900;color:#fff;line-height:1;">OT</span>
-        <span style="font-family:Montserrat,sans-serif;font-size:7px;font-weight:700;color:rgba(255,255,255,.75);line-height:1;letter-spacing:.5px;">PAT</span>
-      </div>
+      <!-- Arrow icon = brand mark for sidebar, always visible -->
+      <svg viewBox="0 0 34 34" width="34" height="34" xmlns="http://www.w3.org/2000/svg">
+        <path d="M5 4 L21 17 L5 30 L10 30 L26 17 L10 4 Z" fill="#e63329"/>
+      </svg>
     </div>
     <!-- items populated by buildSidebar() -->
     <div id="sbItems" style="display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;"></div>
@@ -640,12 +639,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
   <div id="appContent">
     <!-- Topbar -->
     <div id="appTopbar" style="display:none">
-      <img src="logo.png" alt="Patagonia" id="tbLogoImg" style="height:30px;object-fit:contain;margin-right:4px;display:block"
-           onerror="this.style.display='none';document.getElementById('tbLogoFallback').style.display='flex'">
-      <div id="tbLogoFallback" style="display:none;align-items:center;gap:4px;margin-right:6px;">
-        <div style="width:24px;height:24px;background:var(--red);border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:Montserrat,sans-serif;font-size:9px;font-weight:900;color:#fff;">OT</div>
-        <span style="font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;color:var(--navy);">Patagonia</span>
-      </div>
+      <img src="logo.svg" alt="Contenedores Patagonia" style="height:32px;width:auto;object-fit:contain;margin-right:8px;display:block;border-radius:3px;">
       <span class="tb-sec" id="tbSec">Agenda</span>
       <span class="tb-sub" id="tbSub"></span>
       <div class="tb-right">
