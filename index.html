@@ -718,6 +718,18 @@ function buildLunchOverrides() {
     if (p.length === 4) LUNCH_OVERRIDES[`${p[0]}|${p[1]}`] = lunchEntry(p[2], p[3]);
   });
 }
+
+function buildFeriados() {
+  // Load from backend (Listas sheet, type 'Feriado') — syncs across all devices
+  const fromBackend = (LISTAS['Feriado'] || []).filter(Boolean);
+  if (fromBackend.length > 0) {
+    FERIADOS = new Set(fromBackend);
+    saveFeriados(); // keep localStorage in sync too
+  } else {
+    // Fallback: use localStorage (backward compat)
+    FERIADOS = new Set(JSON.parse(localStorage.getItem(_FERIADOS_KEY)||'[]'));
+  }
+}
 const BADGE = {'Por Iniciar':'bi','Programada':'bpr','En Proceso':'bp','Listo':'bl','Standby':'bs','Cancelado':'bc'};
 const ESTADO_COLS = {
   'Por Iniciar':'#d1ecf1;#0c5460','Programada':'#e0f2fe;#075985','En Proceso':'#fff3cd;#856404',
@@ -752,17 +764,32 @@ function saveFeriados() {
   try { localStorage.setItem(_FERIADOS_KEY, JSON.stringify([...FERIADOS])); } catch(e) {}
 }
 function toggleFeriado(ds) {
-  if (FERIADOS.has(ds)) FERIADOS.delete(ds); else FERIADOS.add(ds);
+  if (activeRol() !== 'admin') { toast('Solo el administrador puede modificar feriados','warn'); return; }
+  const adding = !FERIADOS.has(ds);
+  if (adding) FERIADOS.add(ds); else FERIADOS.delete(ds);
   saveFeriados();
+  // Sync to backend so all devices see the change
+  if (adding) {
+    if (!LISTAS['Feriado']) LISTAS['Feriado'] = [];
+    if (!LISTAS['Feriado'].includes(ds)) LISTAS['Feriado'].push(ds);
+    apiPost({accion:'guardarFeriado', fecha:ds}).catch(()=>{});
+  } else {
+    if (LISTAS['Feriado']) LISTAS['Feriado'] = LISTAS['Feriado'].filter(f=>f!==ds);
+    apiPost({accion:'eliminarFeriado', fecha:ds}).catch(()=>{});
+  }
   calRender();
   agRenderFeriados();
-  toast(FERIADOS.has(ds) ? `📅 ${ds} marcado como feriado` : `📅 ${ds} desmarcado`, 'ok');
+  toast(adding ? `📅 ${ds} marcado como feriado` : `📅 ${ds} desmarcado`, 'ok');
 }
 function esFeriado(ds) { return FERIADOS.has(ds); }
 
 function agRenderFeriados() {
   const el = document.getElementById('agFeriadosList');
+  const btn = document.querySelector('#agFeriadosSection button');
   if (!el) return;
+  const isAdmin = activeRol() === 'admin';
+  // Show/hide add button based on role
+  if (btn) btn.style.display = isAdmin ? '' : 'none';
   const sorted = [...FERIADOS].sort();
   if (sorted.length === 0) {
     el.innerHTML = '<span style="font-style:italic">Sin feriados registrados</span>';
@@ -773,12 +800,13 @@ function agRenderFeriados() {
     const label = d.toLocaleDateString('es-CL',{day:'numeric',month:'short'});
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 0;border-bottom:1px dashed var(--border)">
       <span>📅 ${label}</span>
-      <button onclick="toggleFeriado('${ds}');agRenderFeriados();" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px;padding:0 2px" title="Quitar feriado">✕</button>
+      ${isAdmin ? `<button onclick="toggleFeriado('${ds}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px;padding:0 2px" title="Quitar feriado">✕</button>` : ''}
     </div>`;
   }).join('');
 }
 
 function abrirModalFeriado() {
+  if (activeRol() !== 'admin') { toast('Solo el administrador puede agregar feriados','warn'); return; }
   openModal(`
     <div class="mt"><div class="rb"></div>Agregar feriado</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Los días feriados aparecen bloqueados en el calendario (sin disponibilidad).</div>
@@ -799,6 +827,9 @@ function confirmarFeriado() {
   if (!FERIADOS.has(ds)) {
     FERIADOS.add(ds);
     saveFeriados();
+    if (!LISTAS['Feriado']) LISTAS['Feriado'] = [];
+    if (!LISTAS['Feriado'].includes(ds)) LISTAS['Feriado'].push(ds);
+    apiPost({accion:'guardarFeriado', fecha:ds}).catch(()=>{});
     calRender();
     agRenderFeriados();
     const d = new Date(ds+'T12:00:00');
@@ -1061,6 +1092,7 @@ async function loadData(forceRefresh=false) {
         BLOQUES = d.bloques; LISTAS = d.listas;
         if (d.lunchMap) LUNCH_MAP = d.lunchMap;
         buildLunchOverrides();
+        buildFeriados();
         applyLocalOverrides(); // restaura overrides del usuario aunque el cache sea viejo
         if (SESSION?.nombre && LUNCH_MAP[SESSION.nombre]) {
           SESSION.almuerzoIni = LUNCH_MAP[SESSION.nombre].ini;
@@ -1095,6 +1127,7 @@ async function loadData(forceRefresh=false) {
     SESSION.almuerzoFin = LUNCH_MAP[SESSION.nombre].fin;
   }
   buildLunchOverrides();
+  buildFeriados();
   applyLocalOverrides(); // restaura overrides del usuario sobre datos frescos de API
   try {
     sessionStorage.setItem('ot_cache', JSON.stringify({bloques:BLOQUES, listas:LISTAS, lunchMap:LUNCH_MAP}));
