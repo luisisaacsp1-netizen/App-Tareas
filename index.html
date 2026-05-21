@@ -89,7 +89,7 @@ body{font-family:"Open Sans",sans-serif;background:var(--off);color:var(--text);
 #appShell{display:none;}
 
 /* SIDEBAR LAYOUT */
-#appShell{display:flex;height:100vh;overflow:hidden;}
+#appShell{display:flex;height:100vh;width:100%;overflow:hidden;}
 #sidebar{
   width:52px;min-width:52px;background:var(--navy);
   border-right:2px solid var(--red);
@@ -362,7 +362,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .le-add input:focus{outline:none;border-color:var(--navy3);border-style:solid;}
 
 /* ── AGENDA 3-COLUMN SHELL ───────────────────────────── */
-.agenda-shell{display:flex;flex:1;min-height:0;overflow:hidden;gap:0;}
+.agenda-shell{display:flex;flex:1;width:100%;min-height:0;overflow:hidden;gap:0;}
 /* Left panel */
 .ag-left{width:190px;min-width:190px;background:var(--off);border-right:1px solid var(--border);
   padding:10px 8px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex-shrink:0;}
@@ -640,7 +640,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
   <div id="appContent">
     <!-- Topbar -->
     <div id="appTopbar" style="display:none">
-      <img id="tbLogoImg" src="" alt="Contenedores Patagonia" style="height:32px;width:auto;object-fit:contain;margin-right:8px;display:block;border-radius:3px;">
+      <div style="height:32px;background:var(--navy);border-radius:4px;overflow:hidden;margin-right:8px;display:flex;align-items:center;flex-shrink:0;"><img id="tbLogoImg" src="" alt="Contenedores Patagonia" style="height:32px;width:auto;display:block;"></div>
       <span class="tb-sec" id="tbSec">Agenda</span>
       <span class="tb-sub" id="tbSub"></span>
       <div class="tb-right">
