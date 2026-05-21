@@ -398,7 +398,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .ag-toolbar .tb-btn{background:var(--off);border:1px solid var(--border);color:var(--text);
   border-radius:5px;padding:3px 9px;cursor:pointer;font-size:11px;font-weight:600;transition:background .12s;}
 .ag-toolbar .tb-btn:hover{background:var(--border);}
-.ag-cal-area{flex:1;overflow:auto;} /* scrollable calendar */
+.ag-cal-area{flex:1;overflow:auto;display:flex;flex-direction:column;} /* scrollable calendar */
 .ag-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;
   padding:6px 10px;border-top:1px solid var(--border);background:#fff;flex-shrink:0;}
 /* Right tray */
@@ -427,11 +427,10 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .ag-tc-badge.stb{background:#fef9c3;color:#713f12;}
 
 /* AGENDA CALENDAR */
-.cal-wrap{overflow-x:auto;background:#fff;width:100%;min-height:100%;}
+.cal-wrap{background:#fff;width:100%;display:flex;flex-direction:column;}
 /* En agenda-shell el cal-wrap no necesita borde/shadow propio */
 .agenda-shell .cal-wrap{border:none;box-shadow:none;border-radius:0;}
-.agenda-shell .cal-head,.agenda-shell .cal-body{min-width:100%;}
-.cal-head{display:flex;width:100%;background:#fff;border-radius:var(--r) var(--r) 0 0;border-bottom:2px solid var(--border);position:sticky;top:0;z-index:10;}
+.cal-head{display:flex;width:100%;flex-shrink:0;background:#fff;border-radius:var(--r) var(--r) 0 0;border-bottom:2px solid var(--border);position:sticky;top:0;z-index:10;}
 .cal-time-col{width:48px;flex-shrink:0;border-right:1px solid var(--border);}
 .cal-days-head{flex:1;display:flex;}
 .cal-day-hdr{flex:1;padding:6px 4px;text-align:center;border-right:1px solid var(--border);min-width:80px;}
@@ -440,7 +439,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .cal-day-hdr.today .dd{background:var(--navy);color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:13px;}
 .cal-day-hdr .sat{font-size:9px;font-weight:700;margin-top:1px;}
 .cal-day-hdr.sat-col .dn,.cal-day-hdr.sat-col .dd{opacity:.35;}
-.cal-body{display:flex;width:100%;}
+.cal-body{display:flex;width:100%;flex:1;}
 .cal-times{width:48px;flex-shrink:0;border-right:1px solid var(--border);}
 .cal-hour{height:52px;display:flex;align-items:flex-start;padding-top:3px;justify-content:flex-end;padding-right:6px;}
 .cal-hour span{font-size:9px;color:var(--muted);font-family:Montserrat,sans-serif;}
