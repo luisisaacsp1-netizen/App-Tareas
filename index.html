@@ -26,45 +26,6 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;}body{font-f
 
 
 
-/* ── AI CHAT ─────────────────────────────────────────────────────── */
-.ai-fab{position:fixed;bottom:24px;right:24px;width:52px;height:52px;background:var(--navy);
-  border-radius:50%;border:none;cursor:pointer;box-shadow:0 4px 16px rgba(13,27,46,.4);
-  display:flex;align-items:center;justify-content:center;font-size:22px;z-index:800;
-  transition:all .2s;}
-.ai-fab:hover{background:var(--navy3);transform:scale(1.08);}
-.ai-fab .ai-badge{position:absolute;top:-2px;right:-2px;width:14px;height:14px;
-  background:var(--red);border-radius:50%;border:2px solid #fff;}
-.ai-panel{position:fixed;bottom:86px;right:24px;width:360px;max-height:560px;
-  background:#fff;border-radius:12px;box-shadow:0 8px 40px rgba(13,27,46,.25);
-  z-index:800;display:none;flex-direction:column;overflow:hidden;
-  animation:up .22s ease;}
-.ai-panel.op{display:flex;}
-.ai-hdr{background:var(--navy);padding:14px 16px;display:flex;align-items:center;gap:10px;}
-.ai-hdr-ico{font-size:20px;}
-.ai-hdr-txt{flex:1;}
-.ai-hdr-txt .ai-name{font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;color:#fff;}
-.ai-hdr-txt .ai-sub{font-size:10px;color:rgba(255,255,255,.5);}
-.ai-close{background:none;border:none;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer;padding:2px;}
-.ai-close:hover{color:#fff;}
-.ai-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;min-height:200px;}
-.ai-msg{max-width:90%;padding:8px 11px;border-radius:8px;font-size:12px;line-height:1.5;}
-.ai-msg.user{background:var(--navy);color:#fff;align-self:flex-end;border-radius:8px 8px 2px 8px;}
-.ai-msg.ai{background:var(--off);color:var(--text);align-self:flex-start;border-radius:8px 8px 8px 2px;border:1px solid var(--border);}
-.ai-msg.typing{color:var(--muted);font-style:italic;}
-.ai-quick{padding:8px 12px;display:flex;gap:5px;flex-wrap:wrap;border-top:1px solid var(--border);}
-.ai-quick button{padding:4px 9px;border-radius:12px;border:1px solid var(--border);background:#fff;
-  font-size:10px;cursor:pointer;transition:all .15s;color:var(--text);font-family:"Open Sans",sans-serif;}
-.ai-quick button:hover{background:var(--navy);color:#fff;border-color:var(--navy);}
-.ai-input-row{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--border);}
-.ai-input{flex:1;background:var(--inp);border:1.5px solid var(--border);border-radius:20px;
-  padding:7px 13px;font-family:"Open Sans",sans-serif;font-size:12px;color:var(--text);}
-.ai-input:focus{outline:none;border-color:var(--navy3);}
-.ai-send{background:var(--navy);border:none;border-radius:50%;width:32px;height:32px;
-  cursor:pointer;color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;
-  transition:background .15s;flex-shrink:0;}
-.ai-send:hover{background:var(--navy3);}
-.ai-send:disabled{background:var(--border);}
-
 
 /* ── MOBILE (≤768px) ─────────────────────────────────── */
 @media(max-width:768px){
@@ -464,7 +425,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .cal-day-hdr.today .dd{background:var(--navy);color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:13px;}
 .cal-day-hdr .sat{font-size:9px;font-weight:700;margin-top:1px;}
 .cal-day-hdr.sat-col .dn,.cal-day-hdr.sat-col .dd{opacity:.35;}
-.cal-body{display:flex;width:100%;flex:1;}
+.cal-body{display:flex;width:100%;}
 .cal-times{width:48px;flex-shrink:0;border-right:1px solid var(--border);}
 .cal-hour{height:52px;display:flex;align-items:flex-start;padding-top:3px;justify-content:flex-end;padding-right:6px;}
 .cal-hour span{font-size:9px;color:var(--muted);font-family:Montserrat,sans-serif;}
@@ -650,9 +611,6 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
     <div id="sbItems" style="display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;"></div>
     <div class="sb-bottom" id="sbBottom">
       <div class="sb-sep" style="width:28px;"></div>
-      <button class="sb-item" id="sbAiBtn" onclick="toggleAI()" style="display:none" title="Asistente IA">
-        🤖<span class="sb-tip">Asistente IA</span>
-      </button>
       <div class="sb-avatar" id="sbAvatar" title="Cerrar sesión" onclick="logout()">
         <span id="sbAvatarTxt">?</span>
         <span class="sb-tip" id="sbAvatarTip">Cerrar sesión</span>
@@ -685,42 +643,6 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 
 </div>
 
-
-<!-- ══ AI ASSISTANT ══ -->
-<button class="ai-fab" id="aiFab" onclick="toggleAI()" title="Asistente IA" style="display:none">
-  🤖
-</button>
-
-<div class="ai-panel" id="aiPanel">
-  <div class="ai-hdr">
-    <span class="ai-hdr-ico">🤖</span>
-    <div class="ai-hdr-txt">
-      <div class="ai-name">Asistente OT</div>
-      <div class="ai-sub">Powered by Claude · Analiza tus datos</div>
-    </div>
-    <button class="ai-close" onclick="toggleAI()">✕</button>
-  </div>
-  <div class="ai-msgs" id="aiMsgs">
-    <div class="ai-msg ai">
-      Hola <strong id="aiGreetName"></strong> 👋 Soy tu asistente de la Oficina Técnica.
-      Puedo analizar tareas, sesiones y métricas de <strong>todo el equipo</strong> — incluyendo otros usuarios. ¿En qué te ayudo?
-    </div>
-  </div>
-  <div class="ai-quick" id="aiQuick">
-    <button onclick="aiAsk('¿Cuánto trabajo Express vs Simple tiene cada persona? ¿Quién es más reactivo?')">⚡ Express vs Simple</button>
-    <button onclick="aiAsk('Analizá la fragmentación de agenda de cada persona. ¿Quién tiene más bloques cortos?')">🔀 Fragmentación</button>
-    <button onclick="aiAsk('¿Qué tareas o tipos de trabajo debería delegar ' + (SESSION?.nombre?.split(' ')[0]||'yo') + '?')">🎯 ¿Qué delegar?</button>
-    <button onclick="aiAsk('¿Cuáles son las tareas más recurrentes del equipo? ¿Cuáles deberían estandarizarse?')">🔁 Tareas recurrentes</button>
-    <button onclick="aiAsk('Analizá el balance de carga del equipo. ¿Está bien distribuido el trabajo?')">📦 Balance de carga</button>
-    <button onclick="aiAsk('¿Qué área genera más trabajo urgente? ¿Hay algún área que debería mejorar sus SLAs?')">🏢 Análisis por área</button>
-  </div>
-  <div class="ai-input-row">
-    <input type="text" class="ai-input" id="aiInput"
-      placeholder="Pregunta algo sobre tus tareas…"
-      onkeydown="if(event.key==='Enter')aiSend()">
-    <button class="ai-send" id="aiSendBtn" onclick="aiSend()">➤</button>
-  </div>
-</div>
 
 <!-- ══ MODAL ══ -->
 <div class="mb" id="mb">
@@ -1240,11 +1162,6 @@ const SECS = {
 
 function buildNav() {
   const isAdmin = activeRol() === 'admin';
-  // AI fab — show for admin
-  const fab = document.getElementById('aiFab');
-  if (fab) fab.style.display = isAdmin ? 'flex' : 'none';
-  const sbAi = document.getElementById('sbAiBtn');
-  if (sbAi) sbAi.style.display = isAdmin ? 'flex' : 'none';
   buildSidebar();
   // Update avatar
   const av = document.getElementById('sbAvatarTxt');
@@ -3241,180 +3158,8 @@ function buildDashCostosEstrategico(f) {
 
 
 // ════════════════════════════════════════════════════════
-// AI ASSISTANT — Claude-powered
-// ════════════════════════════════════════════════════════
-let aiOpen = false;
-let aiHistory = [];
 
-function toggleAI() {
-  aiOpen = !aiOpen;
-  document.getElementById('aiPanel').classList.toggle('op', aiOpen);
-  if (aiOpen) {
-    document.getElementById('aiGreetName').textContent = SESSION?.nombre?.split(' ')[0] || '';
-    document.getElementById('aiInput').focus();
-  }
-}
 
-function aiAsk(text) {
-  document.getElementById('aiInput').value = text;
-  aiSend();
-}
-
-async function aiSend() {
-  const input = document.getElementById('aiInput');
-  const msg   = input.value.trim();
-  if (!msg) return;
-  input.value = '';
-
-  // Show user message
-  aiAddMsg(msg, 'user');
-  // Remove quick buttons after first message
-  const quick = document.getElementById('aiQuick');
-  if (quick) quick.style.display = 'none';
-
-  // Show typing
-  const typingId = 'aiTyping_' + Date.now();
-  aiAddMsg('Analizando tus datos…', 'ai typing', typingId);
-  document.getElementById('aiSendBtn').disabled = true;
-
-  // Build context from current data
-  const hoy = todayStr();
-  const lunes = mondayStr();
-
-  // Serialize BLOQUES (últimas 5 semanas) para análisis real
-  const d5s = new Date(); d5s.setDate(d5s.getDate()-35);
-  const desde5s = d5s.toISOString().split('T')[0];
-  const bloquesCtx = BLOQUES.filter(b=>{
-    const fd=b.fechaReal||b.fechaProg||b.fechaIngreso||'';
-    return fd>=desde5s;
-  });
-
-  // Pre-calcular métricas por persona
-  const allUsers = LISTAS['Responsable']||['Luis Sanchez','Luis Diaz','Yamila Silva'];
-  const metricasPorPersona = allUsers.map(p=>{
-    const pB = bloquesCtx.filter(b=>b.responsable===p);
-    const ejec = pB.filter(b=>b.estado==='Confirmado'||(parseFloat(b.hhReal)||0)>0);
-    const express = pB.filter(b=>b.tipoBloque==='Express').length;
-    const frag = ejec.filter(b=>(parseFloat(b.hhReal)||0)<0.5).length;
-    const conAmbos = pB.filter(b=>(parseFloat(b.hhPlan)||0)>0&&(parseFloat(b.hhReal)||0)>0&&b.tipoBloque!=='Express');
-    const ratioEst = conAmbos.length>0
-      ? Math.round(conAmbos.reduce((s,b)=>s+(parseFloat(b.hhReal)||0)/(parseFloat(b.hhPlan)||1),0)/conAmbos.length*100)/100
-      : null;
-    const hhRealSem = pB.filter(b=>(b.fechaReal||b.fechaProg||'')>=lunes).reduce((s,b)=>s+(parseFloat(b.hhReal)||0),0);
-    const q1=pB.filter(b=>b.urgente==='Si'&&b.importante==='Si').length;
-    const q2=pB.filter(b=>b.urgente!=='Si'&&b.importante==='Si').length;
-    return `${p}: ${pB.length} bloques | Express: ${pB.length>0?Math.round(express/pB.length*100):0}% | Fragmentación: ${ejec.length>0?Math.round(frag/ejec.length*100):0}% | Ratio est.: ${ratioEst!==null?ratioEst+'x':'N/D'} | Q1/Apagafuegos: ${pB.length>0?Math.round(q1/pB.length*100):0}% Q2/Estratégico: ${pB.length>0?Math.round(q2/pB.length*100):0}% | HH semana: ${hhRealSem.toFixed(1)}h`;
-  }).join('\n');
-
-  // Serializar bloques para análisis detallado (formato compacto)
-  const _dow = f=>{ if(!f)return ''; const d=new Date(f+'T12:00:00'); return ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()]||''; };
-  const bloqSerial = bloquesCtx.map(b=>{
-    const horaIni = b.estado==='Programado'?b.horaInicioProg:b.horaInicio;
-    const horaFin = b.estado==='Programado'?b.horaFinProg:b.horaFin;
-    const fechaEjec = b.fechaReal||b.fechaProg||'';
-    return [
-      b.id||'',
-      (b.titulo||'').substring(0,45).replace(/\|/g,'/'),
-      b.responsable||'',
-      b.tipoBloque||'',
-      b.urgente||'',
-      b.importante||'',
-      b.area||'',
-      b.estado||'',
-      parseFloat(b.hhPlan)||0,
-      parseFloat(b.hhReal)||0,
-      fechaEjec,
-      _dow(fechaEjec),
-      horaIni||'',
-      horaFin||''
-    ].join('|');
-  }).join('\n');
-
-  const context = `
-Eres el asistente de análisis de productividad de la Oficina Técnica de Contenedores Patagonia SpA.
-Usuario activo: ${SESSION?.nombre} (${SESSION?.rol==='admin'?'Admin':'Usuario'}) | Fecha: ${hoy}
-
-MARCO ANALÍTICO:
-- Express = bloque reactivo (sin planificación previa). Simple = planificado.
-- Índice reactividad = Express/Total → crítico si >50%
-- Fragmentación = bloques con HH_Real <0.5h / ejecutados → alto si >50%
-- Ratio estimación = HH_Real/HH_Plan en bloques Simple (ideal 0.85–1.15; >1.3 = subestima sistemáticamente)
-- Q1 (urgente+importante) = apagafuegos | Q2 (importante, no urgente) = trabajo estratégico
-- Bloques delegables: Q3 (urgente, no importante) y operativos repetitivos <45min de otro perfil
-
-CAPACIDADES DE ANÁLISIS — podés responder preguntas sobre:
-1. VARIABILIDAD: Para una tarea o patrón de título, calculá min/máx/promedio de HH_Real. Si la variabilidad es alta (desv. estándar > 50% del promedio), analizá si se relaciona con el día de semana, hora de inicio, o si el área solicitante influye.
-2. HORARIO: Comparar rendimiento mañana (horaInicio < 12:00) vs tarde (>=12:00). Identificar si ciertos tipos de tarea se ejecutan mejor en determinados horarios.
-3. PROGRAMACIÓN: Si te piden sugerencias de programación, calculá el ratio de estimación histórico de esa persona/tipo de tarea y recomendá agregar ese % como holgura. Sugerí también bloques buffer para emergencias basándote en el % Express histórico (ej: si 60% es Express, reservar ~2h/día libres).
-4. DELEGACIÓN: Identificar tareas que otra persona del equipo podría absorber, basándote en tipo, área, duración promedio y perfil actual de cada persona.
-5. PATRONES: Agrupar títulos similares (primeras 3 palabras), calcular frecuencia y variabilidad de cada grupo.
-
-MÉTRICAS POR PERSONA (últimas 5 semanas):
-${metricasPorPersona}
-
-BLOQUES DETALLADOS (id|titulo|responsable|tipo|urgente|importante|area|estado|hhPlan|hhReal|fecha|diaSemana|horaInicio|horaFin):
-${bloqSerial}
-
-Responde en español. Analiza los datos reales — nunca inventes cifras. Usa bullets y sé específico con números. Máximo 350 palabras salvo que pidan más detalle.
-`;
-
-  // Add to history
-  aiHistory.push({ role: 'user', content: msg });
-
-  const claudeKey = localStorage.getItem('ot_claude_key');
-  if (!claudeKey) {
-    document.getElementById(typingId)?.remove();
-    aiAddMsg('⚠️ No hay clave API configurada. Ve a Configuración → "Asistente IA" y pegá tu clave de Anthropic (console.anthropic.com).', 'ai');
-    document.getElementById('aiSendBtn').disabled = false;
-    return;
-  }
-
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': claudeKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-request-source': 'user-controlled'
-      },
-      body: JSON.stringify({
-        model: 'claude-3-5-haiku-20241022',
-        max_tokens: 1000,
-        system: context,
-        messages: aiHistory.slice(-8),
-      })
-    });
-    const data = await response.json();
-    if (data.error) {
-      document.getElementById(typingId)?.remove();
-      aiAddMsg(`Error API: ${data.error.message || 'Respuesta inválida'}`, 'ai');
-    } else {
-      const reply = data.content?.[0]?.text || 'Sin respuesta.';
-      document.getElementById(typingId)?.remove();
-      aiAddMsg(reply, 'ai');
-      aiHistory.push({ role: 'assistant', content: reply });
-    }
-  } catch(e) {
-    document.getElementById(typingId)?.remove();
-    aiAddMsg('Error de red. Verifica tu conexión a internet.', 'ai');
-  }
-
-  document.getElementById('aiSendBtn').disabled = false;
-  document.getElementById('aiInput').focus();
-}
-
-function aiAddMsg(text, type='ai', id=null) {
-  const msgs = document.getElementById('aiMsgs');
-  if (!msgs) return;
-  const div = document.createElement('div');
-  div.className = 'ai-msg ' + type;
-  if (id) div.id = id;
-  // Simple markdown: **bold**
-  div.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
-  msgs.appendChild(div);
-  msgs.scrollTop = msgs.scrollHeight;
-}
 
 
 
@@ -4272,23 +4017,8 @@ function vCConfig() {
         </div>
       </div>
     </div>`).join('');
-  const claudeKey = localStorage.getItem('ot_claude_key')||'';
   return`
   <div class="ph"><div class="pt"><div class="rb"></div>Configuración</div></div>
-
-  <div class="card">
-    <div class="cl"><div class="d"></div>🤖 Asistente IA — Clave API ${tip('Necesaria para usar el chat de IA. Obtenela en console.anthropic.com. Se guarda solo en este navegador.')}</div>
-    <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
-      <input type="password" id="claudeKeyInput" value="${claudeKey}"
-        placeholder="sk-ant-…"
-        style="flex:1;background:var(--inp);border:1.5px solid var(--border);border-radius:6px;padding:7px 10px;font-family:monospace;font-size:12px">
-      <button class="btn sm" onclick="guardarClaudeKey()"><span class="bt">Guardar clave</span></button>
-      ${claudeKey?`<button class="btn sm ghost" onclick="borrarClaudeKey()"><span class="bt">Borrar</span></button>`:''}
-    </div>
-    <div style="font-size:10px;color:var(--muted);margin-top:5px">
-      ${claudeKey ? '✅ Clave configurada — el asistente IA está activo' : '⚠️ Sin clave API configurada — el asistente IA no funcionará'}
-    </div>
-  </div>
 
   <div class="card">
     <div class="cl"><div class="d"></div>Costos por hora ${tip('Valores en CLP por hora trabajada. Se usan en el dashboard de costos.')}</div>
@@ -5518,19 +5248,6 @@ async function guardarCostos(){
     await apiPost({accion:'insertar',tabla:'Config',fila:[`costo_${p}_extra`,extra]});
   }
   toast('Costos guardados','ok');
-}
-
-function guardarClaudeKey() {
-  const val = document.getElementById('claudeKeyInput')?.value?.trim();
-  if (!val) { toast('Ingresa una clave válida', 'warn'); return; }
-  localStorage.setItem('ot_claude_key', val);
-  toast('✅ Clave API guardada', 'ok');
-  goSub('C', 'cConfig'); // rerender to show status
-}
-function borrarClaudeKey() {
-  localStorage.removeItem('ot_claude_key');
-  toast('Clave API eliminada', 'ok');
-  goSub('C', 'cConfig');
 }
 
 function initConfig(){
