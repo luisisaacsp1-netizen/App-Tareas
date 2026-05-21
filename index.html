@@ -362,9 +362,9 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .le-add input:focus{outline:none;border-color:var(--navy3);border-style:solid;}
 
 /* ── AGENDA 3-COLUMN SHELL ───────────────────────────── */
-.agenda-shell{display:flex;flex:1;width:100%;min-height:0;overflow:hidden;gap:0;}
+.agenda-shell{display:grid;grid-template-columns:190px 1fr 220px;width:100%;flex:1;min-height:0;overflow:hidden;}
 /* Left panel */
-.ag-left{width:190px;min-width:190px;background:var(--off);border-right:1px solid var(--border);
+.ag-left{width:auto;background:var(--off);border-right:1px solid var(--border);
   padding:10px 8px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex-shrink:0;}
 .ag-sec-lbl{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;
   color:var(--muted);margin-bottom:2px;}
@@ -391,7 +391,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .ag-v-item:hover{background:var(--border);color:var(--navy);}
 .ag-v-item.on{background:var(--navy);color:#fff;font-weight:600;}
 /* Center */
-.ag-center{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+.ag-center{display:flex;flex-direction:column;overflow:hidden;min-width:0;}
 .ag-toolbar{display:flex;align-items:center;gap:6px;padding:7px 10px;
   background:#fff;border-bottom:1px solid var(--border);flex-shrink:0;}
 .ag-toolbar-lbl{font-size:12px;font-weight:700;color:var(--navy);min-width:140px;}
@@ -402,7 +402,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .ag-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;
   padding:6px 10px;border-top:1px solid var(--border);background:#fff;flex-shrink:0;}
 /* Right tray */
-.ag-tray{width:220px;min-width:220px;background:#fff;border-left:1px solid var(--border);
+.ag-tray{width:auto;background:#fff;border-left:1px solid var(--border);
   display:flex;flex-direction:column;flex-shrink:0;}
 .ag-tray-hdr{padding:9px 10px 8px;border-bottom:1px solid var(--border);
   display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
