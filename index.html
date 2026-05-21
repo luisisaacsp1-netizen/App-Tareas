@@ -150,6 +150,8 @@ body{font-family:"Open Sans",sans-serif;background:var(--off);color:var(--text);
 #appTopbar .h-out:hover{color:var(--navy);border-color:var(--navy);}
 /* Make main full width under new layout */
 #appContent main{max-width:none;padding:12px 16px 40px;flex:1;overflow-y:auto;min-height:0;}
+/* Agenda ocupa todo el alto — sin padding extra */
+#appContent main.agenda-mode{padding:0!important;overflow:hidden!important;display:flex;flex-direction:column;}
 header{display:none!important;}
 .h-logo{height:28px;object-fit:contain;}
 .h-right{display:flex;align-items:center;gap:10px;}
@@ -359,8 +361,74 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .le-add input{flex:1;background:#fff;border:1.5px dashed var(--border);border-radius:5px;padding:5px 8px;font-family:"Open Sans",sans-serif;font-size:12px;}
 .le-add input:focus{outline:none;border-color:var(--navy3);border-style:solid;}
 
+/* ── AGENDA 3-COLUMN SHELL ───────────────────────────── */
+.agenda-shell{display:flex;height:100%;overflow:hidden;gap:0;}
+/* Left panel */
+.ag-left{width:178px;min-width:178px;background:var(--off);border-right:1px solid var(--border);
+  padding:10px 8px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex-shrink:0;}
+.ag-sec-lbl{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;
+  color:var(--muted);margin-bottom:2px;}
+/* Mini calendar */
+.ag-mini-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.ag-mini-hdr span{font-size:11px;font-weight:700;color:var(--navy);}
+.ag-mini-hdr button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:1px 4px;border-radius:3px;}
+.ag-mini-hdr button:hover{background:var(--border);color:var(--navy);}
+.ag-mini-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;}
+.ag-mini-dl{font-size:8px;font-weight:700;color:var(--muted);text-align:center;padding:2px 0;text-transform:uppercase;}
+.ag-mini-d{font-size:10px;text-align:center;padding:3px 0;border-radius:4px;cursor:pointer;color:var(--muted);line-height:1.2;}
+.ag-mini-d:hover{background:var(--border);color:var(--navy);}
+.ag-mini-d.wk{color:var(--navy);font-weight:600;}
+.ag-mini-d.today{background:var(--navy);color:#fff;font-weight:700;border-radius:50%;}
+.ag-mini-d.om{opacity:.25;}
+/* Person rows */
+.ag-p-row{display:flex;align-items:center;gap:6px;padding:4px 4px;border-radius:5px;cursor:pointer;transition:background .12s;}
+.ag-p-row:hover{background:var(--border);}
+.ag-p-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.ag-p-name{font-size:11px;flex:1;color:var(--text);}
+.ag-p-pct{font-size:10px;font-weight:700;}
+/* Vista selector */
+.ag-v-item{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:5px;cursor:pointer;font-size:11px;color:var(--muted);transition:background .12s;}
+.ag-v-item:hover{background:var(--border);color:var(--navy);}
+.ag-v-item.on{background:var(--navy);color:#fff;font-weight:600;}
+/* Center */
+.ag-center{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+.ag-toolbar{display:flex;align-items:center;gap:6px;padding:7px 10px;
+  background:#fff;border-bottom:1px solid var(--border);flex-shrink:0;}
+.ag-toolbar-lbl{font-size:12px;font-weight:700;color:var(--navy);min-width:140px;}
+.ag-toolbar .tb-btn{background:var(--off);border:1px solid var(--border);color:var(--text);
+  border-radius:5px;padding:3px 9px;cursor:pointer;font-size:11px;font-weight:600;transition:background .12s;}
+.ag-toolbar .tb-btn:hover{background:var(--border);}
+.ag-cal-area{flex:1;overflow:auto;} /* scrollable calendar */
+.ag-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;
+  padding:6px 10px;border-top:1px solid var(--border);background:#fff;flex-shrink:0;}
+/* Right tray */
+.ag-tray{width:215px;min-width:215px;background:#fff;border-left:1px solid var(--border);
+  display:flex;flex-direction:column;flex-shrink:0;}
+.ag-tray-hdr{padding:9px 10px 8px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.ag-tray-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);}
+.ag-tray-count{background:var(--navy);color:#fff;font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;}
+.ag-tray-hint{font-size:9px;color:var(--muted);padding:6px 10px 4px;border-bottom:1px dashed var(--border);}
+.ag-tray-body{flex:1;overflow-y:auto;padding:7px;}
+/* Tray cards */
+.ag-tray-card{background:var(--off);border:1px solid var(--border);border-radius:6px;
+  padding:8px 9px;margin-bottom:6px;cursor:grab;border-left:3px solid var(--navy);
+  transition:box-shadow .15s;}
+.ag-tray-card:hover{box-shadow:0 3px 10px rgba(13,27,46,.12);border-color:var(--navy3);}
+.ag-tray-card:active{cursor:grabbing;}
+.ag-tc-drag{font-size:9px;color:var(--muted);margin-bottom:2px;letter-spacing:.2px;}
+.ag-tc-id{font-size:9px;color:var(--muted);}
+.ag-tc-title{font-size:11px;font-weight:600;color:var(--navy);line-height:1.35;margin-bottom:4px;}
+.ag-tc-meta{font-size:9px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;}
+.ag-tc-badge{font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;}
+.ag-tc-badge.exp{background:#f3e8ff;color:#6b21a8;}
+.ag-tc-badge.sim{background:#dbeafe;color:#1e3a6e;}
+.ag-tc-badge.stb{background:#fef9c3;color:#713f12;}
+
 /* AGENDA CALENDAR */
-.cal-wrap{overflow-x:auto;background:#fff;border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--s1);}
+.cal-wrap{overflow-x:auto;background:#fff;}
+/* En agenda-shell el cal-wrap no necesita borde/shadow propio */
+.agenda-shell .cal-wrap{border:none;box-shadow:none;border-radius:0;}
 .cal-head{display:flex;background:#fff;border-radius:var(--r) var(--r) 0 0;border-bottom:2px solid var(--border);position:sticky;top:0;z-index:10;}
 .cal-time-col{width:48px;flex-shrink:0;border-right:1px solid var(--border);}
 .cal-days-head{flex:1;display:flex;}
@@ -566,12 +634,14 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 
   <!-- CONTENT AREA -->
   <div id="appContent">
-    <!-- Thin topbar: section label + user + impersonate indicator -->
+    <!-- Topbar -->
     <div id="appTopbar" style="display:none">
+      <img src="logo.png" alt="Patagonia" style="height:30px;object-fit:contain;margin-right:4px"
+           onerror="this.style.display='none'">
       <span class="tb-sec" id="tbSec">Agenda</span>
       <span class="tb-sub" id="tbSub"></span>
       <div class="tb-right">
-        <span class="h-user" id="tbUser" style="font-size:11px;color:rgba(255,255,255,.55)"></span>
+        <span class="h-user" id="tbUser" style="font-size:11px;color:var(--muted)"></span>
         <span class="h-impersonate" id="tbImpersonate" style="display:none"></span>
         <button class="h-out" onclick="logout()">Salir</button>
       </div>
@@ -1222,6 +1292,8 @@ async function goSec(sec, defaultSub=null) {
 
 async function goSub(sec, sub) {
   currentSec=sec; currentSub=sub;
+  // Remove agenda-mode when leaving agenda
+  if (sub !== 'agenda') document.getElementById('main')?.classList.remove('agenda-mode');
   document.querySelectorAll('.snb').forEach(b=>b.classList.toggle('on',b.id===`snb-${sub}`));
   // Sync sidebar
   document.querySelectorAll('#sbItems .sb-item').forEach(b=>{
@@ -1324,55 +1396,74 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ═══════════════════════════════════════════════════════════════════
 
 function vAgenda() {
-  return `
-  <div class="ph">
-    <div class="pt"><div class="rb"></div>Agenda
-      <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px">${SESSION.nombre}</span>
-      <span id="calPeriodLbl" style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px"></span>
-    </div>
-  </div>
+  return `<div class="agenda-shell">
 
-  <div class="fb" style="margin-bottom:6px">
-    <div class="fb-f"><label>Vista</label>
-      <div class="tabs" style="margin-bottom:0">
-        <button class="tab" id="cvD" onclick="calSwitchView('dia')">Día</button>
-        <button class="tab on" id="cvS" onclick="calSwitchView('semana')">Semana</button>
-        <button class="tab" id="cvM" onclick="calSwitchView('mes')">Mes</button>
+  <!-- ── Panel izquierdo ── -->
+  <div class="ag-left">
+
+    <!-- Mini calendario -->
+    <div>
+      <div class="ag-mini-hdr">
+        <button onclick="agMiniNav(-1)">‹</button>
+        <span id="agMiniLbl"></span>
+        <button onclick="agMiniNav(1)">›</button>
       </div>
+      <div class="ag-mini-grid" id="agMiniCal"></div>
     </div>
-    <div style="margin-left:auto;display:flex;align-items:flex-end;gap:5px">
-      <button class="btn sm ghost" onclick="calNav(-1)">◀</button>
-      <button class="btn sm ghost" onclick="calNav(0)">Hoy</button>
-      <button class="btn sm ghost" onclick="calNav(1)">▶</button>
+
+    <!-- Equipo -->
+    <div>
+      <div class="ag-sec-lbl">Equipo</div>
+      <div id="agEquipo"></div>
     </div>
+
+    <!-- Vista -->
+    <div>
+      <div class="ag-sec-lbl">Vista</div>
+      <div class="ag-v-item on" id="agvS" onclick="calSwitchView('semana');agSetVista('S')">📅 Semana</div>
+      <div class="ag-v-item"   id="agvD" onclick="calSwitchView('dia');agSetVista('D')">📆 Día</div>
+      <div class="ag-v-item"   id="agvM" onclick="calSwitchView('mes');agSetVista('M')">🗓 Mes</div>
+    </div>
+
   </div>
 
-  <!-- Unscheduled tasks tray -->
-  <div id="calTray" style="margin-bottom:8px;display:none">
-    <div class="card" style="padding:10px 14px">
-      <div class="cl" style="margin-bottom:7px">
-        <div class="d"></div>Tareas sin programar — haz clic para programar
-        <button class="btn sm ghost" style="margin-left:auto;padding:2px 7px" onclick="document.getElementById('calTray').style.display='none'">✕</button>
+  <!-- ── Centro: toolbar + calendario ── -->
+  <div class="ag-center">
+    <div class="ag-toolbar">
+      <button class="tb-btn" onclick="calNav(-1)">‹</button>
+      <button class="tb-btn" onclick="calNav(0)">Hoy</button>
+      <button class="tb-btn" onclick="calNav(1)">›</button>
+      <span class="ag-toolbar-lbl" id="calPeriodLbl"></span>
+      <button class="tb-btn" onclick="refreshData()" style="margin-left:auto">↺ Actualizar</button>
+    </div>
+
+    <div class="ag-cal-area">
+      <div class="cal-wrap" id="calWrap"></div>
+    </div>
+
+    <div class="ag-footer">
+      <div class="cal-legend">
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#dbeafe;border-left:3px solid #1e56a8"></div><span>Programado</span></div>
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fef9c3;border-left:3px solid #a16207"></div><span>En Proceso</span></div>
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#dcfce7;border-left:3px solid #15803d"></div><span>Completado</span></div>
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#f3e8ff;border-left:3px solid #7e22ce"></div><span>Express</span></div>
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fef9ec;border-left:3px solid #e8a317"></div><span>Almuerzo</span></div>
       </div>
-      <div id="calTrayList" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      <button class="btn sm ghost" onclick="abrirModalAlmuerzo()" style="font-size:10px">🍽 Almuerzo</button>
     </div>
   </div>
 
-  <div class="cal-wrap" id="calWrap"></div>
-
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:6px">
-    <div class="cal-legend">
-      <span style="font-size:10px;color:var(--muted);font-weight:600">LEYENDA:</span>
-      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#dbeafe;border-left:3px solid #1e56a8"></div><span>Programado</span></div>
-      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fef9c3;border-left:3px solid #a16207"></div><span>En Proceso</span></div>
-      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#dcfce7;border-left:3px solid #15803d"></div><span>Completado</span></div>
-      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#f3e8ff;border-left:3px solid #7e22ce"></div><span>Express</span></div>
-      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fef9ec;border-left:3px solid #e8a317"></div><span>Almuerzo</span></div>
+  <!-- ── Tray derecho: Por Iniciar ── -->
+  <div class="ag-tray" id="calTray">
+    <div class="ag-tray-hdr">
+      <span class="ag-tray-title">📥 Por Iniciar</span>
+      <span class="ag-tray-count" id="agTrayCount">0</span>
     </div>
-    <button class="btn sm ghost" onclick="abrirModalAlmuerzo()" style="font-size:11px">
-      🍽 Configurar almuerzo
-    </button>
-  </div>`;
+    <div class="ag-tray-hint">← Arrastrá al calendario</div>
+    <div class="ag-tray-body" id="calTrayList"></div>
+  </div>
+
+</div>`;
 }
 
 // ── Calendar state ────────────────────────────────────────────────
@@ -1385,24 +1476,154 @@ function calGetPerson() {
   return SESSION.nombre;
 }
 
+// ── Mini calendar state ───────────────────────────────
+let _agMiniYear  = new Date().getFullYear();
+let _agMiniMonth = new Date().getMonth(); // 0-based
+
+function agMiniNav(dir) {
+  _agMiniMonth += dir;
+  if (_agMiniMonth > 11) { _agMiniMonth = 0; _agMiniYear++; }
+  if (_agMiniMonth < 0)  { _agMiniMonth = 11; _agMiniYear--; }
+  agRenderMiniCal();
+}
+
+function agRenderMiniCal() {
+  const lbl = document.getElementById('agMiniLbl');
+  const grid = document.getElementById('agMiniCal');
+  if (!grid) return;
+  const y = _agMiniYear, m = _agMiniMonth;
+  const today = todayStr();
+  const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  if (lbl) lbl.textContent = `${meses[m]} ${y}`;
+
+  // Get current week dates for highlight
+  const weekDates = new Set(calGetDates().map(d => d.toISOString().split('T')[0]));
+
+  const first = new Date(y, m, 1);
+  const last  = new Date(y, m+1, 0);
+  let dow = (first.getDay() || 7) - 1; // Monday=0
+  const cells = [];
+  // Header
+  ['L','M','X','J','V','S','D'].forEach(d =>
+    cells.push(`<div class="ag-mini-dl">${d}</div>`));
+  // Blank cells
+  for (let i=0;i<dow;i++) cells.push(`<div class="ag-mini-d om"></div>`);
+  // Days
+  for (let d=1; d<=last.getDate(); d++) {
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = ds === today;
+    const inWk   = weekDates.has(ds);
+    cells.push(`<div class="ag-mini-d ${isToday?'today':inWk?'wk':''}"
+      onclick="agMiniGoDate('${ds}')">${d}</div>`);
+  }
+  grid.innerHTML = cells.join('');
+}
+
+function agMiniGoDate(ds) {
+  // Navigate calendar to the week containing ds
+  const d = new Date(ds + 'T12:00:00');
+  const today = new Date(todayStr() + 'T12:00:00');
+  const diffDays = Math.round((d - today) / 86400000);
+  const diffWeeks = Math.floor(diffDays / 7);
+  _calOffset = diffWeeks;
+  calRender();
+  agRenderMiniCal();
+  agRenderEquipo();
+}
+
+function agRenderEquipo() {
+  const el = document.getElementById('agEquipo');
+  if (!el) return;
+  const isAdmin = activeRol() === 'admin';
+  const persons = isAdmin ? PERSONAS : [SESSION.nombre];
+  const colors = {'Luis Sanchez':'#2563eb','Luis Diaz':'#16a34a','Yamila Silva':'#9333ea'};
+  const dates = calGetDates();
+  const todayS = todayStr();
+  el.innerHTML = persons.map(p => {
+    // compute avg weekly saturation
+    let totalSat = 0, daysCount = 0;
+    dates.forEach(d => {
+      const ds = d.toISOString().split('T')[0];
+      const blks = getWorkBlocks(ds, p);
+      if (!blks) return;
+      const tw = blks.reduce((s,b)=>s+(b.end-b.start),0)/60;
+      if (tw <= 0) return;
+      const lunch = getLunchFor(p, ds);
+      const lS = Math.round(lunch.start*60), lE = Math.round(lunch.end*60);
+      const pTrim = p.trim();
+      const dayB = BLOQUES.filter(b=>{
+        if(String(b.responsable||'').trim()!==pTrim)return false;
+        if(['Standby','Cancelado'].includes(b.estado))return false;
+        if(b.estado==='Por Iniciar'&&b.fechaProg===ds)return true;
+        if(b.estado==='Programado'&&b.fechaProg===ds)return true;
+        if(b.estado==='Confirmado'&&b.fechaReal===ds)return true;
+        if(b.estado==='En Proceso'&&(b.fechaProg===ds||b.fechaReal===ds))return true;
+        return false;
+      });
+      const _up = b=>b.estado==='Programado'||b.estado==='Por Iniciar';
+      const ivs=[];
+      dayB.forEach(b=>{
+        const ini=_up(b)?b.horaInicioProg:b.horaInicio;
+        const ter=_up(b)?b.horaFinProg:b.horaFin;
+        if(ini&&ter&&ini.length===5&&ter.length===5){
+          try{const bs=t2m(ini),be=t2m(ter);if(be<=bs)return;
+            if(bs>=lE||be<=lS){ivs.push([bs,be]);}
+            else{if(bs<lS)ivs.push([bs,lS]);if(be>lE)ivs.push([lE,be]);}
+          }catch(e){}
+        }
+      });
+      ivs.sort((a,b)=>a[0]-b[0]);
+      const mg=[];ivs.forEach(([s,e])=>{if(!mg.length||s>mg[mg.length-1][1])mg.push([s,e]);else mg[mg.length-1][1]=Math.max(mg[mg.length-1][1],e);});
+      const hh=mg.reduce((s,[a,b])=>s+(b-a)/60,0);
+      totalSat += hh/tw*100; daysCount++;
+    });
+    const sat = daysCount > 0 ? Math.round(totalSat / daysCount) : 0;
+    const satColor = sat>=80?'#e63329':sat>=60?'#c97a00':sat>0?'#1a7a4a':'var(--muted)';
+    const dot = colors[p] || '#637388';
+    const nm = shortName ? shortName(p) : p.split(' ')[0];
+    return `<div class="ag-p-row" onclick="agFilterPerson('${p}')">
+      <div class="ag-p-dot" style="background:${dot}"></div>
+      <span class="ag-p-name">${nm}</span>
+      ${sat>0?`<span class="ag-p-pct" style="color:${satColor}">${sat}%</span>`:''}
+    </div>`;
+  }).join('');
+}
+
+function agFilterPerson(nombre) {
+  // For now: click a person to navigate to their day view
+  // Future: filter calendar to show only that person
+}
+
+function agSetVista(v) {
+  ['S','D','M'].forEach(x => {
+    document.getElementById('agv'+x)?.classList.toggle('on', x===v);
+  });
+}
+
 function initCal() {
   _calView = 'semana';
   _calOffset = 0;
-  ['D','S','M'].forEach(x => document.getElementById('cv'+x)?.classList.toggle('on', x==='S'));
+  _agMiniYear  = new Date().getFullYear();
+  _agMiniMonth = new Date().getMonth();
+  document.getElementById('main')?.classList.add('agenda-mode');
   calRender();
   calRefreshTray(SESSION.nombre);
+  setTimeout(() => { agRenderMiniCal(); agRenderEquipo(); }, 50);
 }
 
 function calSwitchView(v) {
   _calView = v; _calOffset = 0;
-  ['D','S','M'].forEach(x => document.getElementById('cv'+x)?.classList.toggle('on',
-    x === (v==='dia'?'D':v==='semana'?'S':'M')));
   calRender();
+  agSetVista(v==='dia'?'D':v==='semana'?'S':'M');
+  agRenderMiniCal();
 }
 
 function calNav(dir) {
-  if (dir === 0) _calOffset = 0; else _calOffset += dir;
+  if (dir === 0) { _calOffset = 0; _agMiniYear = new Date().getFullYear(); _agMiniMonth = new Date().getMonth(); }
+  else _calOffset += dir;
   calRender();
+  agRenderMiniCal();
+  agRenderEquipo();
 }
 
 function calGetDates() {
@@ -1667,7 +1888,7 @@ function calRender() {
     <div class="cal-time-col"></div>
     <div class="cal-days-head">${hdrCells}</div>
   </div>
-  <div class="cal-body" style="max-height:560px;overflow-y:auto" id="calBody">
+  <div class="cal-body" id="calBody">
     <div class="cal-times">${hourLabels}</div>
     <div class="cal-grid">${cols}</div>
   </div>`;
@@ -1676,9 +1897,13 @@ function calRender() {
   setTimeout(() => {
     const body = document.getElementById('calBody');
     if (body) body.scrollTop = (8 - hStart) * HOUR_H;
+    // Also scroll ag-cal-area if present
+    const agArea = document.querySelector('.ag-cal-area');
+    if (agArea) agArea.scrollTop = (8 - hStart) * HOUR_H;
   }, 60);
 
   calRefreshTray(person);
+  agRenderEquipo();
 }
 
 function calRenderMes(dates, person, todayS) {
@@ -1711,35 +1936,46 @@ function calRenderMes(dates, person, todayS) {
 
 function calRefreshTray(person) {
   const _p = SESSION.nombre;
-  const tray = document.getElementById('calTray');
   const list = document.getElementById('calTrayList');
-  if (!tray || !list) return;
+  if (!list) return;
 
   const porIniciar = BLOQUES.filter(b => b.responsable === _p && b.estado === 'Por Iniciar');
   const standby    = BLOQUES.filter(b => b.responsable === _p && b.estado === 'Standby');
   const all = [...porIniciar, ...standby];
 
-  tray.style.display = 'block';
+  // Update count badge
+  const countEl = document.getElementById('agTrayCount');
+  if (countEl) countEl.textContent = all.length;
 
   if (all.length === 0) {
-    list.innerHTML = `<div style="font-size:11px;color:rgba(255,255,255,.5);padding:4px 8px">
-      ✅ Sin bloques pendientes de programar</div>`;
+    list.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:8px 4px;text-align:center">
+      ✅ Sin bloques pendientes</div>`;
     return;
   }
 
   list.innerHTML = all.map(b => {
     const isStandby = b.estado === 'Standby';
-    const bg    = isStandby ? 'var(--purple)' : 'var(--navy)';
-    const label = isStandby ? ' ⏸' : '';
+    const tipo = b.tipoBloque || 'Simple';
+    const badgeCls = isStandby ? 'stb' : tipo === 'Express' ? 'exp' : 'sim';
+    const badgeTxt = isStandby ? '⏸ Standby' : tipo;
+    const hh = parseFloat(b.hhPlan) || 0;
+    const hhTxt = hh > 0 ? `${hh}h` : '—';
+    const area = b.area ? `· ${b.area}` : '';
+    const borderColor = isStandby ? '#a16207' : tipo === 'Express' ? '#7e22ce' : '#1e56a8';
     return `<div draggable="true" id="trayTask_${b.id}"
+      class="ag-tray-card"
+      style="border-left-color:${borderColor}"
       onclick="abrirModalProgramarBloque('${b.id}')"
       ondragstart="calTrayDragStart(event,${b.id})"
       ondragend="this.style.opacity='1'"
-      style="background:${bg};color:#fff;border-radius:6px;padding:6px 10px;
-        cursor:pointer;user-select:none;border:1px solid rgba(255,255,255,.15)"
-      title="${isStandby?'En Standby':'Clic para programar'}">
-      <div style="font-size:9px;opacity:.6">#${b.id} · ${b.hhPlan||'—'}h · ${b.tipoBloque||'—'}${label}</div>
-      <div style="font-size:11px;font-weight:600">${(b.titulo||'').substring(0,28)}${(b.titulo||'').length>28?'…':''}</div>
+      title="Clic para programar / Arrastrá al calendario">
+      <div class="ag-tc-drag">⠿ arrastrar</div>
+      <div class="ag-tc-title">${(b.titulo||'Sin título').substring(0,40)}${(b.titulo||'').length>40?'…':''}</div>
+      <div class="ag-tc-meta">
+        <span>#${b.id}</span>
+        <span>${hhTxt}${area}</span>
+        <span class="ag-tc-badge ${badgeCls}">${badgeTxt}</span>
+      </div>
     </div>`;
   }).join('');
 }
@@ -4494,33 +4730,8 @@ function buildDashGlobal(f) {
 }
 
 function refreshUnscheduledTray() {
-  const me = SESSION.nombre;
-  const unscheduled = BLOQUES.filter(b=>
-    b.responsable===me &&
-    !b.fechaProg &&
-    !['Confirmado','Cancelado'].includes(b.estado)
-  );
-  // Try both IDs (calTray is the current one in vAgenda)
-  const tray = document.getElementById('calTray') || document.getElementById('unscheduledTray');
-  const list = document.getElementById('calTrayList') || document.getElementById('unscheduledList');
-  if(!tray||!list) return;
-  if(unscheduled.length>0){
-    tray.style.display='block';
-    list.innerHTML=unscheduled.map(b=>`
-      <div draggable="true"
-        style="background:var(--navy);color:#fff;border-radius:6px;padding:6px 10px;
-          cursor:grab;font-size:11px;font-weight:600;display:flex;flex-direction:column;gap:2px;
-          min-width:140px;max-width:200px;user-select:none"
-        onclick="abrirModalProgramar('${b.id}')"
-        ondragstart="startTrayDrag(event,'${b.id}')"
-        ondragend="endTrayDrag(event)"
-        title="Clic para programar">
-        <span style="font-size:9px;opacity:.6">#${b.id} · ${b.hhPlan||'—'}h plan · ${b.tipoBloque||'—'}</span>
-        <span>${(b.titulo||'').substring(0,28)}${(b.titulo||'').length>28?'…':''}</span>
-      </div>`).join('');
-  } else {
-    tray.style.display='none';
-  }
+  // Delegate to calRefreshTray which handles the new tray design
+  if (document.getElementById('calTrayList')) calRefreshTray(SESSION.nombre);
 }
 
 function switchVG(v) {
