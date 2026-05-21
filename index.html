@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OT · Contenedores Patagonia</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d1b2e">
@@ -362,9 +362,9 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .le-add input:focus{outline:none;border-color:var(--navy3);border-style:solid;}
 
 /* ── AGENDA 3-COLUMN SHELL ───────────────────────────── */
-.agenda-shell{display:flex;height:100%;overflow:hidden;gap:0;}
+.agenda-shell{display:flex;flex:1;min-height:0;overflow:hidden;gap:0;}
 /* Left panel */
-.ag-left{width:178px;min-width:178px;background:var(--off);border-right:1px solid var(--border);
+.ag-left{width:190px;min-width:190px;background:var(--off);border-right:1px solid var(--border);
   padding:10px 8px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex-shrink:0;}
 .ag-sec-lbl{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;
   color:var(--muted);margin-bottom:2px;}
@@ -402,7 +402,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .ag-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;
   padding:6px 10px;border-top:1px solid var(--border);background:#fff;flex-shrink:0;}
 /* Right tray */
-.ag-tray{width:215px;min-width:215px;background:#fff;border-left:1px solid var(--border);
+.ag-tray{width:220px;min-width:220px;background:#fff;border-left:1px solid var(--border);
   display:flex;flex-direction:column;flex-shrink:0;}
 .ag-tray-hdr{padding:9px 10px 8px;border-bottom:1px solid var(--border);
   display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
@@ -418,8 +418,9 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .ag-tray-card:active{cursor:grabbing;}
 .ag-tc-drag{font-size:9px;color:var(--muted);margin-bottom:2px;letter-spacing:.2px;}
 .ag-tc-id{font-size:9px;color:var(--muted);}
-.ag-tc-title{font-size:11px;font-weight:600;color:var(--navy);line-height:1.35;margin-bottom:4px;}
-.ag-tc-meta{font-size:9px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;}
+.ag-tc-title{font-size:11px;font-weight:600;color:var(--navy);line-height:1.35;margin-bottom:4px;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+.ag-tc-meta{font-size:9px;color:var(--muted);display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:2px;}
 .ag-tc-badge{font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;}
 .ag-tc-badge.exp{background:#f3e8ff;color:#6b21a8;}
 .ag-tc-badge.sim{background:#dbeafe;color:#1e3a6e;}
@@ -615,8 +616,11 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
   <!-- SIDEBAR — icon only, Teams-style -->
   <nav id="sidebar">
     <div class="sb-logo-btn">
-      <img src="logo.png" alt="OT" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" style="display:flex">
-      <div style="display:none;font-size:9px;font-weight:900;color:var(--red);font-family:Montserrat,sans-serif;text-align:center;line-height:1.1;">OT<br>PAT</div>
+      <img src="logo.png" alt="OT" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" style="display:block;width:34px;height:34px;object-fit:contain;">
+      <div style="display:none;width:32px;height:32px;background:var(--red);border-radius:6px;align-items:center;justify-content:center;flex-direction:column;gap:0;">
+        <span style="font-family:Montserrat,sans-serif;font-size:10px;font-weight:900;color:#fff;line-height:1;">OT</span>
+        <span style="font-family:Montserrat,sans-serif;font-size:7px;font-weight:700;color:rgba(255,255,255,.75);line-height:1;letter-spacing:.5px;">PAT</span>
+      </div>
     </div>
     <!-- items populated by buildSidebar() -->
     <div id="sbItems" style="display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;"></div>
@@ -636,8 +640,12 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
   <div id="appContent">
     <!-- Topbar -->
     <div id="appTopbar" style="display:none">
-      <img src="logo.png" alt="Patagonia" style="height:30px;object-fit:contain;margin-right:4px"
-           onerror="this.style.display='none'">
+      <img src="logo.png" alt="Patagonia" id="tbLogoImg" style="height:30px;object-fit:contain;margin-right:4px;display:block"
+           onerror="this.style.display='none';document.getElementById('tbLogoFallback').style.display='flex'">
+      <div id="tbLogoFallback" style="display:none;align-items:center;gap:4px;margin-right:6px;">
+        <div style="width:24px;height:24px;background:var(--red);border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:Montserrat,sans-serif;font-size:9px;font-weight:900;color:#fff;">OT</div>
+        <span style="font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;color:var(--navy);">Patagonia</span>
+      </div>
       <span class="tb-sec" id="tbSec">Agenda</span>
       <span class="tb-sub" id="tbSub"></span>
       <div class="tb-right">
@@ -1970,10 +1978,11 @@ function calRefreshTray(person) {
       ondragend="this.style.opacity='1'"
       title="Clic para programar / Arrastrá al calendario">
       <div class="ag-tc-drag">⠿ arrastrar</div>
-      <div class="ag-tc-title">${(b.titulo||'Sin título').substring(0,40)}${(b.titulo||'').length>40?'…':''}</div>
+      <div class="ag-tc-title">${b.titulo||'Sin título'}</div>
       <div class="ag-tc-meta">
-        <span>#${b.id}</span>
-        <span>${hhTxt}${area}</span>
+        <span class="ag-tc-id">#${b.id}</span>
+        <span>${hhTxt}</span>
+        ${b.area?`<span>· ${b.area}</span>`:''}
         <span class="ag-tc-badge ${badgeCls}">${badgeTxt}</span>
       </div>
     </div>`;
