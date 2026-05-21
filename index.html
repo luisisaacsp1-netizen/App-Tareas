@@ -65,6 +65,31 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;}body{font-f
 .ai-send:hover{background:var(--navy3);}
 .ai-send:disabled{background:var(--border);}
 
+
+/* ── MOBILE (≤768px) ─────────────────────────────────── */
+@media(max-width:768px){
+  .ag-left{display:none!important;}
+  .ag-tray{display:none!important;}
+  .agenda-shell{grid-template-columns:1fr!important;}
+  .ag-toolbar{flex-wrap:wrap;gap:4px;padding:5px 8px;}
+  .ag-toolbar-lbl{min-width:0;font-size:11px;}
+  .ag-footer{flex-direction:column;align-items:flex-start;gap:4px;}
+  .cal-legend{flex-wrap:wrap;gap:4px;}
+  /* Allow horizontal scroll on calendar for week view */
+  .ag-cal-area{overflow-x:auto!important;}
+  .cal-wrap{min-width:480px;}
+  /* Smaller day headers on mobile */
+  .cal-day-hdr .dd{font-size:14px;}
+  .cal-day-hdr .dn{font-size:8px;}
+  /* Compact topbar */
+  #appTopbar{padding:0 8px;gap:6px;}
+  #appTopbar #tbLogoImg{height:24px;}
+  #appTopbar .tb-sec{font-size:10px;}
+  /* Tray button in toolbar */
+  .ag-mobile-tray-btn{display:flex!important;}
+}
+.ag-mobile-tray-btn{display:none;background:var(--navy);color:#fff;border:none;border-radius:5px;
+  padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;align-items:center;gap:4px;}
 /* SKELETON LOADER */
 .skel{background:linear-gradient(90deg,#e8ecf4 25%,#f4f6f9 50%,#e8ecf4 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:6px;}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
@@ -381,7 +406,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .ag-mini-d.today{background:var(--navy);color:#fff;font-weight:700;border-radius:50%;}
 .ag-mini-d.om{opacity:.25;}
 /* Person rows */
-.ag-p-row{display:flex;align-items:center;gap:6px;padding:4px 4px;border-radius:5px;cursor:pointer;transition:background .12s;}
+.ag-equipo-section{display:none!important;} .ag-p-row{display:flex;align-items:center;gap:6px;padding:4px 4px;border-radius:5px;cursor:pointer;transition:background .12s;}
 .ag-p-row:hover{background:var(--border);}
 .ag-p-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
 .ag-p-name{font-size:11px;flex:1;color:var(--text);}
@@ -409,7 +434,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .ag-tray-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);}
 .ag-tray-count{background:var(--navy);color:#fff;font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;}
 .ag-tray-hint{font-size:9px;color:var(--muted);padding:6px 10px 4px;border-bottom:1px dashed var(--border);}
-.ag-tray-body{flex:1;overflow-y:auto;padding:7px;}
+.ag-tray-body{flex:1;overflow-y:scroll;padding:7px;scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
 /* Tray cards */
 .ag-tray-card{background:var(--off);border:1px solid var(--border);border-radius:6px;
   padding:8px 9px;margin-bottom:6px;cursor:grab;border-left:3px solid var(--navy);
@@ -458,7 +483,7 @@ main{max-width:920px;margin:0 auto;padding:16px 16px 70px;}
 .cal-now-line{position:absolute;left:0;right:0;height:2px;background:var(--red);z-index:10;pointer-events:none;}
 .cal-now-line::before{content:'';width:8px;height:8px;background:var(--red);border-radius:50%;position:absolute;left:-4px;top:-3px;}
 /* Blocks */
-.cal-event{position:absolute;left:2px;right:2px;border-radius:4px;padding:3px 5px;font-size:10px;font-weight:600;cursor:pointer;overflow:hidden;z-index:5;transition:filter .15s,box-shadow .15s;border-left:3px solid;min-height:28px;box-shadow:0 1px 3px rgba(0,0,0,.10),0 0 0 1px rgba(255,255,255,.7);}
+.cal-event{position:absolute;left:2px;right:2px;border-radius:4px;padding:3px 5px;font-size:10px;font-weight:600;cursor:pointer;overflow:hidden;z-index:5;transition:filter .15s,box-shadow .15s;border-left:3px solid;min-height:28px;box-shadow:0 2px 4px rgba(0,0,0,.15),0 0 0 2px #fff;}
 .cal-event:hover{filter:brightness(.93);box-shadow:0 2px 8px rgba(0,0,0,.16),0 0 0 1px rgba(255,255,255,.7);}
 /* Short blocks: compressed padding */
 .cal-event.short{padding:2px 4px;min-height:18px;}
@@ -1418,10 +1443,10 @@ function vAgenda() {
     </div>
 
     <!-- Equipo -->
-    <div>
+    <div class="ag-equipo-section"><div>
       <div class="ag-sec-lbl">Equipo</div>
       <div id="agEquipo"></div>
-    </div>
+    </div></div>
 
     <!-- Vista -->
     <div>
@@ -1441,6 +1466,7 @@ function vAgenda() {
       <button class="tb-btn" onclick="calNav(1)">›</button>
       <span class="ag-toolbar-lbl" id="calPeriodLbl"></span>
       <button class="tb-btn" onclick="refreshData()" style="margin-left:auto">↺ Actualizar</button>
+      <button class="ag-mobile-tray-btn" onclick="toggleMobileTray()" id="agMobileTrayBtn">📥 Por iniciar <span id="agMobileTrayCount">0</span></button>
     </div>
 
     <div class="ag-cal-area">
@@ -1455,6 +1481,7 @@ function vAgenda() {
         <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#f3e8ff;border-left:3px solid #7e22ce"></div><span>Express</span></div>
         <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fef9ec;border-left:3px solid #e8a317"></div><span>Almuerzo</span></div>
       </div>
+      <div id="agTodaySatBadge" style="font-size:10px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:4px;"></div>
       <button class="btn sm ghost" onclick="abrirModalAlmuerzo()" style="font-size:10px">🍽 Almuerzo</button>
     </div>
   </div>
@@ -1595,11 +1622,65 @@ function agRenderEquipo() {
   }).join('');
 }
 
+function agRenderTodaySat() {
+  const badge = document.getElementById('agTodaySatBadge');
+  if (!badge) return;
+  const p = SESSION.nombre;
+  const ds = todayStr();
+  const blks = getWorkBlocks(ds, p);
+  if (!blks || blks.length === 0) { badge.innerHTML = ''; return; }
+  const tw = blks.reduce((s,b)=>s+(b.end-b.start),0)/60;
+  if (tw <= 0) { badge.innerHTML = ''; return; }
+  const lunch = getLunchFor(p, ds);
+  const lS = Math.round(lunch.start*60), lE = Math.round(lunch.end*60);
+  const pTrim = p.trim();
+  const dayB = BLOQUES.filter(b=>{
+    if(String(b.responsable||'').trim()!==pTrim)return false;
+    if(['Standby','Cancelado'].includes(b.estado))return false;
+    if(b.estado==='Por Iniciar'&&b.fechaProg===ds)return true;
+    if(b.estado==='Programado'&&b.fechaProg===ds)return true;
+    if(b.estado==='Confirmado'&&b.fechaReal===ds)return true;
+    if(b.estado==='En Proceso'&&(b.fechaProg===ds||b.fechaReal===ds))return true;
+    return false;
+  });
+  const _up = b=>b.estado==='Programado'||b.estado==='Por Iniciar';
+  const ivs=[];
+  dayB.forEach(b=>{
+    const ini=_up(b)?b.horaInicioProg:b.horaInicio;
+    const ter=_up(b)?b.horaFinProg:b.horaFin;
+    if(ini&&ter&&ini.length===5&&ter.length===5){
+      try{const bs=t2m(ini),be=t2m(ter);if(be<=bs)return;
+        if(bs>=lE||be<=lS){ivs.push([bs,be]);}
+        else{if(bs<lS)ivs.push([bs,lS]);if(be>lE)ivs.push([lE,be]);}
+      }catch(e){}
+    }
+  });
+  ivs.sort((a,b)=>a[0]-b[0]);
+  const mg=[];ivs.forEach(([s,e])=>{if(!mg.length||s>mg[mg.length-1][1])mg.push([s,e]);else mg[mg.length-1][1]=Math.max(mg[mg.length-1][1],e);});
+  const hh=mg.reduce((s,[a,b])=>s+(b-a)/60,0);
+  const sat=Math.round(hh/tw*100);
+  const col=sat>=80?'#e63329':sat>=60?'#c97a00':sat>0?'#1a7a4a':'var(--muted)';
+  badge.innerHTML = `<span style="color:var(--muted)">Hoy:</span> <span style="color:${col}">${sat}%</span>`;
+}
+
 function agFilterPerson(nombre) {
   // For now: click a person to navigate to their day view
   // Future: filter calendar to show only that person
 }
 
+
+function toggleMobileTray() {
+  const tray = document.getElementById('calTray');
+  if (!tray) return;
+  const isVisible = tray.style.display !== 'none' && tray.style.display !== '';
+  if (window.innerWidth <= 768) {
+    if (isVisible) {
+      tray.style.display = 'none';
+    } else {
+      tray.style.cssText = 'display:flex!important;position:fixed;right:0;top:44px;bottom:0;width:85%;max-width:320px;z-index:500;box-shadow:-4px 0 20px rgba(0,0,0,.2);flex-direction:column;background:#fff;border-left:1px solid var(--border);';
+    }
+  }
+}
 function agSetVista(v) {
   ['S','D','M'].forEach(x => {
     document.getElementById('agv'+x)?.classList.toggle('on', x===v);
@@ -1614,7 +1695,7 @@ function initCal() {
   document.getElementById('main')?.classList.add('agenda-mode');
   calRender();
   calRefreshTray(SESSION.nombre);
-  setTimeout(() => { agRenderMiniCal(); agRenderEquipo(); }, 50);
+  setTimeout(() => { agRenderMiniCal(); agRenderEquipo(); agRenderTodaySat(); }, 50);
 }
 
 function calSwitchView(v) {
@@ -1630,6 +1711,7 @@ function calNav(dir) {
   calRender();
   agRenderMiniCal();
   agRenderEquipo();
+  agRenderTodaySat();
 }
 
 function calGetDates() {
@@ -1910,6 +1992,7 @@ function calRender() {
 
   calRefreshTray(person);
   agRenderEquipo();
+  agRenderTodaySat();
 }
 
 function calRenderMes(dates, person, todayS) {
@@ -1949,9 +2032,12 @@ function calRefreshTray(person) {
   const standby    = BLOQUES.filter(b => b.responsable === _p && b.estado === 'Standby');
   const all = [...porIniciar, ...standby];
 
-  // Update count badge
+  // Update count badges (desktop + mobile button)
   const countEl = document.getElementById('agTrayCount');
   if (countEl) countEl.textContent = all.length;
+  const mobileCountEl = document.getElementById('agMobileTrayCount');
+  if (mobileCountEl) mobileCountEl.textContent = all.length;
+  agRenderTodaySat();
 
   if (all.length === 0) {
     list.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:8px 4px;text-align:center">
