@@ -720,14 +720,21 @@ function buildLunchOverrides() {
 }
 
 function buildFeriados() {
-  // Load from backend (Listas sheet, type 'Feriado') — syncs across all devices
-  const fromBackend = (LISTAS['Feriado'] || []).filter(Boolean);
+  // Google Sheets may return Date objects instead of strings — handle both
+  const isValidStr = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const toDateStr  = v => {
+    if (isValidStr(v)) return v;
+    if (v instanceof Date && !isNaN(v)) return dateStr(v); // convert Sheets Date → "YYYY-MM-DD"
+    return null;
+  };
+  const fromBackend = (LISTAS['Feriado'] || []).map(toDateStr).filter(Boolean);
   if (fromBackend.length > 0) {
     FERIADOS = new Set(fromBackend);
     saveFeriados(); // keep localStorage in sync too
   } else {
     // Fallback: use localStorage (backward compat)
-    FERIADOS = new Set(JSON.parse(localStorage.getItem(_FERIADOS_KEY)||'[]'));
+    const stored = JSON.parse(localStorage.getItem(_FERIADOS_KEY)||'[]');
+    FERIADOS = new Set(stored.filter(isValidStr));
   }
 }
 const BADGE = {'Por Iniciar':'bi','Programada':'bpr','En Proceso':'bp','Listo':'bl','Standby':'bs','Cancelado':'bc'};
@@ -761,7 +768,10 @@ let calDragOrigSlot = null;
 const _FERIADOS_KEY = 'ot_feriados';
 let FERIADOS = new Set(JSON.parse(localStorage.getItem(_FERIADOS_KEY)||'[]'));
 function saveFeriados() {
-  try { localStorage.setItem(_FERIADOS_KEY, JSON.stringify([...FERIADOS])); } catch(e) {}
+  try {
+    const valid = [...FERIADOS].filter(s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s));
+    localStorage.setItem(_FERIADOS_KEY, JSON.stringify(valid));
+  } catch(e) {}
 }
 function toggleFeriado(ds) {
   if (activeRol() !== 'admin') { toast('Solo el administrador puede modificar feriados','warn'); return; }
@@ -790,7 +800,7 @@ function agRenderFeriados() {
   const isAdmin = activeRol() === 'admin';
   // Show/hide add button based on role
   if (btn) btn.style.display = isAdmin ? '' : 'none';
-  const sorted = [...FERIADOS].sort();
+  const sorted = [...FERIADOS].filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s)).sort();
   if (sorted.length === 0) {
     el.innerHTML = '<span style="font-style:italic">Sin feriados registrados</span>';
     return;
@@ -1399,6 +1409,7 @@ async function goSub(sec, sub) {
       main.innerHTML=vDashReporte();
       setTimeout(()=>applyDashFilter('reporte'),80); break;
     case 'dAnalisis':
+      _analisisCat = 'todas';
       main.innerHTML=vDashAnalisis();
       setTimeout(()=>applyDashFilter('analisis'),80); break;
     case 'dClasif':
@@ -5090,8 +5101,8 @@ function vDashAnalisis() {
 function buildDashAnalisis(f) {
   const hoy = todayStr();
 
-  // Bloques filtrados por período y usuarios
-  const bl = BLOQUES.filter(b => {
+  // ── Bloques filtrados por período y usuarios ──
+  const blBase = BLOQUES.filter(b => {
     if (f.users.length>0 && !f.users.includes(b.responsable)) return false;
     const fd = b.fechaProg||b.fechaIngreso||'';
     if (f.desde && fd < f.desde) return false;
@@ -5099,7 +5110,87 @@ function buildDashAnalisis(f) {
     return true;
   });
 
-  if (bl.length === 0) return `<div class="al w"><span class="al-ico">📭</span><div class="al-txt">No hay datos para el período y filtros seleccionados.</div></div>`;
+  if (blBase.length === 0) return `<div class="al w"><span class="al-ico">📭</span><div class="al-txt">No hay datos para el período y filtros seleccionados.</div></div>`;
+
+  // ── Clasificar blBase usando reglas del Clasificador ──
+  const _synA = {'mantención':'mantenimiento','mantener':'mantenimiento','mantencion':'mantenimiento',
+    'revision':'revisión','revisar':'revisión','verificar':'revisión',
+    'instalacion':'instalación','instalar':'instalación','cotizacion':'cotización',
+    'programacion':'programación','adicional':'adicionales','plano':'planos'};
+  const _normA = w => { const s=w.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); return _synA[s]||s; };
+  const _stopA = new Set(['de','la','el','en','y','a','los','del','las','un','una','con','por','para','al','se','que','es','no','lo','su','mas','para','por']);
+  const _tokA  = t => (t||'').toLowerCase().split(/[\s,.\-\/\\()]+/).map(_normA).filter(w=>w.length>2&&!_stopA.has(w));
+
+  const customRules = _cRules();
+  const cExcl = _cExcl();
+  const cNames = _cNames();
+  const assignedA = new Set();
+  const catGroupsA = {}; // key → {label, tasks, isCustom}
+
+  // Layer 1: reglas personalizadas
+  customRules.forEach(rule => {
+    const key = 'rule_' + rule.id;
+    const excluidos = new Set(cExcl[key] || []);
+    blBase.forEach(b => {
+      if (assignedA.has(b.id) || excluidos.has(b.id)) return;
+      const t = (b.titulo||'').toLowerCase();
+      if (rule.keywords.some(kw => t.includes(kw.toLowerCase()))) {
+        if (!catGroupsA[key]) catGroupsA[key] = { label: rule.name, tasks: [], isCustom: true };
+        catGroupsA[key].tasks.push(b);
+        assignedA.add(b.id);
+      }
+    });
+  });
+
+  // Layer 2: bigramas automáticos para los no asignados
+  const unassA = blBase.filter(b => !assignedA.has(b.id));
+  if (unassA.length >= 3) {
+    const ngCntA = {};
+    unassA.forEach(b => {
+      const ws = _tokA(b.titulo);
+      for (let i=0;i<ws.length-1;i++) { const bg=ws[i]+' '+ws[i+1]; ngCntA[bg]=(ngCntA[bg]||0)+1; }
+      ws.forEach(w=>{ if(w.length>4) ngCntA[w]=(ngCntA[w]||0)+1; });
+    });
+    Object.entries(ngCntA).filter(([,n])=>n>=3).sort((a,b)=>b[1]-a[1]).slice(0,8).forEach(([ng])=>{
+      unassA.forEach(b=>{
+        if(assignedA.has(b.id)) return;
+        if(_tokA(b.titulo).join(' ').includes(ng)){
+          const lbl = cNames[ng] || (ng.charAt(0).toUpperCase()+ng.slice(1));
+          if(!catGroupsA[ng]) catGroupsA[ng]={label:lbl, tasks:[], isCustom:false};
+          catGroupsA[ng].tasks.push(b); assignedA.add(b.id);
+        }
+      });
+    });
+  }
+
+  // Sin categoría
+  const sinCatA = blBase.filter(b=>!assignedA.has(b.id));
+  if (sinCatA.length>0) catGroupsA['__sin__']={label:'Sin categoría', tasks:sinCatA, isCustom:false};
+
+  const catListA = Object.entries(catGroupsA)
+    .map(([key,g])=>({key, label:g.label, tasks:g.tasks, isCustom:g.isCustom}))
+    .sort((a,b)=>b.tasks.length-a.tasks.length);
+
+  // ── Filtrar por categoría seleccionada ──
+  const selCat = _analisisCat || 'todas';
+  let bl = (selCat!=='todas' && catGroupsA[selCat]) ? catGroupsA[selCat].tasks : blBase;
+  const selIds = selCat!=='todas' ? new Set(bl.map(b=>b.id)) : null;
+
+  // ── Chips de categorías ──
+  const chipsTodos = [{key:'todas', label:'Todas', n:blBase.length, isCustom:null}, ...catListA.map(c=>({...c, n:c.tasks.length}))];
+  const chipsHtml = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 14px">
+    ${chipsTodos.map(c=>{
+      const active = selCat===c.key;
+      const bg = active ? (c.isCustom===true?'#16a34a':c.key==='todas'?'var(--navy)':c.isCustom===false&&c.key!=='__sin__'?'#2563eb':'#64748b') : 'transparent';
+      const border = active ? bg : 'var(--border)';
+      const color = active ? 'white' : 'var(--txt)';
+      return `<span onclick="setAnalisisCat('${c.key}')" style="cursor:pointer;padding:4px 12px;border-radius:14px;font-size:11px;border:1.5px solid ${border};background:${bg};color:${color};transition:all 0.15s">
+        ${c.label} <span style="opacity:0.75;font-weight:400">${c.n}</span>
+      </span>`;
+    }).join('')}
+  </div>`;
+
+  const noData = bl.length===0;
 
   // ── 1: Tendencia semanal (últimas 12 semanas) ──
   const semanas = [];
@@ -5112,6 +5203,7 @@ function buildDashAnalisis(f) {
     const monStr = dateStr(mon), sunStr = dateStr(sun);
     const bSem = BLOQUES.filter(b => {
       if (f.users.length>0 && !f.users.includes(b.responsable)) return false;
+      if (selIds && !selIds.has(b.id)) return false;
       const fd = b.fechaReal||b.fechaProg||''; return fd>=monStr && fd<=sunStr;
     });
     const conf = bSem.filter(b=>b.estado==='Confirmado');
@@ -5137,13 +5229,15 @@ function buildDashAnalisis(f) {
   const tendTxt = tendPct>10 ? `📈 Carga +${tendPct}% vs las 4 semanas anteriores`
     : tendPct<-10 ? `📉 Carga ${tendPct}% vs las 4 semanas anteriores`
     : `➡️ Carga estable (${tendPct>0?'+':''}${tendPct}% vs semanas anteriores)`;
+  const tendSuffix = selCat!=='todas' ? ` <span style="color:var(--muted)"> · categoría: ${catGroupsA[selCat]?.label||''}</span>` : '';
 
-  // ── 2: Inventario total por estado (todos los usuarios filtrados, sin rango de fecha) ──
-  const todosU = BLOQUES.filter(b => f.users.length===0||f.users.includes(b.responsable));
+  // ── 2: Inventario total por estado ──
+  const todosU = (selCat!=='todas' && catGroupsA[selCat]) ? catGroupsA[selCat].tasks
+    : BLOQUES.filter(b => f.users.length===0||f.users.includes(b.responsable));
   const colEst = {'Por Iniciar':'#64748b','Programado':'#3b82f6','En Proceso':'#f59e0b','Standby':'#94a3b8','Confirmado':'#22c55e','Cancelado':'#ef4444'};
   const countEst = {};
   todosU.forEach(b => { countEst[b.estado]=(countEst[b.estado]||0)+1; });
-  const totalEst = todosU.length;
+  const totalEst = todosU.length||1;
   const estRows = ['Por Iniciar','Programado','En Proceso','Standby','Confirmado','Cancelado']
     .filter(e=>countEst[e]).map(e => {
       const pct = Math.round((countEst[e]||0)/totalEst*100);
@@ -5157,8 +5251,8 @@ function buildDashAnalisis(f) {
       </div>`;
     }).join('');
   const activos = (countEst['Por Iniciar']||0)+(countEst['Programado']||0)+(countEst['En Proceso']||0);
-  const pctConf = totalEst>0?Math.round((countEst['Confirmado']||0)/totalEst*100):0;
-  const inventInsight = `Inventario activo: ${activos} bloques · ${countEst['Confirmado']||0} confirmados (${pctConf}% del total) · ${countEst['Cancelado']||0} cancelados.`;
+  const pctConf = Math.round((countEst['Confirmado']||0)/totalEst*100);
+  const inventInsight = `Activos: ${activos} · Confirmados: ${countEst['Confirmado']||0} (${pctConf}%) · Cancelados: ${countEst['Cancelado']||0}`;
 
   // ── 3: Carga por día de semana ──
   const diasN = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -5182,7 +5276,7 @@ function buildDashAnalisis(f) {
     </div>`;
   }).join('');
   const diaMaxI = cargaDia.indexOf(Math.max(...cargaDia));
-  const diaInsight = `${diasN[diaMaxI]} es el día con mayor carga.${(cargaDia[0]+cargaDia[6])>0?` · ${Math.round((cargaDia[0]+cargaDia[6])*10)/10}h en fines de semana.`:''}`;
+  const diaInsight = bl.length>0 ? `${diasN[diaMaxI]} es el día con mayor carga.${(cargaDia[0]+cargaDia[6])>0?` · ${Math.round((cargaDia[0]+cargaDia[6])*10)/10}h en fines de semana.`:''}` : 'Sin datos.';
 
   // ── 4: Tiempo de espera ingreso → ejecución ──
   const tiempos = bl.filter(b=>b.fechaIngreso&&(b.fechaProg||b.fechaReal)).map(b=>{
@@ -5193,37 +5287,42 @@ function buildDashAnalisis(f) {
   const p90 = tiempos.length>0?(()=>{const s=[...tiempos].sort((a,b)=>a-b);return s[Math.floor(s.length*0.9)]||0;})():0;
   const p90Color = p90>14?'var(--red)':p90>7?'var(--amber)':'var(--green)';
   const esperaInsight = tiempos.length>0
-    ? `${p90>14?'⚠️ El 10% de tareas tarda más de '+p90+' días en ejecutarse.':p90>7?'Tiempo de respuesta moderado.':'✅ Respuesta rápida.'} Mediana ${mediana}d · Promedio ${promEsp}d.`
+    ? `${p90>14?'⚠️ El 10% tarda más de '+p90+' días.':p90>7?'Tiempo de respuesta moderado.':'✅ Respuesta rápida.'} Mediana ${mediana}d · Promedio ${promEsp}d.`
     : 'Sin suficientes datos de fechas para calcular tiempos.';
 
-  // ── 5: Top palabras en títulos (frecuencia) ──
-  const stopwords = new Set(['de','la','el','en','y','a','los','del','las','un','una','con','por','para','al','se','que','es','no','lo','su','más']);
-  const wordFreq = {};
-  bl.forEach(b => {
-    (b.titulo||'').toLowerCase().split(/[\s,.\-\/\\()]+/).filter(w=>w.length>3&&!stopwords.has(w)).forEach(w=>{
-      wordFreq[w]=(wordFreq[w]||0)+1;
-    });
-  });
-  const topWords = Object.entries(wordFreq).filter(([,n])=>n>=2).sort((a,b)=>b[1]-a[1]).slice(0,12);
-  const maxWord = topWords.length>0?topWords[0][1]:1;
-  const wordRows = topWords.map(([w,n])=>{
-    const pw = Math.round(n/maxWord*100);
-    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-      <div style="flex:1;font-size:11px;color:var(--txt);text-transform:capitalize">${w}</div>
-      <div style="width:80px;height:10px;background:#f1f5f9;border-radius:3px;overflow:hidden;flex-shrink:0">
-        <div style="height:100%;width:${pw}%;background:#7c3aed;border-radius:3px"></div>
+  // ── 5 (NUEVO): Distribución por Categorías ──
+  const totalHHBase = blBase.reduce((s,b)=>s+(parseFloat(b.hhPlan)||0),0)||1;
+  const catDistRows = catListA.length>0 ? catListA.map(c=>{
+    const hhC = c.tasks.reduce((s,b)=>s+(parseFloat(b.hhPlan)||0),0);
+    const pctC = Math.round(hhC/totalHHBase*100);
+    const wC = Math.round(c.tasks.length/blBase.length*100);
+    const isActive = selCat===c.key;
+    const bgChip = c.isCustom?'#dcfce7':'#dbeafe';
+    const colChip = c.isCustom?'#166534':'#1e40af';
+    return `<div onclick="setAnalisisCat('${c.key}')" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:5px 8px;border-radius:6px;cursor:pointer;background:${isActive?'#f0f9ff':'transparent'};border:1px solid ${isActive?'var(--navy)':'transparent'}">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="font-size:10px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.label}</span>
+          <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:${bgChip};color:${colChip};white-space:nowrap">${c.isCustom?'regla':'auto'}</span>
+        </div>
+        <div style="height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden;margin-top:3px">
+          <div style="height:100%;width:${wC}%;background:${c.isCustom?'#16a34a':'#2563eb'};border-radius:3px"></div>
+        </div>
       </div>
-      <div style="width:30px;text-align:right;font-size:11px;font-weight:700;color:#7c3aed;flex-shrink:0">${n}</div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:12px;font-weight:700;color:var(--navy)">${c.tasks.length} <span style="font-size:9px;color:var(--muted);font-weight:400">tareas</span></div>
+        <div style="font-size:10px;color:var(--muted)">${Math.round(hhC*10)/10}h (${pctC}%)</div>
+      </div>
     </div>`;
-  }).join('');
-  const wordInsight = topWords.length>0
-    ? `Top término: "${topWords[0][0]}" aparece ${topWords[0][1]}× · ${topWords.length} términos frecuentes detectados.`
-    : 'No hay términos repetidos con frecuencia suficiente en el período.';
+  }).join('') : '<div class="emp" style="font-size:11px">Sin categorías. Define reglas en el Clasificador de Tareas.</div>';
 
   // ── 6: Anomalías ──
-  const sinProgViejas = BLOQUES.filter(b=>{
+  const blAnom = selIds
+    ? BLOQUES.filter(b=>selIds.has(b.id)||(f.users.length===0||f.users.includes(b.responsable)))
+    : BLOQUES.filter(b=>f.users.length===0||f.users.includes(b.responsable));
+  const sinProgViejas = blAnom.filter(b=>{
     if(!['Por Iniciar','Standby'].includes(b.estado)) return false;
-    if(f.users.length>0&&!f.users.includes(b.responsable)) return false;
+    if(selIds&&!selIds.has(b.id)) return false;
     if(!b.fechaIngreso) return false;
     return Math.round((new Date(hoy+'T12:00:00')-new Date(b.fechaIngreso+'T12:00:00'))/86400000)>30;
   }).sort((a,b)=>{
@@ -5261,14 +5360,17 @@ function buildDashAnalisis(f) {
     })
   ].join('');
 
+  const selLabel = selCat!=='todas' && catGroupsA[selCat] ? ` <span style="color:var(--muted);font-size:11px;font-weight:400">· ${catGroupsA[selCat].label}</span>` : '';
+
   return `
+  ${chipsHtml}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px">
 
     <!-- Tendencia 12 semanas -->
     <div class="cw" style="grid-column:1/-1">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
         <span style="font-size:18px">📈</span>
-        <div class="ct" style="margin:0">Tendencia — Últimas 12 Semanas (HH confirmadas)</div>
+        <div class="ct" style="margin:0">Tendencia — Últimas 12 Semanas (HH confirmadas)${selLabel}</div>
         <span style="font-size:11px;color:${tendColor};margin-left:auto">${tendTxt}</span>
       </div>
       ${tendenciaRows}
@@ -5279,27 +5381,37 @@ function buildDashAnalisis(f) {
     <div class="cw">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <span style="font-size:18px">🗂</span>
-        <div class="ct" style="margin:0">Inventario Total por Estado</div>
+        <div class="ct" style="margin:0">Inventario por Estado${selLabel}</div>
       </div>
       ${estRows||'<div class="emp">Sin datos</div>'}
       <div style="font-size:11px;color:var(--txt);line-height:1.5;padding-top:8px;border-top:1px solid var(--border);margin-top:8px">${inventInsight}</div>
+    </div>
+
+    <!-- Distribución por Categorías -->
+    <div class="cw">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span style="font-size:18px">🧩</span>
+        <div class="ct" style="margin:0">Distribución por Categorías</div>
+        <span style="font-size:10px;color:var(--muted);margin-left:auto">${catListA.length} categorías · click para filtrar</span>
+      </div>
+      ${catDistRows}
     </div>
 
     <!-- Patrones por día de semana -->
     <div class="cw">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <span style="font-size:18px">📅</span>
-        <div class="ct" style="margin:0">Carga por Día de Semana</div>
+        <div class="ct" style="margin:0">Carga por Día de Semana${selLabel}</div>
       </div>
-      ${diaRows}
-      <div style="font-size:11px;color:var(--txt);line-height:1.5;padding-top:8px;border-top:1px solid var(--border);margin-top:8px">${diaInsight}</div>
+      ${noData?'<div class="emp">Sin datos para esta categoría.</div>':diaRows}
+      ${!noData?`<div style="font-size:11px;color:var(--txt);line-height:1.5;padding-top:8px;border-top:1px solid var(--border);margin-top:8px">${diaInsight}</div>`:''}
     </div>
 
     <!-- Tiempo de espera -->
     <div class="cw">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <span style="font-size:18px">⏱</span>
-        <div class="ct" style="margin:0">Tiempo de Espera (Ingreso → Ejecución)</div>
+        <div class="ct" style="margin:0">Tiempo Ingreso → Ejecución${selLabel}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
         <div style="text-align:center;padding:10px 6px;background:#f8fafc;border-radius:8px">
@@ -5321,21 +5433,11 @@ function buildDashAnalisis(f) {
       <div style="font-size:11px;color:var(--txt);line-height:1.5">${esperaInsight}</div>
     </div>
 
-    <!-- Top palabras en títulos -->
-    <div class="cw">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-        <span style="font-size:18px">💬</span>
-        <div class="ct" style="margin:0">Términos Más Frecuentes en Tareas</div>
-      </div>
-      ${wordRows||'<div class="emp">No hay términos frecuentes en el período.</div>'}
-      <div style="font-size:11px;color:var(--txt);line-height:1.5;padding-top:8px;border-top:1px solid var(--border);margin-top:8px">${wordInsight}</div>
-    </div>
-
     <!-- Anomalías -->
     <div class="cw" style="grid-column:1/-1">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <span style="font-size:18px">🚨</span>
-        <div class="ct" style="margin:0">Anomalías y Alertas</div>
+        <div class="ct" style="margin:0">Anomalías y Alertas${selLabel}</div>
         <span style="font-size:11px;color:var(--muted);margin-left:auto">${sinProgViejas.length} sin programar &gt;30d &nbsp;·&nbsp; ${outliers.length} outliers de duración</span>
       </div>
       ${anomRows
@@ -5349,7 +5451,7 @@ function buildDashAnalisis(f) {
             </tr></thead>
             <tbody>${anomRows}</tbody>
           </table></div>`
-        : '<div class="emp">✅ Sin anomalías detectadas. Ninguna tarea acumula más de 30 días sin programar y las duraciones son consistentes.</div>'}
+        : '<div class="emp">✅ Sin anomalías detectadas en esta categoría.</div>'}
     </div>
   </div>`;
 }
@@ -5357,6 +5459,13 @@ function buildDashAnalisis(f) {
 // ══════════════════════════════════════════════════════════
 // CLASIFICADOR DE TAREAS
 // ══════════════════════════════════════════════════════════
+
+// ── Análisis Inteligente — categoría activa ──
+let _analisisCat = 'todas';
+function setAnalisisCat(k) {
+  _analisisCat = (k === _analisisCat && k !== 'todas') ? 'todas' : k;
+  applyDashFilter('analisis');
+}
 
 // ── Persistencia ──
 const _CN = 'ot_clasif_names', _CE = 'ot_clasif_excl', _CR = 'ot_clasif_rules';
