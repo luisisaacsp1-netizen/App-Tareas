@@ -5358,44 +5358,135 @@ function buildDashAnalisis(f) {
 // CLASIFICADOR DE TAREAS
 // ══════════════════════════════════════════════════════════
 
-// ── Persistencia de ajustes manuales ──
-const _CN = 'ot_clasif_names', _CE = 'ot_clasif_excl';
+// ── Persistencia ──
+const _CN = 'ot_clasif_names', _CE = 'ot_clasif_excl', _CR = 'ot_clasif_rules';
 function _cNames() { try{return JSON.parse(localStorage.getItem(_CN)||'{}')}catch(e){return{}} }
 function _cExcl()  { try{return JSON.parse(localStorage.getItem(_CE)||'{}')}catch(e){return{}} }
+function _cRules() { try{return JSON.parse(localStorage.getItem(_CR)||'[]')}catch(e){return[]} }
+function _saveRules(r){ localStorage.setItem(_CR, JSON.stringify(r)); }
 
-function renameClasif(ng) {
-  const m = _cNames(), cur = m[ng] || ng;
-  const n = window.prompt('Renombrar categoría como:', cur);
-  if (n && n.trim() && n.trim() !== cur) {
-    m[ng] = n.trim(); localStorage.setItem(_CN, JSON.stringify(m));
-    applyDashFilter('clasif');
-  }
+// ── Funciones interactivas ──
+function renameClasif(key) {
+  const m=_cNames(), cur=m[key]||key;
+  const n=window.prompt('Renombrar categoría como:', cur);
+  if(n&&n.trim()&&n.trim()!==cur){m[key]=n.trim();localStorage.setItem(_CN,JSON.stringify(m));applyDashFilter('clasif');}
 }
-function excluirDeClasif(ng, id) {
-  const m = _cExcl(); if (!m[ng]) m[ng] = [];
-  if (!m[ng].includes(id)) m[ng].push(id);
-  localStorage.setItem(_CE, JSON.stringify(m));
-  applyDashFilter('clasif'); toast('Tarea excluida de la categoría','ok');
+function excluirDeClasif(key, id) {
+  const m=_cExcl(); if(!m[key])m[key]=[];
+  if(!m[key].includes(id))m[key].push(id);
+  localStorage.setItem(_CE,JSON.stringify(m)); applyDashFilter('clasif'); toast('Tarea excluida','ok');
 }
-function incluirEnClasif(ng, id) {
-  const m = _cExcl(); if (m[ng]) m[ng] = m[ng].filter(x=>x!==id);
-  localStorage.setItem(_CE, JSON.stringify(m));
-  applyDashFilter('clasif'); toast('Tarea incluida de nuevo','ok');
+function incluirEnClasif(key, id) {
+  const m=_cExcl(); if(m[key])m[key]=m[key].filter(x=>x!==id);
+  localStorage.setItem(_CE,JSON.stringify(m)); applyDashFilter('clasif'); toast('Tarea incluida de nuevo','ok');
 }
 function toggleClasifDetail(key) {
-  const d = document.getElementById('det-'+key);
-  const b = document.getElementById('btn-'+key);
-  if (!d) return;
-  const open = d.style.display !== 'none';
-  d.style.display = open ? 'none' : 'block';
-  if (b) b.innerHTML = open ? '&#9660; Ver tareas' : '&#9650; Ocultar tareas';
+  const d=document.getElementById('det-'+key), b=document.getElementById('btn-'+key); if(!d)return;
+  const open=d.style.display!=='none'; d.style.display=open?'none':'block';
+  if(b)b.innerHTML=open?'&#9660; Ver tareas':'&#9650; Ocultar tareas';
+}
+
+// ── Gestión de reglas personalizadas ──
+function abrirReglasClasif() {
+  const rules=_cRules();
+  const swSug=new Set(['de','la','el','en','y','a','los','del','las','un','una','con','por','para','al','se','que','es','no','lo','su','más']);
+  const fq={};
+  BLOQUES.forEach(b=>{
+    const words=(b.titulo||'').toLowerCase().replace(/[^\w\sáéíóúñ]/g,' ').split(/\s+/).filter(w=>w.length>3&&!swSug.has(w));
+    for(let i=0;i<words.length-1;i++){const ng=words[i]+' '+words[i+1];fq[ng]=(fq[ng]||0)+1;}
+    words.filter(w=>w.length>=5).forEach(w=>{fq[w]=(fq[w]||0)+1;});
+  });
+  const allKw=rules.flatMap(r=>r.keywords);
+  const sugs=Object.entries(fq)
+    .filter(([ng,n])=>n>=3&&!allKw.some(k=>ng.includes(k)||k.includes(ng)))
+    .sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+  const rulesHtml=rules.length?rules.map(r=>`
+    <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong style="font-size:13px;color:var(--navy)">${r.name}</strong>
+        <button onclick="clasifDelRule('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1">×</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+        ${r.keywords.map(kw=>`<span style="background:#e0e7ff;color:#3730a3;border-radius:4px;padding:2px 8px;font-size:11px;display:inline-flex;align-items:center;gap:4px">${kw}
+          <button onclick="clasifDelKw('${r.id}','${kw.replace(/'/g,"\\'")}')" style="background:none;border:none;cursor:pointer;color:#6366f1;font-size:14px;padding:0;line-height:1">×</button></span>`).join('')}
+        ${!r.keywords.length?'<span style="font-size:11px;color:var(--muted)">Sin palabras clave aún</span>':''}
+      </div>
+      <div style="display:flex;gap:6px">
+        <input id="kwi-${r.id}" placeholder="agregar palabra clave..." style="flex:1;padding:5px 9px;border:1px solid var(--border);border-radius:5px;font-size:11px">
+        <button onclick="clasifAddKw('${r.id}')" style="padding:5px 12px;background:var(--navy);color:#fff;border:none;border-radius:5px;font-size:11px;cursor:pointer">+</button>
+      </div>
+    </div>`).join('')
+  :'<div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:10px;background:#f8fafc;border-radius:6px">Aún no tienes categorías personalizadas. Crea la primera abajo.</div>';
+
+  const sugHtml=sugs.length?`
+    <div style="margin-top:14px;padding:12px;background:#f0f9ff;border-radius:8px;border:1px solid #bae6fd">
+      <div style="font-size:11px;font-weight:700;color:#0369a1;margin-bottom:8px">💡 Patrones frecuentes sin categoría — clic para crear</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${sugs.map(([ng,n])=>`<button onclick="clasifQuickAdd('${ng.replace(/'/g,"\\'")}','${ng.replace(/'/g,"\\'")}');event.stopPropagation()"
+          style="background:#fff;border:1px solid #7dd3fc;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:11px;color:#0369a1">
+          "${ng}" <span style="color:#94a3b8">${n}×</span></button>`).join('')}
+      </div>
+    </div>`:'';
+
+  openModal(`<div>
+    <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:4px">⚙ Gestionar Categorías</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.6">Las categorías personalizadas tienen <strong>prioridad</strong> sobre la detección automática. Una tarea se asigna a la primera categoría cuyas palabras clave aparezcan en el título. Puedes poner varias palabras clave separadas por coma.</div>
+    ${rulesHtml}
+    <div style="border-top:2px solid var(--border);padding-top:14px;margin-top:6px">
+      <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">Nueva categoría</div>
+      <input id="newRName" placeholder="Nombre (ej: Presupuesto / Costeo)" style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-bottom:8px">
+      <div style="display:flex;gap:8px">
+        <input id="newRKw" placeholder="Palabras clave separadas por coma (ej: cotización, costeo, presupuesto, valorización)" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+        <button onclick="clasifAddRule()" style="padding:7px 16px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap">Crear</button>
+      </div>
+    </div>
+    ${sugHtml}
+  </div>`);
+}
+
+function clasifAddRule() {
+  const name=(document.getElementById('newRName')?.value||'').trim();
+  const kwRaw=(document.getElementById('newRKw')?.value||'').trim();
+  if(!name){toast('Ingresa un nombre para la categoría','warn');return;}
+  const kws=kwRaw?kwRaw.split(',').map(k=>k.trim().toLowerCase()).filter(Boolean):[];
+  const rules=_cRules(); rules.push({id:Date.now()+'',name,keywords:kws});
+  _saveRules(rules); applyDashFilter('clasif'); abrirReglasClasif();
+}
+function clasifQuickAdd(ng, name) {
+  const rules=_cRules();
+  if(!rules.some(r=>r.keywords.includes(ng))){
+    rules.push({id:Date.now()+'',name:name.charAt(0).toUpperCase()+name.slice(1),keywords:[ng]});
+    _saveRules(rules); applyDashFilter('clasif');
+  }
+  abrirReglasClasif();
+}
+function clasifDelRule(id) {
+  _saveRules(_cRules().filter(r=>r.id!==id)); applyDashFilter('clasif'); abrirReglasClasif();
+}
+function clasifAddKw(id) {
+  const inp=document.getElementById('kwi-'+id); if(!inp)return;
+  const kw=inp.value.trim().toLowerCase(); if(!kw)return;
+  const rules=_cRules(), r=rules.find(x=>x.id===id);
+  if(r&&!r.keywords.includes(kw)){r.keywords.push(kw);_saveRules(rules);applyDashFilter('clasif');}
+  abrirReglasClasif();
+}
+function clasifDelKw(id, kw) {
+  const rules=_cRules(), r=rules.find(x=>x.id===id);
+  if(r){r.keywords=r.keywords.filter(k=>k!==kw);_saveRules(rules);applyDashFilter('clasif');}
+  abrirReglasClasif();
 }
 
 function vDashClasif() {
+  const rc=_cRules().length;
   return `
   <div class="ph">
     <div class="pt"><div class="rb"></div>Clasificador de Tareas</div>
-    <div class="pd">Sub-clasificación automática por conceptos · detalle de tareas por categoría · ajuste manual de clasificación.</div>
+    <div class="pd">Categorías personalizadas + detección automática · ver detalle de tareas · ajuste manual.</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;padding:0 2px 8px">
+    <button onclick="abrirReglasClasif()" style="padding:7px 14px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600">⚙ Gestionar Categorías</button>
+    <span style="font-size:11px;color:var(--muted)">${rc} categoría${rc!==1?'s':''} personalizada${rc!==1?'s':''} · la detección automática cubre el resto</span>
   </div>
   ${buildDashFilterBar('clasif')}
   <div id="dash-content-clasif"></div>`;
@@ -5403,7 +5494,7 @@ function vDashClasif() {
 
 function buildDashClasif(f) {
   const hoy = todayStr();
-  const cNames = _cNames(), cExcl = _cExcl();
+  const cNames = _cNames(), cExcl = _cExcl(), customRules = _cRules();
 
   // ── Filtrar bloques del período ──
   const bl = BLOQUES.filter(b => {
@@ -5487,15 +5578,31 @@ function buildDashClasif(f) {
   });
   candidates = candidates.filter(ng => !merged.has(ng));
 
-  // ── Asignación greedy + aplicar exclusiones del usuario ──
+  // ── 1. Categorías personalizadas tienen prioridad ──
   const groups = {}, assigned = new Set();
+  // Clave de grupo para reglas custom: 'rule_' + id
+  customRules.forEach(rule => {
+    const key = 'rule_' + rule.id;
+    const excluidos = new Set(cExcl[key] || []);
+    bl.forEach(b => {
+      if (assigned.has(b.id) || excluidos.has(b.id)) return;
+      const t = (b.titulo||'').toLowerCase();
+      if (rule.keywords.some(kw => t.includes(kw.toLowerCase()))) {
+        if (!groups[key]) groups[key] = { label: rule.name, tasks: [], isCustom: true };
+        groups[key].tasks.push(b);
+        assigned.add(b.id);
+      }
+    });
+  });
+
+  // ── 2. Auto-detección para tareas no clasificadas aún ──
   candidates.forEach(ng => {
     const excluidos = new Set(cExcl[ng] || []);
     bl.forEach(b => {
       if (assigned.has(b.id) || excluidos.has(b.id)) return;
       if ((b.titulo||'').toLowerCase().includes(ng)) {
-        if (!groups[ng]) groups[ng] = [];
-        groups[ng].push(b);
+        if (!groups[ng]) groups[ng] = { label: cNames[ng] || ng, tasks: [], isCustom: false };
+        groups[ng].tasks.push(b);
         assigned.add(b.id);
       }
     });
@@ -5542,10 +5649,12 @@ function buildDashClasif(f) {
   }
 
   // ── Lista de grupos + términos relacionados ──
-  const groupList = Object.entries(groups).map(([ng, tasks]) => {
-    // Otros candidatos que aparecen en ≥30% de las tareas de este grupo
-    const related = candidates.filter(c => c!==ng && tasks.filter(b=>(b.titulo||'').toLowerCase().includes(c)).length >= Math.ceil(tasks.length*0.3));
-    return { ng, tasks, st: calcSt(tasks), related: related.slice(0,4) };
+  const groupList = Object.entries(groups).map(([key, g]) => {
+    const tasks = g.tasks, isCustom = g.isCustom, label = g.label;
+    const related = !isCustom
+      ? candidates.filter(c=>c!==key && tasks.filter(b=>(b.titulo||'').toLowerCase().includes(c)).length >= Math.ceil(tasks.length*0.3)).slice(0,4)
+      : [];
+    return { key, label, tasks, st: calcSt(tasks), related, isCustom };
   }).sort((a,b) => b.st.totalHHP - a.st.totalHHP);
 
   if (groupList.length === 0) return `<div class="al w"><span class="al-ico">🔍</span>
@@ -5584,21 +5693,20 @@ function buildDashClasif(f) {
     const pct=globalHHP>0?Math.round(g.st.totalHHP/globalHHP*100):0;
     const alerts=getAlerts(g.st);
     const dot=alerts.some(a=>a.lvl==='danger')?'🔴':alerts.some(a=>a.lvl==='warn')?'🟡':'🟢';
-    const label=cNames[g.ng]||g.ng;
+    const customBadge=g.isCustom?'<span style="font-size:8px;background:#dbeafe;color:#1d4ed8;border-radius:3px;padding:1px 4px;margin-left:4px">✎</span>':'';
     return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
       <div style="width:12px;flex-shrink:0">${dot}</div>
-      <div style="min-width:110px;max-width:150px;font-size:10px;color:var(--txt);text-transform:capitalize;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${label}">${label}</div>
+      <div style="min-width:110px;max-width:160px;font-size:10px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${g.label}">${g.label}${customBadge}</div>
       <div style="flex:1;height:14px;background:#f1f5f9;border-radius:3px;overflow:hidden">
-        <div style="height:100%;width:${w}%;background:var(--navy);border-radius:3px"></div>
+        <div style="height:100%;width:${w}%;background:${g.isCustom?'#3b82f6':'var(--navy)'};border-radius:3px"></div>
       </div>
       <div style="width:80px;text-align:right;font-size:10px;font-weight:700;color:var(--navy);flex-shrink:0">${g.st.totalHHP}h <span style="color:var(--muted);font-weight:400">(${pct}%)</span></div>
     </div>`;
   }).join('');
 
   // ── Cards ──
-  const cards = groupList.map(({ng, tasks, st, related}) => {
-    const label     = cNames[ng] || ng;
-    const safeKey   = ng.replace(/[^a-z0-9]/gi,'_').substring(0,30);
+  const cards = groupList.map(({key, label, tasks, st, related, isCustom}) => {
+    const safeKey = key.replace(/[^a-z0-9]/gi,'_').substring(0,30);
     const pct       = globalHHP>0?Math.round(st.totalHHP/globalHHP*100):0;
     const alerts    = getAlerts(st);
     const borderCol = alerts.some(a=>a.lvl==='danger')?'var(--red)':alerts.some(a=>a.lvl==='warn')?'#f59e0b':'var(--green)';
@@ -5631,8 +5739,9 @@ function buildDashClasif(f) {
       const hhp=parseFloat(b.hhPlan)||0, hhr=parseFloat(b.hhReal)||0;
       const desv=hhp>0&&hhr>0?Math.round((hhr/hhp-1)*100):null;
       const desvTxt=desv===null?'—':desv>0?`<span style="color:var(--red)">+${desv}%</span>`:`<span style="color:var(--green)">${desv}%</span>`;
-      const excluidos=cExcl[ng]||[];
+      const excluidos=cExcl[key]||[];
       const yaExcl=excluidos.includes(b.id);
+      const safeK=key.replace(/'/g,"\\'");
       return `<tr style="border-bottom:1px solid #f1f5f9">
         <td style="padding:4px 6px;font-size:11px;color:var(--muted)">#${b.id}</td>
         <td style="padding:4px 6px;font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${b.titulo||''}">${(b.titulo||'—').substring(0,35)}${(b.titulo||'').length>35?'…':''}</td>
@@ -5645,8 +5754,8 @@ function buildDashClasif(f) {
         <td style="padding:4px 6px;white-space:nowrap">
           <button onclick="abrirModal(${b.id})" style="font-size:9px;padding:2px 6px;border:1px solid var(--border);background:none;border-radius:3px;cursor:pointer;margin-right:3px">Ver</button>
           ${yaExcl
-            ? `<button onclick="incluirEnClasif('${ng.replace(/'/g,"\\'")}',${b.id})" style="font-size:9px;padding:2px 6px;border:1px solid #22c55e;color:#166534;background:#f0fdf4;border-radius:3px;cursor:pointer">↩ Incluir</button>`
-            : `<button onclick="excluirDeClasif('${ng.replace(/'/g,"\\'")}',${b.id})" style="font-size:9px;padding:2px 6px;border:1px solid var(--border);color:var(--muted);background:none;border-radius:3px;cursor:pointer">✕ Excluir</button>`
+            ? `<button onclick="incluirEnClasif('${safeK}',${b.id})" style="font-size:9px;padding:2px 6px;border:1px solid #22c55e;color:#166534;background:#f0fdf4;border-radius:3px;cursor:pointer">↩ Incluir</button>`
+            : `<button onclick="excluirDeClasif('${safeK}',${b.id})" style="font-size:9px;padding:2px 6px;border:1px solid var(--border);color:var(--muted);background:none;border-radius:3px;cursor:pointer">✕ Excluir</button>`
           }
         </td>
       </tr>`;
@@ -5656,12 +5765,14 @@ function buildDashClasif(f) {
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span style="font-size:13px;font-weight:700;color:var(--navy);text-transform:capitalize">"${label}"</span>
+            <span style="font-size:13px;font-weight:700;color:var(--navy)">${label}</span>
+            ${isCustom?'<span style="font-size:9px;background:#dbeafe;color:#1d4ed8;border-radius:3px;padding:1px 5px">✎ personalizada</span>':''}
             ${trendBadge}
-            <button onclick="renameClasif('${ng.replace(/'/g,"\\'")}'); event.stopPropagation();"
-              style="font-size:9px;padding:1px 6px;border:1px solid var(--border);background:none;border-radius:3px;cursor:pointer;color:var(--muted)" title="Renombrar categoría">✏️ Renombrar</button>
+            ${!isCustom?`<button onclick="renameClasif('${key.replace(/'/g,"\\'")}');event.stopPropagation();"
+              style="font-size:9px;padding:1px 6px;border:1px solid var(--border);background:none;border-radius:3px;cursor:pointer;color:var(--muted)">✏️ Renombrar</button>`
+            :`<button onclick="abrirReglasClasif()" style="font-size:9px;padding:1px 6px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:3px;cursor:pointer;color:#1d4ed8">⚙ Editar</button>`}
           </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px">${st.n} tarea${st.n>1?'s':''} · ${pct}% de los recursos del período · patrón: "${ng}"</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${st.n} tarea${st.n>1?'s':''} · ${pct}% de los recursos del período${isCustom?'':` · patrón detectado: "${key}"`}</div>
           ${relatedHTML}
         </div>
         <div style="text-align:right;flex-shrink:0;margin-left:12px">
