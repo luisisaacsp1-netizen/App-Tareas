@@ -5357,11 +5357,45 @@ function buildDashAnalisis(f) {
 // ══════════════════════════════════════════════════════════
 // CLASIFICADOR DE TAREAS
 // ══════════════════════════════════════════════════════════
+
+// ── Persistencia de ajustes manuales ──
+const _CN = 'ot_clasif_names', _CE = 'ot_clasif_excl';
+function _cNames() { try{return JSON.parse(localStorage.getItem(_CN)||'{}')}catch(e){return{}} }
+function _cExcl()  { try{return JSON.parse(localStorage.getItem(_CE)||'{}')}catch(e){return{}} }
+
+function renameClasif(ng) {
+  const m = _cNames(), cur = m[ng] || ng;
+  const n = window.prompt('Renombrar categoría como:', cur);
+  if (n && n.trim() && n.trim() !== cur) {
+    m[ng] = n.trim(); localStorage.setItem(_CN, JSON.stringify(m));
+    applyDashFilter('clasif');
+  }
+}
+function excluirDeClasif(ng, id) {
+  const m = _cExcl(); if (!m[ng]) m[ng] = [];
+  if (!m[ng].includes(id)) m[ng].push(id);
+  localStorage.setItem(_CE, JSON.stringify(m));
+  applyDashFilter('clasif'); toast('Tarea excluida de la categoría','ok');
+}
+function incluirEnClasif(ng, id) {
+  const m = _cExcl(); if (m[ng]) m[ng] = m[ng].filter(x=>x!==id);
+  localStorage.setItem(_CE, JSON.stringify(m));
+  applyDashFilter('clasif'); toast('Tarea incluida de nuevo','ok');
+}
+function toggleClasifDetail(key) {
+  const d = document.getElementById('det-'+key);
+  const b = document.getElementById('btn-'+key);
+  if (!d) return;
+  const open = d.style.display !== 'none';
+  d.style.display = open ? 'none' : 'block';
+  if (b) b.innerHTML = open ? '&#9660; Ver tareas' : '&#9650; Ocultar tareas';
+}
+
 function vDashClasif() {
   return `
   <div class="ph">
     <div class="pt"><div class="rb"></div>Clasificador de Tareas</div>
-    <div class="pd">Sub-clasificación automática por patrones en títulos · recursos, desviaciones y recomendaciones por categoría.</div>
+    <div class="pd">Sub-clasificación automática por conceptos · detalle de tareas por categoría · ajuste manual de clasificación.</div>
   </div>
   ${buildDashFilterBar('clasif')}
   <div id="dash-content-clasif"></div>`;
@@ -5369,6 +5403,7 @@ function vDashClasif() {
 
 function buildDashClasif(f) {
   const hoy = todayStr();
+  const cNames = _cNames(), cExcl = _cExcl();
 
   // ── Filtrar bloques del período ──
   const bl = BLOQUES.filter(b => {
@@ -5378,164 +5413,181 @@ function buildDashClasif(f) {
     if (f.hasta && fd > f.hasta) return false;
     return true;
   });
-
   if (bl.length < 5) return `<div class="al w"><span class="al-ico">📭</span>
     <div class="al-txt">Se necesitan al menos 5 tareas en el período para clasificar. Amplía el rango de fechas.</div></div>`;
 
-  // ── Stopwords español ──
-  const SW = new Set(['de','la','el','en','y','a','los','del','las','un','una','con','por','para','al','se','que','es','no','lo','su','sus','más','e','o','u','i','le','les','me','mi','te','tu','nos','si','sin','pero','como','hay','bien','así','este','esta','estos','estas','ese','esa','cuando','donde','quien','cual','también','solo','ya','ser','está','son','fue','han','ha','era','van','ir','ver','hacer','tener','debe','puede','todo']);
+  // ── Stopwords + sinónimos → normalización de conceptos ──
+  const SW = new Set(['de','la','el','en','y','a','los','del','las','un','una','con','por','para','al','se','que','es','no','lo','su','sus','más','e','o','u','i','le','les','me','mi','te','tu','nos','si','sin','pero','como','hay','bien','así','este','esta','estos','estas','ese','esa','cuando','donde','quien','cual','también','solo','ya','ser','está','son','fue','han','ha','era','van','ir','ver','hacer','tener','debe','puede','todo','del','las']);
+  const SYN = {
+    'mantención':'mantenimiento','mantener':'mantenimiento','mantencion':'mantenimiento',
+    'revision':'revisión','revisar':'revisión','verificar':'revisión','verificacion':'revisión',
+    'instalacion':'instalación','instalar':'instalación',
+    'capacitacion':'capacitación','training':'capacitación',
+    'informe':'reporte','report':'reporte',
+    'reunion':'reunión','meeting':'reunión','junta':'reunión',
+    'soporte':'soporte','apoyo':'soporte','asistencia':'soporte',
+    'configuracion':'configuración','configurar':'configuración',
+    'actualizacion':'actualización','actualizar':'actualización',
+    'diagnostico':'diagnóstico','diagnosticar':'diagnóstico',
+    'reparacion':'reparación','reparar':'reparación',
+    'limpieza':'limpieza','limpiar':'limpieza',
+    'inspeccion':'inspección','inspeccionar':'inspección',
+  };
+  function normalizeWord(w) { return SYN[w] || w; }
 
-  // ── Extraer n-gramas de un título ──
-  function ngrams(titulo) {
-    const words = (titulo || '').toLowerCase()
+  // ── Extraer tokens normalizados de un título ──
+  function tokenize(titulo) {
+    return (titulo || '').toLowerCase()
       .replace(/[^\w\sáéíóúüñ]/g, ' ')
       .split(/\s+/)
+      .map(normalizeWord)
       .filter(w => w.length > 2 && !SW.has(w));
+  }
+
+  // ── Construir n-gramas (tri → bi → uni) ──
+  function ngrams(titulo) {
+    const words = tokenize(titulo);
     const out = new Set();
-    // trigramas
-    for (let i = 0; i < words.length - 2; i++) out.add(words.slice(i, i+3).join(' '));
-    // bigramas
-    for (let i = 0; i < words.length - 1; i++) out.add(words.slice(i, i+2).join(' '));
-    // unigramas (solo palabras largas y significativas)
-    words.filter(w => w.length >= 6).forEach(w => out.add(w));
+    for (let i = 0; i < words.length - 2; i++) out.add(words.slice(i,i+3).join(' '));
+    for (let i = 0; i < words.length - 1; i++) out.add(words.slice(i,i+2).join(' '));
+    words.filter(w => w.length >= 5).forEach(w => out.add(w));
     return [...out];
   }
 
-  // ── Contar frecuencia de cada n-grama ──
+  // ── Frecuencia de n-gramas ──
   const freq = {};
-  bl.forEach(b => {
-    ngrams(b.titulo).forEach(ng => { freq[ng] = (freq[ng] || 0) + 1; });
-  });
+  bl.forEach(b => { ngrams(b.titulo).forEach(ng => { freq[ng] = (freq[ng]||0)+1; }); });
 
-  // ── Seleccionar n-gramas candidatos (freq >= 3), preferir más largos ──
-  const minFreq = Math.max(2, Math.floor(bl.length * 0.04)); // al menos 4% de tareas
-  const candidates = Object.entries(freq)
-    .filter(([, n]) => n >= minFreq)
-    .sort((a, b) => {
-      const lenDiff = b[0].split(' ').length - a[0].split(' ').length;
-      return lenDiff !== 0 ? lenDiff : b[1] - a[1];
-    })
+  // ── Candidatos: umbral dinámico ──
+  const minFreq = Math.max(2, Math.floor(bl.length * 0.04));
+  let candidates = Object.entries(freq)
+    .filter(([,n]) => n >= minFreq)
+    .sort((a,b) => { const d=b[0].split(' ').length-a[0].split(' ').length; return d!==0?d:b[1]-a[1]; })
     .map(([ng]) => ng);
 
-  // ── Asignar cada tarea al primer n-grama que la contenga (greedy: largo → corto) ──
-  const groups = {};   // ng → [bloques]
-  const assigned = new Set();
+  // ── Fusión de conceptos: si dos candidatos comparten ≥70% de tareas, unir bajo el más largo ──
+  const taskSets = {};
   candidates.forEach(ng => {
+    taskSets[ng] = new Set(bl.filter(b=>(b.titulo||'').toLowerCase().includes(ng)).map(b=>b.id));
+  });
+  const merged = new Set();
+  candidates.forEach((a,i) => {
+    if (merged.has(a)) return;
+    candidates.slice(i+1).forEach(b => {
+      if (merged.has(b)) return;
+      const sa=taskSets[a], sb=taskSets[b];
+      const inter=[...sa].filter(id=>sb.has(id)).length;
+      const smaller=Math.min(sa.size,sb.size);
+      if (smaller>0 && inter/smaller >= 0.75) {
+        // absorber el más corto / menos frecuente en el otro
+        const absorbB = a.split(' ').length >= b.split(' ').length;
+        merged.add(absorbB ? b : a);
+      }
+    });
+  });
+  candidates = candidates.filter(ng => !merged.has(ng));
+
+  // ── Asignación greedy + aplicar exclusiones del usuario ──
+  const groups = {}, assigned = new Set();
+  candidates.forEach(ng => {
+    const excluidos = new Set(cExcl[ng] || []);
     bl.forEach(b => {
-      if (assigned.has(b.id)) return;
-      if ((b.titulo || '').toLowerCase().includes(ng)) {
+      if (assigned.has(b.id) || excluidos.has(b.id)) return;
+      if ((b.titulo||'').toLowerCase().includes(ng)) {
         if (!groups[ng]) groups[ng] = [];
         groups[ng].push(b);
         assigned.add(b.id);
       }
     });
   });
-
   const sinClasif = bl.filter(b => !assigned.has(b.id));
 
-  // ── Estadísticas por grupo ──
-  function stats(tasks) {
-    const n = tasks.length;
-    const conP  = tasks.filter(b => parseFloat(b.hhPlan) > 0);
-    const conR  = tasks.filter(b => parseFloat(b.hhReal) > 0);
-    const conAmbos = tasks.filter(b => parseFloat(b.hhPlan) > 0 && parseFloat(b.hhReal) > 0);
-
-    const totalHHP = tasks.reduce((s, b) => s + (parseFloat(b.hhPlan) || 0), 0);
-    const totalHHR = tasks.reduce((s, b) => s + (parseFloat(b.hhReal) || 0), 0);
-    const avgHHP = conP.length  ? totalHHP / conP.length  : 0;
-    const avgHHR = conR.length  ? totalHHR / conR.length  : 0;
-
-    // Ratio real/plan promedio
-    const ratio = conAmbos.length
-      ? conAmbos.reduce((s, b) => s + (parseFloat(b.hhReal) || 0) / (parseFloat(b.hhPlan) || 1), 0) / conAmbos.length
-      : null;
-
-    // Coeficiente de variación de HHP (predecibilidad)
-    let cv = null;
-    if (conP.length >= 3) {
-      const vals = conP.map(b => parseFloat(b.hhPlan) || 0);
-      const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
-      const sd = Math.sqrt(vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length);
-      cv = mean > 0 ? sd / mean : null;
+  // ── Estadísticas de un grupo ──
+  function calcSt(tasks) {
+    const conP=tasks.filter(b=>parseFloat(b.hhPlan)>0);
+    const conR=tasks.filter(b=>parseFloat(b.hhReal)>0);
+    const conAmbos=tasks.filter(b=>parseFloat(b.hhPlan)>0&&parseFloat(b.hhReal)>0);
+    const totalHHP=tasks.reduce((s,b)=>s+(parseFloat(b.hhPlan)||0),0);
+    const totalHHR=tasks.reduce((s,b)=>s+(parseFloat(b.hhReal)||0),0);
+    const avgHHP=conP.length?totalHHP/conP.length:0;
+    const avgHHR=conR.length?totalHHR/conR.length:0;
+    const ratio=conAmbos.length?conAmbos.reduce((s,b)=>s+(parseFloat(b.hhReal)||0)/(parseFloat(b.hhPlan)||1),0)/conAmbos.length:null;
+    let cv=null;
+    if(conP.length>=3){
+      const vals=conP.map(b=>parseFloat(b.hhPlan)||0);
+      const mean=vals.reduce((a,b)=>a+b,0)/vals.length;
+      const sd=Math.sqrt(vals.reduce((s,v)=>s+(v-mean)**2,0)/vals.length);
+      cv=mean>0?sd/mean:null;
     }
-
-    // Por persona
-    const byPerson = {};
-    tasks.forEach(b => { byPerson[b.responsable || '?'] = (byPerson[b.responsable || '?'] || 0) + 1; });
-
-    // Tendencia: últimas 4 semanas vs anteriores 4
-    const base = new Date(hoy + 'T12:00:00');
-    let ult4 = 0, ant4 = 0;
-    tasks.forEach(b => {
-      const fd = b.fechaProg || b.fechaReal || '';
-      if (!fd) return;
-      const diff = Math.round((base - new Date(fd + 'T12:00:00')) / 86400000);
-      if (diff >= 0 && diff < 28) ult4++;
-      else if (diff >= 28 && diff < 56) ant4++;
+    const byPerson={};
+    tasks.forEach(b=>{byPerson[b.responsable||'?']=(byPerson[b.responsable||'?']||0)+1;});
+    const base=new Date(hoy+'T12:00:00');
+    let ult4=0,ant4=0;
+    tasks.forEach(b=>{
+      const fd=b.fechaProg||b.fechaReal||''; if(!fd)return;
+      const d=Math.round((base-new Date(fd+'T12:00:00'))/86400000);
+      if(d>=0&&d<28)ult4++; else if(d>=28&&d<56)ant4++;
     });
-    const trendPct = ant4 > 0 ? Math.round((ult4 - ant4) / ant4 * 100) : (ult4 > 0 ? 100 : null);
-
-    const conf    = tasks.filter(b => b.estado === 'Confirmado').length;
-    const sinProg = tasks.filter(b => ['Por Iniciar', 'Standby'].includes(b.estado)).length;
-
+    const trendPct=ant4>0?Math.round((ult4-ant4)/ant4*100):(ult4>0?100:null);
+    const conf=tasks.filter(b=>b.estado==='Confirmado').length;
+    const sinProg=tasks.filter(b=>['Por Iniciar','Standby'].includes(b.estado)).length;
     return {
-      n, totalHHP: Math.round(totalHHP * 10) / 10, totalHHR: Math.round(totalHHR * 10) / 10,
-      avgHHP: Math.round(avgHHP * 10) / 10, avgHHR: Math.round(avgHHR * 10) / 10,
-      ratio: ratio ? Math.round(ratio * 100) / 100 : null,
-      cv: cv ? Math.round(cv * 100) / 100 : null,
+      n:tasks.length,
+      totalHHP:Math.round(totalHHP*10)/10, totalHHR:Math.round(totalHHR*10)/10,
+      avgHHP:Math.round(avgHHP*10)/10,     avgHHR:Math.round(avgHHR*10)/10,
+      ratio:ratio?Math.round(ratio*100)/100:null,
+      cv:cv?Math.round(cv*100)/100:null,
       byPerson, conf, sinProg, trendPct
     };
   }
 
-  // ── Construir lista de grupos ordenada por HHP total ──
-  const groupList = Object.entries(groups)
-    .map(([ng, tasks]) => ({ ng, tasks, st: stats(tasks) }))
-    .sort((a, b) => b.st.totalHHP - a.st.totalHHP);
+  // ── Lista de grupos + términos relacionados ──
+  const groupList = Object.entries(groups).map(([ng, tasks]) => {
+    // Otros candidatos que aparecen en ≥30% de las tareas de este grupo
+    const related = candidates.filter(c => c!==ng && tasks.filter(b=>(b.titulo||'').toLowerCase().includes(c)).length >= Math.ceil(tasks.length*0.3));
+    return { ng, tasks, st: calcSt(tasks), related: related.slice(0,4) };
+  }).sort((a,b) => b.st.totalHHP - a.st.totalHHP);
 
   if (groupList.length === 0) return `<div class="al w"><span class="al-ico">🔍</span>
-    <div class="al-txt">No se detectaron patrones repetidos con el período seleccionado. Prueba ampliando el rango de fechas.</div></div>`;
+    <div class="al-txt">No se detectaron patrones con el período seleccionado. Amplía el rango de fechas o ajusta los filtros.</div></div>`;
 
-  const globalHHP = bl.reduce((s, b) => s + (parseFloat(b.hhPlan) || 0), 0);
-  const pctClasif = bl.length ? Math.round((bl.length - sinClasif.length) / bl.length * 100) : 0;
+  const globalHHP = bl.reduce((s,b)=>s+(parseFloat(b.hhPlan)||0),0);
+  const pctClasif = bl.length ? Math.round((bl.length-sinClasif.length)/bl.length*100) : 0;
 
-  // ── Generar alertas por grupo ──
-  function getAlerts(st, ng) {
-    const a = [];
-    if (st.ratio !== null && st.ratio > 1.3)
-      a.push({ lvl:'warn', txt: `Subestimación crónica +${Math.round((st.ratio-1)*100)}% — ajustar HHP de referencia de ${st.avgHHP}h a ~${Math.round(st.avgHHP*st.ratio*10)/10}h` });
-    if (st.ratio !== null && st.ratio < 0.7)
-      a.push({ lvl:'info', txt: `Sobreestimación ${Math.round((1-st.ratio)*100)}% — el equipo termina antes de lo planeado, reducir HHP estimado` });
-    if (st.cv !== null && st.cv > 0.6)
-      a.push({ lvl:'warn', txt: `Alta variabilidad (CV=${st.cv}) — las tareas de esta categoría son impredecibles en duración, evaluar estandarizar el proceso` });
-    if (st.sinProg > 2)
-      a.push({ lvl:'danger', txt: `${st.sinProg} tareas de esta categoría llevan tiempo sin programar — revisar priorización` });
-    if (st.trendPct !== null && st.trendPct > 40)
-      a.push({ lvl:'info', txt: `Categoría en crecimiento +${st.trendPct}% vs las 4 semanas anteriores — verificar si es tendencia o pico` });
-    if (st.trendPct !== null && st.trendPct < -40)
-      a.push({ lvl:'info', txt: `Categoría en baja ${st.trendPct}% — puede indicar que el trabajo se completó o que bajó la demanda` });
-    if (st.n >= 5 && st.ratio === null)
-      a.push({ lvl:'info', txt: `Sin datos de HH real — registrar tiempos para habilitar análisis de desviación` });
+  // ── Alertas ──
+  const aBg={warn:'#fef3c7',danger:'#fee2e2',info:'#eff6ff'};
+  const aTx={warn:'#78350f',danger:'#991b1b',info:'#1e3a8a'};
+  function getAlerts(st) {
+    const a=[];
+    if(st.ratio!==null&&st.ratio>1.3)
+      a.push({lvl:'warn',txt:`Subestimación crónica +${Math.round((st.ratio-1)*100)}% — ajustar HHP referencia de ${st.avgHHP}h → ~${Math.round(st.avgHHP*st.ratio*10)/10}h`});
+    if(st.ratio!==null&&st.ratio<0.7)
+      a.push({lvl:'info',txt:`Sobreestimación ${Math.round((1-st.ratio)*100)}% — reducir HHP estimado`});
+    if(st.cv!==null&&st.cv>0.6)
+      a.push({lvl:'warn',txt:`Alta variabilidad (CV=${st.cv}) — tareas impredecibles, evaluar estandarizar proceso`});
+    if(st.sinProg>2)
+      a.push({lvl:'danger',txt:`${st.sinProg} tareas sin programar en esta categoría — revisar priorización`});
+    if(st.trendPct!==null&&st.trendPct>40)
+      a.push({lvl:'info',txt:`Categoría en crecimiento +${st.trendPct}% (últimas 4 semanas)`});
+    if(st.trendPct!==null&&st.trendPct<-40)
+      a.push({lvl:'info',txt:`Categoría en baja ${st.trendPct}% (últimas 4 semanas)`});
+    if(st.n>=5&&st.ratio===null)
+      a.push({lvl:'info',txt:`Sin HH real registrada — completar tiempos para habilitar análisis de desviación`});
     return a;
   }
+  const totalAlerts = groupList.reduce((s,g)=>s+getAlerts(g.st).length,0);
 
-  const alertBg  = { warn:'#fef3c7', danger:'#fee2e2', info:'#eff6ff' };
-  const alertBdr = { warn:'#f59e0b', danger:'#ef4444', info:'#3b82f6' };
-  const alertTxt = { warn:'#78350f', danger:'#991b1b', info:'#1e3a8a' };
-
-  // ── Conteo total de alertas críticas ──
-  const totalAlerts = groupList.reduce((s, g) => s + getAlerts(g.st, g.ng).length, 0);
-
-  // ── Ranking de recursos (barras horizontales) ──
-  const top6 = groupList.slice(0, 6);
-  const maxHHtop = top6.length ? top6[0].st.totalHHP : 1;
-  const rankingRows = top6.map(g => {
-    const w   = Math.round(g.st.totalHHP / maxHHtop * 100);
-    const pct = globalHHP > 0 ? Math.round(g.st.totalHHP / globalHHP * 100) : 0;
-    const alerts = getAlerts(g.st, g.ng);
-    const alertDot = alerts.some(a => a.lvl === 'danger') ? '🔴' : alerts.some(a => a.lvl === 'warn') ? '🟡' : '🟢';
+  // ── Ranking ──
+  const top6=groupList.slice(0,6), maxHH=top6.length?top6[0].st.totalHHP:1;
+  const rankingRows = top6.map(g=>{
+    const w=Math.round(g.st.totalHHP/maxHH*100);
+    const pct=globalHHP>0?Math.round(g.st.totalHHP/globalHHP*100):0;
+    const alerts=getAlerts(g.st);
+    const dot=alerts.some(a=>a.lvl==='danger')?'🔴':alerts.some(a=>a.lvl==='warn')?'🟡':'🟢';
+    const label=cNames[g.ng]||g.ng;
     return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-      <div style="width:10px;text-align:center;flex-shrink:0">${alertDot}</div>
-      <div style="min-width:100px;max-width:140px;font-size:10px;color:var(--txt);text-transform:capitalize;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.ng}</div>
+      <div style="width:12px;flex-shrink:0">${dot}</div>
+      <div style="min-width:110px;max-width:150px;font-size:10px;color:var(--txt);text-transform:capitalize;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${label}">${label}</div>
       <div style="flex:1;height:14px;background:#f1f5f9;border-radius:3px;overflow:hidden">
         <div style="height:100%;width:${w}%;background:var(--navy);border-radius:3px"></div>
       </div>
@@ -5543,43 +5595,74 @@ function buildDashClasif(f) {
     </div>`;
   }).join('');
 
-  // ── Cards de cada categoría ──
-  const cards = groupList.map(({ ng, tasks, st }) => {
-    const pct = globalHHP > 0 ? Math.round(st.totalHHP / globalHHP * 100) : 0;
-    const alerts = getAlerts(st, ng);
+  // ── Cards ──
+  const cards = groupList.map(({ng, tasks, st, related}) => {
+    const label     = cNames[ng] || ng;
+    const safeKey   = ng.replace(/[^a-z0-9]/gi,'_').substring(0,30);
+    const pct       = globalHHP>0?Math.round(st.totalHHP/globalHHP*100):0;
+    const alerts    = getAlerts(st);
+    const borderCol = alerts.some(a=>a.lvl==='danger')?'var(--red)':alerts.some(a=>a.lvl==='warn')?'#f59e0b':'var(--green)';
+    const alertBgCol= alerts.some(a=>a.lvl==='danger')?aBg.danger:alerts.some(a=>a.lvl==='warn')?aBg.warn:'#f0fdf4';
 
-    const ratioColor = st.ratio === null ? 'var(--muted)'
-      : st.ratio > 1.3 ? 'var(--red)' : st.ratio < 0.7 ? 'var(--amber)' : 'var(--green)';
-    const ratioLabel = st.ratio === null ? '—'
-      : st.ratio > 1 ? `+${Math.round((st.ratio-1)*100)}%` : `-${Math.round((1-st.ratio)*100)}%`;
-    const ratioDesc  = st.ratio === null ? 'sin datos' : st.ratio > 1 ? 'subestima' : 'sobreestima';
+    const ratioColor= st.ratio===null?'var(--muted)':st.ratio>1.3?'var(--red)':st.ratio<0.7?'var(--amber)':'var(--green)';
+    const ratioLabel= st.ratio===null?'—':st.ratio>1?`+${Math.round((st.ratio-1)*100)}%`:`-${Math.round((1-st.ratio)*100)}%`;
+    const ratioDesc = st.ratio===null?'sin datos':st.ratio>1?'subestima':'sobreestima';
+    const cvLabel   = st.cv===null?'—':st.cv<0.3?'Baja':st.cv<0.6?'Media':'Alta';
+    const cvColor   = st.cv===null?'var(--muted)':st.cv<0.3?'var(--green)':st.cv<0.6?'var(--amber)':'var(--red)';
 
-    const cvLabel = st.cv === null ? '—' : st.cv < 0.3 ? 'Baja' : st.cv < 0.6 ? 'Media' : 'Alta';
-    const cvColor = st.cv === null ? 'var(--muted)' : st.cv < 0.3 ? 'var(--green)' : st.cv < 0.6 ? 'var(--amber)' : 'var(--red)';
+    const trendBadge= st.trendPct===null?'':st.trendPct>0
+      ?`<span style="font-size:9px;background:#dcfce7;color:#166534;border-radius:3px;padding:1px 5px;margin-left:6px">↑ ${st.trendPct}%</span>`
+      :`<span style="font-size:9px;background:#fee2e2;color:#991b1b;border-radius:3px;padding:1px 5px;margin-left:6px">↓ ${st.trendPct}%</span>`;
 
-    const trendBadge = st.trendPct === null ? ''
-      : st.trendPct > 0 ? `<span style="font-size:9px;background:#dcfce7;color:#166534;border-radius:3px;padding:1px 5px;margin-left:6px">↑ ${st.trendPct}%</span>`
-      : `<span style="font-size:9px;background:#fee2e2;color:#991b1b;border-radius:3px;padding:1px 5px;margin-left:6px">↓ ${st.trendPct}%</span>`;
+    const personBadges = Object.entries(st.byPerson).sort((a,b)=>b[1]-a[1]).slice(0,4)
+      .map(([p,n])=>`<span style="font-size:10px;background:#f1f5f9;border-radius:4px;padding:2px 7px">${shortName(p)} <strong>${n}</strong></span>`).join(' ');
 
-    const personBadges = Object.entries(st.byPerson)
-      .sort((a, b) => b[1] - a[1]).slice(0, 3)
-      .map(([p, n]) => `<span style="font-size:10px;background:#f1f5f9;border-radius:4px;padding:2px 7px;color:var(--txt)">${shortName(p)}&nbsp;<strong>${n}</strong></span>`)
-      .join(' ');
+    const relatedHTML = related.length
+      ? `<div style="margin-top:4px;font-size:10px;color:var(--muted)">Términos relacionados: ${related.map(r=>`<span style="background:#e0e7ff;color:#3730a3;border-radius:3px;padding:1px 5px;margin-right:3px">${cNames[r]||r}</span>`).join('')}</div>`
+      : '';
 
     const alertsHTML = alerts.length
-      ? alerts.map(a => `<div style="font-size:10px;color:${alertTxt[a.lvl]};line-height:1.6;padding:1px 0">▸ ${a.txt}</div>`).join('')
+      ? alerts.map(a=>`<div style="font-size:10px;color:${aTx[a.lvl]};line-height:1.7">▸ ${a.txt}</div>`).join('')
       : `<div style="font-size:10px;color:var(--green)">✅ Sin alertas — categoría bien gestionada</div>`;
 
-    const borderColor = alerts.some(a => a.lvl === 'danger') ? 'var(--red)'
-      : alerts.some(a => a.lvl === 'warn') ? '#f59e0b' : 'var(--green)';
+    // Tabla de detalle de tareas (oculta por defecto)
+    const colEstado = {'Confirmado':'#22c55e','Programado':'#3b82f6','Por Iniciar':'#64748b','En Proceso':'#f59e0b','Standby':'#94a3b8','Cancelado':'#ef4444'};
+    const detalleRows = tasks.map(b => {
+      const hhp=parseFloat(b.hhPlan)||0, hhr=parseFloat(b.hhReal)||0;
+      const desv=hhp>0&&hhr>0?Math.round((hhr/hhp-1)*100):null;
+      const desvTxt=desv===null?'—':desv>0?`<span style="color:var(--red)">+${desv}%</span>`:`<span style="color:var(--green)">${desv}%</span>`;
+      const excluidos=cExcl[ng]||[];
+      const yaExcl=excluidos.includes(b.id);
+      return `<tr style="border-bottom:1px solid #f1f5f9">
+        <td style="padding:4px 6px;font-size:11px;color:var(--muted)">#${b.id}</td>
+        <td style="padding:4px 6px;font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${b.titulo||''}">${(b.titulo||'—').substring(0,35)}${(b.titulo||'').length>35?'…':''}</td>
+        <td style="padding:4px 6px;font-size:11px">${shortName(b.responsable||'')}</td>
+        <td style="padding:4px 6px;font-size:11px">${b.fechaProg||b.fechaReal||'—'}</td>
+        <td style="padding:4px 6px;font-size:11px;text-align:right">${hhp||'—'}h</td>
+        <td style="padding:4px 6px;font-size:11px;text-align:right">${hhr||'—'}h</td>
+        <td style="padding:4px 6px;font-size:11px;text-align:right">${desvTxt}</td>
+        <td style="padding:4px 6px;font-size:11px"><span style="background:${colEstado[b.estado]||'#888'}22;color:${colEstado[b.estado]||'#888'};border-radius:3px;padding:1px 5px;font-size:9px;white-space:nowrap">${b.estado}</span></td>
+        <td style="padding:4px 6px;white-space:nowrap">
+          <button onclick="abrirModal(${b.id})" style="font-size:9px;padding:2px 6px;border:1px solid var(--border);background:none;border-radius:3px;cursor:pointer;margin-right:3px">Ver</button>
+          ${yaExcl
+            ? `<button onclick="incluirEnClasif('${ng.replace(/'/g,"\\'")}',${b.id})" style="font-size:9px;padding:2px 6px;border:1px solid #22c55e;color:#166534;background:#f0fdf4;border-radius:3px;cursor:pointer">↩ Incluir</button>`
+            : `<button onclick="excluirDeClasif('${ng.replace(/'/g,"\\'")}',${b.id})" style="font-size:9px;padding:2px 6px;border:1px solid var(--border);color:var(--muted);background:none;border-radius:3px;cursor:pointer">✕ Excluir</button>`
+          }
+        </td>
+      </tr>`;
+    }).join('');
 
-    return `<div class="cw" style="border-left:4px solid ${borderColor}">
+    return `<div class="cw" style="border-left:4px solid ${borderCol}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;color:var(--navy);text-transform:capitalize;margin-bottom:2px">
-            "${ng}"${trendBadge}
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span style="font-size:13px;font-weight:700;color:var(--navy);text-transform:capitalize">"${label}"</span>
+            ${trendBadge}
+            <button onclick="renameClasif('${ng.replace(/'/g,"\\'")}'); event.stopPropagation();"
+              style="font-size:9px;padding:1px 6px;border:1px solid var(--border);background:none;border-radius:3px;cursor:pointer;color:var(--muted)" title="Renombrar categoría">✏️ Renombrar</button>
           </div>
-          <div style="font-size:11px;color:var(--muted)">${st.n} tarea${st.n>1?'s':''} · ${pct}% de los recursos del período</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${st.n} tarea${st.n>1?'s':''} · ${pct}% de los recursos del período · patrón: "${ng}"</div>
+          ${relatedHTML}
         </div>
         <div style="text-align:right;flex-shrink:0;margin-left:12px">
           <div style="font-family:Montserrat,sans-serif;font-size:22px;font-weight:800;color:var(--navy)">${st.totalHHP}h</div>
@@ -5594,7 +5677,7 @@ function buildDashClasif(f) {
         </div>
         <div style="text-align:center;padding:6px 4px;background:#f8fafc;border-radius:6px">
           <div style="font-size:8px;color:var(--muted);font-weight:700;text-transform:uppercase">HHR prom</div>
-          <div style="font-size:16px;font-weight:800;color:var(--navy)">${st.avgHHR || '—'}${st.avgHHR?'<span style="font-size:10px">h</span>':''}</div>
+          <div style="font-size:16px;font-weight:800;color:var(--navy)">${st.avgHHR?st.avgHHR+'h':'—'}</div>
         </div>
         <div style="text-align:center;padding:6px 4px;background:#f8fafc;border-radius:6px">
           <div style="font-size:8px;color:var(--muted);font-weight:700;text-transform:uppercase">Desviación</div>
@@ -5604,39 +5687,87 @@ function buildDashClasif(f) {
         <div style="text-align:center;padding:6px 4px;background:#f8fafc;border-radius:6px">
           <div style="font-size:8px;color:var(--muted);font-weight:700;text-transform:uppercase">Variabilidad</div>
           <div style="font-size:16px;font-weight:800;color:${cvColor}">${cvLabel}</div>
-          <div style="font-size:8px;color:${cvColor}">${st.cv !== null ? 'CV='+st.cv : 'pocos datos'}</div>
+          <div style="font-size:8px;color:${cvColor}">${st.cv!==null?'CV='+st.cv:'pocos datos'}</div>
         </div>
       </div>
 
       <div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">${personBadges}</div>
 
-      <div style="padding:7px 9px;background:${alerts.some(a=>a.lvl==='danger')?alertBg.danger:alerts.some(a=>a.lvl==='warn')?alertBg.warn:'#f0fdf4'};
-        border-radius:6px;border-left:3px solid ${borderColor}">
+      <div style="padding:7px 9px;background:${alertBgCol};border-radius:6px;border-left:3px solid ${borderCol};margin-bottom:8px">
         ${alertsHTML}
+      </div>
+
+      <button id="btn-${safeKey}" onclick="toggleClasifDetail('${safeKey}')"
+        style="width:100%;padding:6px;background:#f8fafc;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:11px;color:var(--navy);font-weight:600">
+        &#9660; Ver ${tasks.length} tarea${tasks.length>1?'s':''}
+      </button>
+
+      <div id="det-${safeKey}" style="display:none;margin-top:8px;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead><tr style="border-bottom:2px solid var(--border);background:#f8fafc">
+            <th style="padding:4px 6px;text-align:left;font-size:10px;color:var(--muted)">#</th>
+            <th style="padding:4px 6px;text-align:left;font-size:10px;color:var(--muted)">Título</th>
+            <th style="padding:4px 6px;text-align:left;font-size:10px;color:var(--muted)">Persona</th>
+            <th style="padding:4px 6px;text-align:left;font-size:10px;color:var(--muted)">Fecha</th>
+            <th style="padding:4px 6px;text-align:right;font-size:10px;color:var(--muted)">HHP</th>
+            <th style="padding:4px 6px;text-align:right;font-size:10px;color:var(--muted)">HHR</th>
+            <th style="padding:4px 6px;text-align:right;font-size:10px;color:var(--muted)">Desv.</th>
+            <th style="padding:4px 6px;text-align:left;font-size:10px;color:var(--muted)">Estado</th>
+            <th></th>
+          </tr></thead>
+          <tbody>${detalleRows}</tbody>
+        </table>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px;padding:4px 0">
+          💡 Usa <strong>✕ Excluir</strong> para quitar tareas que no pertenezcan a esta categoría. El cambio se guarda localmente.
+        </div>
       </div>
     </div>`;
   });
 
   // Card "Sin clasificar"
   if (sinClasif.length > 0) {
-    const scSt = stats(sinClasif);
-    const scPct = globalHHP > 0 ? Math.round(scSt.totalHHP / globalHHP * 100) : 0;
-    cards.push(`<div class="cw" style="border-left:4px solid #94a3b8;opacity:0.75">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    const scSt=calcSt(sinClasif);
+    const scPct=globalHHP>0?Math.round(scSt.totalHHP/globalHHP*100):0;
+    const scKey='sin_clasificar';
+    const scRows=sinClasif.map(b=>`<tr style="border-bottom:1px solid #f1f5f9">
+      <td style="padding:4px 6px;font-size:11px;color:var(--muted)">#${b.id}</td>
+      <td style="padding:4px 6px;font-size:11px">${(b.titulo||'—').substring(0,40)}${(b.titulo||'').length>40?'…':''}</td>
+      <td style="padding:4px 6px;font-size:11px">${shortName(b.responsable||'')}</td>
+      <td style="padding:4px 6px;font-size:11px">${b.fechaProg||b.fechaReal||'—'}</td>
+      <td style="padding:4px 6px;font-size:11px;text-align:right">${parseFloat(b.hhPlan)||'—'}h</td>
+      <td style="padding:4px 6px"><button onclick="abrirModal(${b.id})" style="font-size:9px;padding:2px 6px;border:1px solid var(--border);background:none;border-radius:3px;cursor:pointer">Ver</button></td>
+    </tr>`).join('');
+    cards.push(`<div class="cw" style="border-left:4px solid #94a3b8">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div>
           <div style="font-size:13px;font-weight:700;color:#64748b">Sin clasificar</div>
           <div style="font-size:11px;color:var(--muted)">${sinClasif.length} tarea${sinClasif.length>1?'s':''} · ${scPct}% de HH · sin patrón repetido</div>
         </div>
         <div style="font-family:Montserrat,sans-serif;font-size:22px;font-weight:800;color:#94a3b8">${scSt.totalHHP}h</div>
       </div>
-      <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.6">
-        Estas tareas no comparten términos con al menos ${minFreq} otras tareas del período. Pueden ser trabajos únicos, puntuales o con títulos muy distintos entre sí.
-        ${sinClasif.length > 10 ? ' Considera estandarizar la nomenclatura de los títulos para mejorar la clasificación.' : ''}
+      <div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.6">
+        Tareas sin términos que aparezcan ${minFreq}+ veces. ${sinClasif.length>10?'Considera estandarizar la nomenclatura de los títulos.':'Son trabajos puntuales o únicos.'}
+      </div>
+      <button id="btn-${scKey}" onclick="toggleClasifDetail('${scKey}')"
+        style="width:100%;padding:6px;background:#f8fafc;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:11px;color:#64748b;font-weight:600">
+        &#9660; Ver ${sinClasif.length} tarea${sinClasif.length>1?'s':''}
+      </button>
+      <div id="det-${scKey}" style="display:none;margin-top:8px;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="border-bottom:2px solid var(--border);background:#f8fafc">
+            <th style="padding:4px 6px;font-size:10px;color:var(--muted)">#</th>
+            <th style="padding:4px 6px;font-size:10px;color:var(--muted)">Título</th>
+            <th style="padding:4px 6px;font-size:10px;color:var(--muted)">Persona</th>
+            <th style="padding:4px 6px;font-size:10px;color:var(--muted)">Fecha</th>
+            <th style="padding:4px 6px;font-size:10px;color:var(--muted)">HHP</th>
+            <th></th>
+          </tr></thead>
+          <tbody>${scRows}</tbody>
+        </table>
       </div>
     </div>`);
   }
 
-  // ── HTML final ──
   return `
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:4px;margin-bottom:14px">
     <div class="cw" style="text-align:center;padding:14px 8px">
@@ -5647,7 +5778,7 @@ function buildDashClasif(f) {
     <div class="cw" style="text-align:center;padding:14px 8px">
       <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:4px">Clasificadas</div>
       <div style="font-family:Montserrat,sans-serif;font-size:28px;font-weight:800;color:var(--navy)">${pctClasif}%</div>
-      <div style="font-size:10px;color:var(--muted)">${bl.length - sinClasif.length} de ${bl.length}</div>
+      <div style="font-size:10px;color:var(--muted)">${bl.length-sinClasif.length} de ${bl.length}</div>
     </div>
     <div class="cw" style="text-align:center;padding:14px 8px">
       <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:4px">HH Totales</div>
@@ -5665,11 +5796,11 @@ function buildDashClasif(f) {
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <span style="font-size:18px">🎯</span>
       <div class="ct" style="margin:0">Ranking — Dónde va el tiempo del equipo</div>
-      <span style="font-size:10px;color:var(--muted);margin-left:auto">🟢 sin alertas &nbsp;🟡 advertencia &nbsp;🔴 crítico</span>
+      <span style="font-size:10px;color:var(--muted);margin-left:auto">🟢 ok &nbsp;🟡 advertencia &nbsp;🔴 crítico</span>
     </div>
     ${rankingRows}
-    ${sinClasif.length > 0 ? `<div style="font-size:10px;color:var(--muted);margin-top:8px;border-top:1px solid var(--border);padding-top:6px">
-      + ${sinClasif.length} tarea${sinClasif.length>1?'s':''} sin clasificar (${globalHHP>0?Math.round(stats(sinClasif).totalHHP/globalHHP*100):0}% de HH)</div>` : ''}
+    ${sinClasif.length>0?`<div style="font-size:10px;color:var(--muted);margin-top:8px;border-top:1px solid var(--border);padding-top:6px">
+      + ${sinClasif.length} tarea${sinClasif.length>1?'s':''} sin clasificar (${globalHHP>0?Math.round(calcSt(sinClasif).totalHHP/globalHHP*100):0}% de HH)</div>`:''}
   </div>
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
