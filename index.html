@@ -919,11 +919,18 @@ function bloqueYaTermino(b) {
   const now = new Date();
   return now.getHours()*60 + now.getMinutes() >= t2m(b.horaFinProg);
 }
-function dateStr(d) { return d instanceof Date?d.toISOString().split('T')[0]:String(d||'').substring(0,10); }
-function todayStr() { return new Date().toISOString().split('T')[0]; }
+function dateStr(d) {
+  if (!(d instanceof Date)) return String(d||'').substring(0,10);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function todayStr() {
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function mondayStr() {
-  const d=new Date(); d.setDate(d.getDate()-d.getDay()+(d.getDay()===0?-6:1));
-  return d.toISOString().split('T')[0];
+  const d=new Date();
+  d.setDate(d.getDate()-d.getDay()+(d.getDay()===0?-6:1));
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function validate(fields) {
   const miss=[];
@@ -1229,7 +1236,9 @@ const SECS = {
       {id:'dRend',    ico:'⚡',  lbl:'Rendimiento', adminOnly:true},
       {id:'dCostos',  ico:'💰', lbl:'Costos', adminOnly:true},
       {id:'dGlobal',  ico:'🗂',  lbl:'Vista Global'},
-      {id:'dReporte', ico:'📊', lbl:'Reporte Productividad', adminOnly:true},
+      {id:'dReporte',  ico:'📊', lbl:'Reporte Productividad', adminOnly:true},
+      {id:'dAnalisis', ico:'🔍', lbl:'Análisis Inteligente',  adminOnly:true},
+      {id:'dClasif',   ico:'🧩', lbl:'Clasificador de Tareas', adminOnly:true},
     ]
   },
   C: {
@@ -1389,6 +1398,12 @@ async function goSub(sec, sub) {
     case 'dReporte':
       main.innerHTML=vDashReporte();
       setTimeout(()=>applyDashFilter('reporte'),80); break;
+    case 'dAnalisis':
+      main.innerHTML=vDashAnalisis();
+      setTimeout(()=>applyDashFilter('analisis'),80); break;
+    case 'dClasif':
+      main.innerHTML=vDashClasif();
+      setTimeout(()=>applyDashFilter('clasif'),80); break;
     // SECTION C
     case 'cRegistros':  main.innerHTML=vCRegistros(); setTimeout(()=>initRegistros(),50); break;
     case 'cUsuarios':   main.innerHTML=`<div class="skel-card"><div class="skel skel-line" style="width:40%;height:20px;margin-bottom:16px"></div>
@@ -1538,7 +1553,7 @@ function agRenderMiniCal() {
   if (lbl) lbl.textContent = `${meses[m]} ${y}`;
 
   // Get current week dates for highlight
-  const weekDates = new Set(calGetDates().map(d => d.toISOString().split('T')[0]));
+  const weekDates = new Set(calGetDates().map(d => dateStr(d)));
 
   const first = new Date(y, m, 1);
   const last  = new Date(y, m+1, 0);
@@ -1562,11 +1577,21 @@ function agRenderMiniCal() {
 
 function agMiniGoDate(ds) {
   // Navigate calendar to the week containing ds
+  // Find Monday of week containing ds
   const d = new Date(ds + 'T12:00:00');
+  const dowD = d.getDay(); // 0=Sun
+  const daysToMonD = dowD === 0 ? -6 : 1 - dowD;
+  const clickedMonday = new Date(d);
+  clickedMonday.setDate(d.getDate() + daysToMonD);
+
+  // Find Monday of base week (today, _calOffset=0)
   const today = new Date(todayStr() + 'T12:00:00');
-  const diffDays = Math.round((d - today) / 86400000);
-  const diffWeeks = Math.floor(diffDays / 7);
-  _calOffset = diffWeeks;
+  const dowT = today.getDay();
+  const daysToMonT = dowT === 0 ? -6 : 1 - dowT;
+  const baseMonday = new Date(today);
+  baseMonday.setDate(today.getDate() + daysToMonT);
+
+  _calOffset = Math.round((clickedMonday - baseMonday) / (7 * 86400000));
   calRender();
   agRenderMiniCal();
   agRenderEquipo();
@@ -1584,7 +1609,7 @@ function agRenderEquipo() {
     // compute avg weekly saturation
     let totalSat = 0, daysCount = 0;
     dates.forEach(d => {
-      const ds = d.toISOString().split('T')[0];
+      const ds = dateStr(d);
       const blks = getWorkBlocks(ds, p);
       if (!blks) return;
       const tw = blks.reduce((s,b)=>s+(b.end-b.start),0)/60;
@@ -1804,11 +1829,11 @@ function calRender() {
   }
 
   const hStart = 7, hEnd = 20, nHours = hEnd - hStart;
-  const dateStrs = dates.map(d => d.toISOString().split('T')[0]);
+  const dateStrs = dates.map(d => dateStr(d));
 
   // Build header
   const hdrCells = dates.map(d => {
-    const ds = d.toISOString().split('T')[0];
+    const ds = dateStr(d);
     const isToday = ds === todayS;
     const dow = d.getDay();
     const isSat = dow===0||dow===6;
@@ -1868,7 +1893,7 @@ function calRender() {
       : sat>0 ? `<div style="font-size:9px;color:${satColor};font-weight:700">${sat}%</div>` : '';
     const ferStyle = isFer ? 'background:#fffbeb;' : '';
     const ferBorder = isFer ? 'border-bottom:3px solid #f59e0b;' : sat>=80?'border-bottom:3px solid #e63329':sat>=60?'border-bottom:3px solid #c97a00':'';
-    const ferTip = isAdmin ? ` title="${isFer?'Clic para quitar feriado':'Clic para marcar feriado'}" style="cursor:pointer;${ferStyle}${ferBorder}" onclick="toggleFeriado('${ds}')"` : ` style="${ferStyle}${ferBorder}"`;
+    const ferTip = ` style="${ferStyle}${ferBorder}"`;
 
     return `<div class="cal-day-hdr ${isToday?'today':''} ${isSat||isFer?'sat-col':''}"${ferTip}>
       <div class="dn">${d.toLocaleDateString('es-CL',{weekday:'short'}).toUpperCase()}</div>
@@ -1879,7 +1904,7 @@ function calRender() {
 
   // Build columns
   const cols = dates.map(d => {
-    const ds = d.toISOString().split('T')[0];
+    const ds = dateStr(d);
     const dow = d.getDay();
     const isSat = dow===0||dow===6;
     const blks = getWorkBlocks(ds, person);
@@ -2008,7 +2033,7 @@ function calRenderMes(dates, person, todayS) {
   const days = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const blanks = Array(firstDow).fill('<div></div>');
   const cells = dates.map(d => {
-    const ds = d.toISOString().split('T')[0];
+    const ds = dateStr(d);
     const isToday = ds === todayS;
     const daySes = getBloquesForPersonOnDate(person, ds);
     const items = daySes.slice(0,2).map(s =>
@@ -2779,6 +2804,12 @@ async function applyDashFilter(id) {
     } else if (id === 'reporte') {
       html = buildDashReporte(f);
       cont.innerHTML = html;
+    } else if (id === 'analisis') {
+      html = buildDashAnalisis(f);
+      cont.innerHTML = html;
+    } else if (id === 'clasif') {
+      html = buildDashClasif(f);
+      cont.innerHTML = html;
     } else {
       const data = await apiGet({accion:'dashboard', desde:f.desde, hasta:f.hasta});
       cont.innerHTML = renderDashBloques(data, f);
@@ -2902,7 +2933,7 @@ function buildDashPlanTactico(f) {
   const tareas = filtrarTareas(f);
   const hoy = todayStr();
   const ayer = new Date(); ayer.setDate(ayer.getDate()-1);
-  const ayerStr = ayer.toISOString().split('T')[0];
+  const ayerStr = dateStr(ayer);
 
   // Tasa de programación mensual
   const conFecha = tareas.filter(t => t.fechaEjecucion).length;
@@ -3824,8 +3855,8 @@ async function guardarNuevoBloque() {
 function buildDashPlan(f) {
   const tareas=filtrarTareas(f);
   const hoy=todayStr();
-  const ayer=new Date();ayer.setDate(ayer.getDate()-1);const ayerStr=ayer.toISOString().split('T')[0];
-  const prox3=new Date();prox3.setDate(prox3.getDate()+3);const prox3Str=prox3.toISOString().split('T')[0];
+  const ayer=new Date();ayer.setDate(ayer.getDate()-1);const ayerStr=dateStr(ayer);
+  const prox3=new Date();prox3.setDate(prox3.getDate()+3);const prox3Str=dateStr(prox3);
 
   // Unprogrammed > 1 day
   const sinProg=tareas.filter(t=>!t.fechaEjecucion&&!['Listo','Cancelado'].includes(t.estado)&&t.fechaIngreso<=ayerStr);
@@ -3956,7 +3987,7 @@ function buildDashPlan(f) {
   <!-- Carga del día - same format as carga futura -->
   ${(()=>{
     const today=new Date();
-    const days=[0,1,2].map(d=>{const dt=new Date(today);dt.setDate(today.getDate()+d);return dt.toISOString().split('T')[0];});
+    const days=[0,1,2].map(d=>{const dt=new Date(today);dt.setDate(today.getDate()+d);return dateStr(dt);});
     const labels=['Hoy','Mañana','Pasado mañana'];
     const cards=days.map((ds,i)=>{
       const dt2=BLOQUES.filter(b=>f.users.includes(b.responsable)&&(b.fechaProg===ds||b.fechaReal===ds)&&!['Confirmado','Cancelado'].includes(b.estado));
@@ -4457,7 +4488,7 @@ function dashPeriodo(id, p, btn) {
   let desde;
   if(p==='hoy')desde=hoy;
   else if(p==='semana')desde=mondayStr();
-  else desde=new Date().toISOString().slice(0,7)+'-01';
+  else { const _n=new Date(); desde=`${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-01`; }
   document.getElementById(`${id}-d`).value=desde;
   document.getElementById(`${id}-h`).value=hoy;
   applyDashFilter(id);
@@ -4584,7 +4615,7 @@ function vGlobal() {
 function buildDashGlobal(f) {
   const tareas=filtrarTareas(f);
   const hoy=todayStr();
-  const ayer=new Date();ayer.setDate(ayer.getDate()-1);const ayerStr=ayer.toISOString().split('T')[0];
+  const ayer=new Date();ayer.setDate(ayer.getDate()-1);const ayerStr=dateStr(ayer);
 
   const vigentes=tareas.filter(t=>!['Listo','Cancelado'].includes(t.estado));
   const noVigentes=tareas.filter(t=>['Listo','Cancelado'].includes(t.estado));
@@ -5045,14 +5076,606 @@ function buildDashReporte(f) {
   </div>`;
 }
 
-function initRegistros(){
-  const t=document.getElementById('srT'),a=document.getElementById('srA');
-  (LISTAS['Tipo']||[]).forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;t?.appendChild(o);});
-  (LISTAS['Area']||[]).forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;a?.appendChild(o);});
-  buscarReg();
+// ══════════════════════════════════════════════════════════
+// ANÁLISIS INTELIGENTE
+// ══════════════════════════════════════════════════════════
+function vDashAnalisis() {
+  return `
+  <div class="ph"><div class="pt"><div class="rb"></div>Análisis Inteligente</div>
+    <div class="pd">Tendencias históricas, patrones operativos y anomalías en la base de tareas.</div></div>
+  ${buildDashFilterBar('analisis')}
+  <div id="dash-content-analisis"></div>`;
 }
 
+function buildDashAnalisis(f) {
+  const hoy = todayStr();
 
+  // Bloques filtrados por período y usuarios
+  const bl = BLOQUES.filter(b => {
+    if (f.users.length>0 && !f.users.includes(b.responsable)) return false;
+    const fd = b.fechaProg||b.fechaIngreso||'';
+    if (f.desde && fd < f.desde) return false;
+    if (f.hasta && fd > f.hasta) return false;
+    return true;
+  });
+
+  if (bl.length === 0) return `<div class="al w"><span class="al-ico">📭</span><div class="al-txt">No hay datos para el período y filtros seleccionados.</div></div>`;
+
+  // ── 1: Tendencia semanal (últimas 12 semanas) ──
+  const semanas = [];
+  const baseD = new Date(hoy + 'T12:00:00');
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(baseD); d.setDate(baseD.getDate() - i*7);
+    const dow = d.getDay();
+    const mon = new Date(d); mon.setDate(d.getDate() + (dow===0?-6:1-dow));
+    const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+    const monStr = dateStr(mon), sunStr = dateStr(sun);
+    const bSem = BLOQUES.filter(b => {
+      if (f.users.length>0 && !f.users.includes(b.responsable)) return false;
+      const fd = b.fechaReal||b.fechaProg||''; return fd>=monStr && fd<=sunStr;
+    });
+    const conf = bSem.filter(b=>b.estado==='Confirmado');
+    semanas.push({ label: mon.toLocaleDateString('es-CL',{day:'numeric',month:'short'}),
+      conf: conf.length, hh: conf.reduce((s,b)=>s+(parseFloat(b.hhReal)||0),0), total: bSem.length });
+  }
+  const maxHHSem = Math.max(...semanas.map(s=>s.hh), 1);
+  const tendenciaRows = semanas.map((s,i) => {
+    const w = Math.round(s.hh/maxHHSem*100);
+    const isCurrent = i===semanas.length-1;
+    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+      <div style="width:50px;font-size:9px;color:var(--muted);text-align:right;flex-shrink:0">${s.label}</div>
+      <div style="flex:1;height:14px;background:#f1f5f9;border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${w}%;background:${isCurrent?'var(--navy)':'#60a5fa'};border-radius:3px"></div>
+      </div>
+      <div style="width:70px;font-size:10px;color:var(--navy);font-weight:700;text-align:right;flex-shrink:0">${Math.round(s.hh*10)/10}h &nbsp;<span style="color:var(--muted);font-weight:400">${s.conf}t</span></div>
+    </div>`;
+  }).join('');
+  const ult4hh = semanas.slice(-4).reduce((s,w)=>s+w.hh,0);
+  const ant4hh = semanas.slice(-8,-4).reduce((s,w)=>s+w.hh,0);
+  const tendPct = ant4hh>0 ? Math.round((ult4hh-ant4hh)/ant4hh*100) : 0;
+  const tendColor = tendPct>10?'var(--green)':tendPct<-10?'var(--red)':'var(--muted)';
+  const tendTxt = tendPct>10 ? `📈 Carga +${tendPct}% vs las 4 semanas anteriores`
+    : tendPct<-10 ? `📉 Carga ${tendPct}% vs las 4 semanas anteriores`
+    : `➡️ Carga estable (${tendPct>0?'+':''}${tendPct}% vs semanas anteriores)`;
+
+  // ── 2: Inventario total por estado (todos los usuarios filtrados, sin rango de fecha) ──
+  const todosU = BLOQUES.filter(b => f.users.length===0||f.users.includes(b.responsable));
+  const colEst = {'Por Iniciar':'#64748b','Programado':'#3b82f6','En Proceso':'#f59e0b','Standby':'#94a3b8','Confirmado':'#22c55e','Cancelado':'#ef4444'};
+  const countEst = {};
+  todosU.forEach(b => { countEst[b.estado]=(countEst[b.estado]||0)+1; });
+  const totalEst = todosU.length;
+  const estRows = ['Por Iniciar','Programado','En Proceso','Standby','Confirmado','Cancelado']
+    .filter(e=>countEst[e]).map(e => {
+      const pct = Math.round((countEst[e]||0)/totalEst*100);
+      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+        <div style="width:14px;height:14px;border-radius:3px;background:${colEst[e]};flex-shrink:0"></div>
+        <div style="flex:1;font-size:11px;color:var(--txt)">${e}</div>
+        <div style="width:90px;height:10px;background:#f1f5f9;border-radius:3px;overflow:hidden;flex-shrink:0">
+          <div style="height:100%;width:${pct}%;background:${colEst[e]};border-radius:3px"></div>
+        </div>
+        <div style="width:60px;text-align:right;font-size:11px;font-weight:700;color:var(--navy);flex-shrink:0">${countEst[e]} <span style="color:var(--muted);font-weight:400">(${pct}%)</span></div>
+      </div>`;
+    }).join('');
+  const activos = (countEst['Por Iniciar']||0)+(countEst['Programado']||0)+(countEst['En Proceso']||0);
+  const pctConf = totalEst>0?Math.round((countEst['Confirmado']||0)/totalEst*100):0;
+  const inventInsight = `Inventario activo: ${activos} bloques · ${countEst['Confirmado']||0} confirmados (${pctConf}% del total) · ${countEst['Cancelado']||0} cancelados.`;
+
+  // ── 3: Carga por día de semana ──
+  const diasN = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const cargaDia = [0,0,0,0,0,0,0], contDia = [0,0,0,0,0,0,0];
+  bl.forEach(b => {
+    const ds = b.fechaProg||b.fechaReal||''; if(!ds) return;
+    const dow = new Date(ds+'T12:00:00').getDay();
+    cargaDia[dow] += parseFloat(b.hhPlan)||parseFloat(b.hhReal)||0;
+    contDia[dow]++;
+  });
+  const maxCargaDia = Math.max(...cargaDia, 1);
+  const diaRows = [1,2,3,4,5,6,0].map(i => {
+    const w = Math.round(cargaDia[i]/maxCargaDia*100);
+    const isFinde = i===0||i===6;
+    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+      <div style="width:28px;font-size:10px;color:${isFinde?'var(--muted)':'var(--txt)'};font-weight:${isFinde?'400':'600'};flex-shrink:0">${diasN[i]}</div>
+      <div style="flex:1;height:14px;background:#f1f5f9;border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${w}%;background:${isFinde?'#94a3b8':'var(--navy)'};border-radius:3px"></div>
+      </div>
+      <div style="width:70px;font-size:10px;text-align:right;color:var(--navy);font-weight:700;flex-shrink:0">${Math.round(cargaDia[i]*10)/10}h <span style="color:var(--muted);font-weight:400">(${contDia[i]})</span></div>
+    </div>`;
+  }).join('');
+  const diaMaxI = cargaDia.indexOf(Math.max(...cargaDia));
+  const diaInsight = `${diasN[diaMaxI]} es el día con mayor carga.${(cargaDia[0]+cargaDia[6])>0?` · ${Math.round((cargaDia[0]+cargaDia[6])*10)/10}h en fines de semana.`:''}`;
+
+  // ── 4: Tiempo de espera ingreso → ejecución ──
+  const tiempos = bl.filter(b=>b.fechaIngreso&&(b.fechaProg||b.fechaReal)).map(b=>{
+    return Math.round((new Date((b.fechaProg||b.fechaReal)+'T12:00:00')-new Date(b.fechaIngreso+'T12:00:00'))/86400000);
+  }).filter(d=>d>=0&&d<365);
+  const promEsp = tiempos.length>0?Math.round(tiempos.reduce((a,b)=>a+b,0)/tiempos.length):0;
+  const mediana = tiempos.length>0?(()=>{const s=[...tiempos].sort((a,b)=>a-b);const m=Math.floor(s.length/2);return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2);})():0;
+  const p90 = tiempos.length>0?(()=>{const s=[...tiempos].sort((a,b)=>a-b);return s[Math.floor(s.length*0.9)]||0;})():0;
+  const p90Color = p90>14?'var(--red)':p90>7?'var(--amber)':'var(--green)';
+  const esperaInsight = tiempos.length>0
+    ? `${p90>14?'⚠️ El 10% de tareas tarda más de '+p90+' días en ejecutarse.':p90>7?'Tiempo de respuesta moderado.':'✅ Respuesta rápida.'} Mediana ${mediana}d · Promedio ${promEsp}d.`
+    : 'Sin suficientes datos de fechas para calcular tiempos.';
+
+  // ── 5: Top palabras en títulos (frecuencia) ──
+  const stopwords = new Set(['de','la','el','en','y','a','los','del','las','un','una','con','por','para','al','se','que','es','no','lo','su','más']);
+  const wordFreq = {};
+  bl.forEach(b => {
+    (b.titulo||'').toLowerCase().split(/[\s,.\-\/\\()]+/).filter(w=>w.length>3&&!stopwords.has(w)).forEach(w=>{
+      wordFreq[w]=(wordFreq[w]||0)+1;
+    });
+  });
+  const topWords = Object.entries(wordFreq).filter(([,n])=>n>=2).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const maxWord = topWords.length>0?topWords[0][1]:1;
+  const wordRows = topWords.map(([w,n])=>{
+    const pw = Math.round(n/maxWord*100);
+    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <div style="flex:1;font-size:11px;color:var(--txt);text-transform:capitalize">${w}</div>
+      <div style="width:80px;height:10px;background:#f1f5f9;border-radius:3px;overflow:hidden;flex-shrink:0">
+        <div style="height:100%;width:${pw}%;background:#7c3aed;border-radius:3px"></div>
+      </div>
+      <div style="width:30px;text-align:right;font-size:11px;font-weight:700;color:#7c3aed;flex-shrink:0">${n}</div>
+    </div>`;
+  }).join('');
+  const wordInsight = topWords.length>0
+    ? `Top término: "${topWords[0][0]}" aparece ${topWords[0][1]}× · ${topWords.length} términos frecuentes detectados.`
+    : 'No hay términos repetidos con frecuencia suficiente en el período.';
+
+  // ── 6: Anomalías ──
+  const sinProgViejas = BLOQUES.filter(b=>{
+    if(!['Por Iniciar','Standby'].includes(b.estado)) return false;
+    if(f.users.length>0&&!f.users.includes(b.responsable)) return false;
+    if(!b.fechaIngreso) return false;
+    return Math.round((new Date(hoy+'T12:00:00')-new Date(b.fechaIngreso+'T12:00:00'))/86400000)>30;
+  }).sort((a,b)=>{
+    const da=Math.round((new Date(hoy+'T12:00:00')-new Date(a.fechaIngreso+'T12:00:00'))/86400000);
+    const db=Math.round((new Date(hoy+'T12:00:00')-new Date(b.fechaIngreso+'T12:00:00'))/86400000);
+    return db-da;
+  }).slice(0,8);
+
+  const outliers = bl.filter(b=>{
+    const p=parseFloat(b.hhPlan)||0, r=parseFloat(b.hhReal)||0;
+    return p>0&&r>0&&r>2*p&&(r-p)>1;
+  }).sort((a,b)=>(parseFloat(b.hhReal)||0)/(parseFloat(b.hhPlan)||1)-(parseFloat(a.hhReal)||0)/(parseFloat(a.hhPlan)||1)).slice(0,5);
+
+  const anomRows = [
+    ...sinProgViejas.map(b=>{
+      const dias=Math.round((new Date(hoy+'T12:00:00')-new Date(b.fechaIngreso+'T12:00:00'))/86400000);
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:5px 6px"><span style="background:#fef3c7;color:#92400e;border-radius:3px;padding:1px 5px;font-size:9px;white-space:nowrap">⏳ SIN PROG</span></td>
+        <td style="padding:5px 6px;font-size:11px">#${b.id} ${(b.titulo||'').substring(0,28)}${(b.titulo||'').length>28?'…':''}</td>
+        <td style="padding:5px 6px;font-size:11px">${shortName(b.responsable||'')}</td>
+        <td style="padding:5px 6px;font-size:11px;color:var(--red);font-weight:700;white-space:nowrap">${dias} días</td>
+        <td style="padding:5px 6px"><button onclick="abrirModal(${b.id})" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:10px;padding:2px 7px">Ver</button></td>
+      </tr>`;
+    }),
+    ...outliers.map(b=>{
+      const p=parseFloat(b.hhPlan)||0, r=parseFloat(b.hhReal)||0;
+      const ratio=Math.round(r/p*10)/10;
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:5px 6px"><span style="background:#fee2e2;color:#991b1b;border-radius:3px;padding:1px 5px;font-size:9px;white-space:nowrap">📊 OUTLIER</span></td>
+        <td style="padding:5px 6px;font-size:11px">#${b.id} ${(b.titulo||'').substring(0,28)}${(b.titulo||'').length>28?'…':''}</td>
+        <td style="padding:5px 6px;font-size:11px">${shortName(b.responsable||'')}</td>
+        <td style="padding:5px 6px;font-size:11px;color:var(--red);font-weight:700;white-space:nowrap">${ratio}x (${p}h→${r}h)</td>
+        <td style="padding:5px 6px"><button onclick="abrirModal(${b.id})" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:10px;padding:2px 7px">Ver</button></td>
+      </tr>`;
+    })
+  ].join('');
+
+  return `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px">
+
+    <!-- Tendencia 12 semanas -->
+    <div class="cw" style="grid-column:1/-1">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <span style="font-size:18px">📈</span>
+        <div class="ct" style="margin:0">Tendencia — Últimas 12 Semanas (HH confirmadas)</div>
+        <span style="font-size:11px;color:${tendColor};margin-left:auto">${tendTxt}</span>
+      </div>
+      ${tendenciaRows}
+      <div style="font-size:10px;color:var(--muted);margin-top:8px">Barras = HH reales confirmadas · t = bloques confirmados · Azul oscuro = semana actual</div>
+    </div>
+
+    <!-- Inventario por estado -->
+    <div class="cw">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span style="font-size:18px">🗂</span>
+        <div class="ct" style="margin:0">Inventario Total por Estado</div>
+      </div>
+      ${estRows||'<div class="emp">Sin datos</div>'}
+      <div style="font-size:11px;color:var(--txt);line-height:1.5;padding-top:8px;border-top:1px solid var(--border);margin-top:8px">${inventInsight}</div>
+    </div>
+
+    <!-- Patrones por día de semana -->
+    <div class="cw">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span style="font-size:18px">📅</span>
+        <div class="ct" style="margin:0">Carga por Día de Semana</div>
+      </div>
+      ${diaRows}
+      <div style="font-size:11px;color:var(--txt);line-height:1.5;padding-top:8px;border-top:1px solid var(--border);margin-top:8px">${diaInsight}</div>
+    </div>
+
+    <!-- Tiempo de espera -->
+    <div class="cw">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span style="font-size:18px">⏱</span>
+        <div class="ct" style="margin:0">Tiempo de Espera (Ingreso → Ejecución)</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+        <div style="text-align:center;padding:10px 6px;background:#f8fafc;border-radius:8px">
+          <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700">Mediana</div>
+          <div style="font-family:Montserrat,sans-serif;font-size:24px;font-weight:800;color:var(--navy)">${mediana}</div>
+          <div style="font-size:10px;color:var(--muted)">días</div>
+        </div>
+        <div style="text-align:center;padding:10px 6px;background:#f8fafc;border-radius:8px">
+          <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700">Promedio</div>
+          <div style="font-family:Montserrat,sans-serif;font-size:24px;font-weight:800;color:var(--navy)">${promEsp}</div>
+          <div style="font-size:10px;color:var(--muted)">días</div>
+        </div>
+        <div style="text-align:center;padding:10px 6px;background:#f8fafc;border-radius:8px">
+          <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700">P90</div>
+          <div style="font-family:Montserrat,sans-serif;font-size:24px;font-weight:800;color:${p90Color}">${p90}</div>
+          <div style="font-size:10px;color:var(--muted)">días</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--txt);line-height:1.5">${esperaInsight}</div>
+    </div>
+
+    <!-- Top palabras en títulos -->
+    <div class="cw">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span style="font-size:18px">💬</span>
+        <div class="ct" style="margin:0">Términos Más Frecuentes en Tareas</div>
+      </div>
+      ${wordRows||'<div class="emp">No hay términos frecuentes en el período.</div>'}
+      <div style="font-size:11px;color:var(--txt);line-height:1.5;padding-top:8px;border-top:1px solid var(--border);margin-top:8px">${wordInsight}</div>
+    </div>
+
+    <!-- Anomalías -->
+    <div class="cw" style="grid-column:1/-1">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span style="font-size:18px">🚨</span>
+        <div class="ct" style="margin:0">Anomalías y Alertas</div>
+        <span style="font-size:11px;color:var(--muted);margin-left:auto">${sinProgViejas.length} sin programar &gt;30d &nbsp;·&nbsp; ${outliers.length} outliers de duración</span>
+      </div>
+      ${anomRows
+        ? `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+            <thead><tr style="border-bottom:2px solid var(--border)">
+              <th style="text-align:left;font-size:10px;color:var(--muted);padding:4px 6px;font-weight:600">Tipo</th>
+              <th style="text-align:left;font-size:10px;color:var(--muted);padding:4px 6px;font-weight:600">Tarea</th>
+              <th style="text-align:left;font-size:10px;color:var(--muted);padding:4px 6px;font-weight:600">Persona</th>
+              <th style="text-align:left;font-size:10px;color:var(--muted);padding:4px 6px;font-weight:600">Indicador</th>
+              <th></th>
+            </tr></thead>
+            <tbody>${anomRows}</tbody>
+          </table></div>`
+        : '<div class="emp">✅ Sin anomalías detectadas. Ninguna tarea acumula más de 30 días sin programar y las duraciones son consistentes.</div>'}
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+// CLASIFICADOR DE TAREAS
+// ══════════════════════════════════════════════════════════
+function vDashClasif() {
+  return `
+  <div class="ph">
+    <div class="pt"><div class="rb"></div>Clasificador de Tareas</div>
+    <div class="pd">Sub-clasificación automática por patrones en títulos · recursos, desviaciones y recomendaciones por categoría.</div>
+  </div>
+  ${buildDashFilterBar('clasif')}
+  <div id="dash-content-clasif"></div>`;
+}
+
+function buildDashClasif(f) {
+  const hoy = todayStr();
+
+  // ── Filtrar bloques del período ──
+  const bl = BLOQUES.filter(b => {
+    if (f.users.length > 0 && !f.users.includes(b.responsable)) return false;
+    const fd = b.fechaProg || b.fechaIngreso || '';
+    if (f.desde && fd < f.desde) return false;
+    if (f.hasta && fd > f.hasta) return false;
+    return true;
+  });
+
+  if (bl.length < 5) return `<div class="al w"><span class="al-ico">📭</span>
+    <div class="al-txt">Se necesitan al menos 5 tareas en el período para clasificar. Amplía el rango de fechas.</div></div>`;
+
+  // ── Stopwords español ──
+  const SW = new Set(['de','la','el','en','y','a','los','del','las','un','una','con','por','para','al','se','que','es','no','lo','su','sus','más','e','o','u','i','le','les','me','mi','te','tu','nos','si','sin','pero','como','hay','bien','así','este','esta','estos','estas','ese','esa','cuando','donde','quien','cual','también','solo','ya','ser','está','son','fue','han','ha','era','van','ir','ver','hacer','tener','debe','puede','todo']);
+
+  // ── Extraer n-gramas de un título ──
+  function ngrams(titulo) {
+    const words = (titulo || '').toLowerCase()
+      .replace(/[^\w\sáéíóúüñ]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !SW.has(w));
+    const out = new Set();
+    // trigramas
+    for (let i = 0; i < words.length - 2; i++) out.add(words.slice(i, i+3).join(' '));
+    // bigramas
+    for (let i = 0; i < words.length - 1; i++) out.add(words.slice(i, i+2).join(' '));
+    // unigramas (solo palabras largas y significativas)
+    words.filter(w => w.length >= 6).forEach(w => out.add(w));
+    return [...out];
+  }
+
+  // ── Contar frecuencia de cada n-grama ──
+  const freq = {};
+  bl.forEach(b => {
+    ngrams(b.titulo).forEach(ng => { freq[ng] = (freq[ng] || 0) + 1; });
+  });
+
+  // ── Seleccionar n-gramas candidatos (freq >= 3), preferir más largos ──
+  const minFreq = Math.max(2, Math.floor(bl.length * 0.04)); // al menos 4% de tareas
+  const candidates = Object.entries(freq)
+    .filter(([, n]) => n >= minFreq)
+    .sort((a, b) => {
+      const lenDiff = b[0].split(' ').length - a[0].split(' ').length;
+      return lenDiff !== 0 ? lenDiff : b[1] - a[1];
+    })
+    .map(([ng]) => ng);
+
+  // ── Asignar cada tarea al primer n-grama que la contenga (greedy: largo → corto) ──
+  const groups = {};   // ng → [bloques]
+  const assigned = new Set();
+  candidates.forEach(ng => {
+    bl.forEach(b => {
+      if (assigned.has(b.id)) return;
+      if ((b.titulo || '').toLowerCase().includes(ng)) {
+        if (!groups[ng]) groups[ng] = [];
+        groups[ng].push(b);
+        assigned.add(b.id);
+      }
+    });
+  });
+
+  const sinClasif = bl.filter(b => !assigned.has(b.id));
+
+  // ── Estadísticas por grupo ──
+  function stats(tasks) {
+    const n = tasks.length;
+    const conP  = tasks.filter(b => parseFloat(b.hhPlan) > 0);
+    const conR  = tasks.filter(b => parseFloat(b.hhReal) > 0);
+    const conAmbos = tasks.filter(b => parseFloat(b.hhPlan) > 0 && parseFloat(b.hhReal) > 0);
+
+    const totalHHP = tasks.reduce((s, b) => s + (parseFloat(b.hhPlan) || 0), 0);
+    const totalHHR = tasks.reduce((s, b) => s + (parseFloat(b.hhReal) || 0), 0);
+    const avgHHP = conP.length  ? totalHHP / conP.length  : 0;
+    const avgHHR = conR.length  ? totalHHR / conR.length  : 0;
+
+    // Ratio real/plan promedio
+    const ratio = conAmbos.length
+      ? conAmbos.reduce((s, b) => s + (parseFloat(b.hhReal) || 0) / (parseFloat(b.hhPlan) || 1), 0) / conAmbos.length
+      : null;
+
+    // Coeficiente de variación de HHP (predecibilidad)
+    let cv = null;
+    if (conP.length >= 3) {
+      const vals = conP.map(b => parseFloat(b.hhPlan) || 0);
+      const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+      const sd = Math.sqrt(vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length);
+      cv = mean > 0 ? sd / mean : null;
+    }
+
+    // Por persona
+    const byPerson = {};
+    tasks.forEach(b => { byPerson[b.responsable || '?'] = (byPerson[b.responsable || '?'] || 0) + 1; });
+
+    // Tendencia: últimas 4 semanas vs anteriores 4
+    const base = new Date(hoy + 'T12:00:00');
+    let ult4 = 0, ant4 = 0;
+    tasks.forEach(b => {
+      const fd = b.fechaProg || b.fechaReal || '';
+      if (!fd) return;
+      const diff = Math.round((base - new Date(fd + 'T12:00:00')) / 86400000);
+      if (diff >= 0 && diff < 28) ult4++;
+      else if (diff >= 28 && diff < 56) ant4++;
+    });
+    const trendPct = ant4 > 0 ? Math.round((ult4 - ant4) / ant4 * 100) : (ult4 > 0 ? 100 : null);
+
+    const conf    = tasks.filter(b => b.estado === 'Confirmado').length;
+    const sinProg = tasks.filter(b => ['Por Iniciar', 'Standby'].includes(b.estado)).length;
+
+    return {
+      n, totalHHP: Math.round(totalHHP * 10) / 10, totalHHR: Math.round(totalHHR * 10) / 10,
+      avgHHP: Math.round(avgHHP * 10) / 10, avgHHR: Math.round(avgHHR * 10) / 10,
+      ratio: ratio ? Math.round(ratio * 100) / 100 : null,
+      cv: cv ? Math.round(cv * 100) / 100 : null,
+      byPerson, conf, sinProg, trendPct
+    };
+  }
+
+  // ── Construir lista de grupos ordenada por HHP total ──
+  const groupList = Object.entries(groups)
+    .map(([ng, tasks]) => ({ ng, tasks, st: stats(tasks) }))
+    .sort((a, b) => b.st.totalHHP - a.st.totalHHP);
+
+  if (groupList.length === 0) return `<div class="al w"><span class="al-ico">🔍</span>
+    <div class="al-txt">No se detectaron patrones repetidos con el período seleccionado. Prueba ampliando el rango de fechas.</div></div>`;
+
+  const globalHHP = bl.reduce((s, b) => s + (parseFloat(b.hhPlan) || 0), 0);
+  const pctClasif = bl.length ? Math.round((bl.length - sinClasif.length) / bl.length * 100) : 0;
+
+  // ── Generar alertas por grupo ──
+  function getAlerts(st, ng) {
+    const a = [];
+    if (st.ratio !== null && st.ratio > 1.3)
+      a.push({ lvl:'warn', txt: `Subestimación crónica +${Math.round((st.ratio-1)*100)}% — ajustar HHP de referencia de ${st.avgHHP}h a ~${Math.round(st.avgHHP*st.ratio*10)/10}h` });
+    if (st.ratio !== null && st.ratio < 0.7)
+      a.push({ lvl:'info', txt: `Sobreestimación ${Math.round((1-st.ratio)*100)}% — el equipo termina antes de lo planeado, reducir HHP estimado` });
+    if (st.cv !== null && st.cv > 0.6)
+      a.push({ lvl:'warn', txt: `Alta variabilidad (CV=${st.cv}) — las tareas de esta categoría son impredecibles en duración, evaluar estandarizar el proceso` });
+    if (st.sinProg > 2)
+      a.push({ lvl:'danger', txt: `${st.sinProg} tareas de esta categoría llevan tiempo sin programar — revisar priorización` });
+    if (st.trendPct !== null && st.trendPct > 40)
+      a.push({ lvl:'info', txt: `Categoría en crecimiento +${st.trendPct}% vs las 4 semanas anteriores — verificar si es tendencia o pico` });
+    if (st.trendPct !== null && st.trendPct < -40)
+      a.push({ lvl:'info', txt: `Categoría en baja ${st.trendPct}% — puede indicar que el trabajo se completó o que bajó la demanda` });
+    if (st.n >= 5 && st.ratio === null)
+      a.push({ lvl:'info', txt: `Sin datos de HH real — registrar tiempos para habilitar análisis de desviación` });
+    return a;
+  }
+
+  const alertBg  = { warn:'#fef3c7', danger:'#fee2e2', info:'#eff6ff' };
+  const alertBdr = { warn:'#f59e0b', danger:'#ef4444', info:'#3b82f6' };
+  const alertTxt = { warn:'#78350f', danger:'#991b1b', info:'#1e3a8a' };
+
+  // ── Conteo total de alertas críticas ──
+  const totalAlerts = groupList.reduce((s, g) => s + getAlerts(g.st, g.ng).length, 0);
+
+  // ── Ranking de recursos (barras horizontales) ──
+  const top6 = groupList.slice(0, 6);
+  const maxHHtop = top6.length ? top6[0].st.totalHHP : 1;
+  const rankingRows = top6.map(g => {
+    const w   = Math.round(g.st.totalHHP / maxHHtop * 100);
+    const pct = globalHHP > 0 ? Math.round(g.st.totalHHP / globalHHP * 100) : 0;
+    const alerts = getAlerts(g.st, g.ng);
+    const alertDot = alerts.some(a => a.lvl === 'danger') ? '🔴' : alerts.some(a => a.lvl === 'warn') ? '🟡' : '🟢';
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+      <div style="width:10px;text-align:center;flex-shrink:0">${alertDot}</div>
+      <div style="min-width:100px;max-width:140px;font-size:10px;color:var(--txt);text-transform:capitalize;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.ng}</div>
+      <div style="flex:1;height:14px;background:#f1f5f9;border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${w}%;background:var(--navy);border-radius:3px"></div>
+      </div>
+      <div style="width:80px;text-align:right;font-size:10px;font-weight:700;color:var(--navy);flex-shrink:0">${g.st.totalHHP}h <span style="color:var(--muted);font-weight:400">(${pct}%)</span></div>
+    </div>`;
+  }).join('');
+
+  // ── Cards de cada categoría ──
+  const cards = groupList.map(({ ng, tasks, st }) => {
+    const pct = globalHHP > 0 ? Math.round(st.totalHHP / globalHHP * 100) : 0;
+    const alerts = getAlerts(st, ng);
+
+    const ratioColor = st.ratio === null ? 'var(--muted)'
+      : st.ratio > 1.3 ? 'var(--red)' : st.ratio < 0.7 ? 'var(--amber)' : 'var(--green)';
+    const ratioLabel = st.ratio === null ? '—'
+      : st.ratio > 1 ? `+${Math.round((st.ratio-1)*100)}%` : `-${Math.round((1-st.ratio)*100)}%`;
+    const ratioDesc  = st.ratio === null ? 'sin datos' : st.ratio > 1 ? 'subestima' : 'sobreestima';
+
+    const cvLabel = st.cv === null ? '—' : st.cv < 0.3 ? 'Baja' : st.cv < 0.6 ? 'Media' : 'Alta';
+    const cvColor = st.cv === null ? 'var(--muted)' : st.cv < 0.3 ? 'var(--green)' : st.cv < 0.6 ? 'var(--amber)' : 'var(--red)';
+
+    const trendBadge = st.trendPct === null ? ''
+      : st.trendPct > 0 ? `<span style="font-size:9px;background:#dcfce7;color:#166534;border-radius:3px;padding:1px 5px;margin-left:6px">↑ ${st.trendPct}%</span>`
+      : `<span style="font-size:9px;background:#fee2e2;color:#991b1b;border-radius:3px;padding:1px 5px;margin-left:6px">↓ ${st.trendPct}%</span>`;
+
+    const personBadges = Object.entries(st.byPerson)
+      .sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([p, n]) => `<span style="font-size:10px;background:#f1f5f9;border-radius:4px;padding:2px 7px;color:var(--txt)">${shortName(p)}&nbsp;<strong>${n}</strong></span>`)
+      .join(' ');
+
+    const alertsHTML = alerts.length
+      ? alerts.map(a => `<div style="font-size:10px;color:${alertTxt[a.lvl]};line-height:1.6;padding:1px 0">▸ ${a.txt}</div>`).join('')
+      : `<div style="font-size:10px;color:var(--green)">✅ Sin alertas — categoría bien gestionada</div>`;
+
+    const borderColor = alerts.some(a => a.lvl === 'danger') ? 'var(--red)'
+      : alerts.some(a => a.lvl === 'warn') ? '#f59e0b' : 'var(--green)';
+
+    return `<div class="cw" style="border-left:4px solid ${borderColor}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:var(--navy);text-transform:capitalize;margin-bottom:2px">
+            "${ng}"${trendBadge}
+          </div>
+          <div style="font-size:11px;color:var(--muted)">${st.n} tarea${st.n>1?'s':''} · ${pct}% de los recursos del período</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:12px">
+          <div style="font-family:Montserrat,sans-serif;font-size:22px;font-weight:800;color:var(--navy)">${st.totalHHP}h</div>
+          <div style="font-size:9px;color:var(--muted)">HH planificadas</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
+        <div style="text-align:center;padding:6px 4px;background:#f8fafc;border-radius:6px">
+          <div style="font-size:8px;color:var(--muted);font-weight:700;text-transform:uppercase">HHP prom</div>
+          <div style="font-size:16px;font-weight:800;color:var(--navy)">${st.avgHHP}<span style="font-size:10px">h</span></div>
+        </div>
+        <div style="text-align:center;padding:6px 4px;background:#f8fafc;border-radius:6px">
+          <div style="font-size:8px;color:var(--muted);font-weight:700;text-transform:uppercase">HHR prom</div>
+          <div style="font-size:16px;font-weight:800;color:var(--navy)">${st.avgHHR || '—'}${st.avgHHR?'<span style="font-size:10px">h</span>':''}</div>
+        </div>
+        <div style="text-align:center;padding:6px 4px;background:#f8fafc;border-radius:6px">
+          <div style="font-size:8px;color:var(--muted);font-weight:700;text-transform:uppercase">Desviación</div>
+          <div style="font-size:16px;font-weight:800;color:${ratioColor}">${ratioLabel}</div>
+          <div style="font-size:8px;color:${ratioColor}">${ratioDesc}</div>
+        </div>
+        <div style="text-align:center;padding:6px 4px;background:#f8fafc;border-radius:6px">
+          <div style="font-size:8px;color:var(--muted);font-weight:700;text-transform:uppercase">Variabilidad</div>
+          <div style="font-size:16px;font-weight:800;color:${cvColor}">${cvLabel}</div>
+          <div style="font-size:8px;color:${cvColor}">${st.cv !== null ? 'CV='+st.cv : 'pocos datos'}</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">${personBadges}</div>
+
+      <div style="padding:7px 9px;background:${alerts.some(a=>a.lvl==='danger')?alertBg.danger:alerts.some(a=>a.lvl==='warn')?alertBg.warn:'#f0fdf4'};
+        border-radius:6px;border-left:3px solid ${borderColor}">
+        ${alertsHTML}
+      </div>
+    </div>`;
+  });
+
+  // Card "Sin clasificar"
+  if (sinClasif.length > 0) {
+    const scSt = stats(sinClasif);
+    const scPct = globalHHP > 0 ? Math.round(scSt.totalHHP / globalHHP * 100) : 0;
+    cards.push(`<div class="cw" style="border-left:4px solid #94a3b8;opacity:0.75">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#64748b">Sin clasificar</div>
+          <div style="font-size:11px;color:var(--muted)">${sinClasif.length} tarea${sinClasif.length>1?'s':''} · ${scPct}% de HH · sin patrón repetido</div>
+        </div>
+        <div style="font-family:Montserrat,sans-serif;font-size:22px;font-weight:800;color:#94a3b8">${scSt.totalHHP}h</div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.6">
+        Estas tareas no comparten términos con al menos ${minFreq} otras tareas del período. Pueden ser trabajos únicos, puntuales o con títulos muy distintos entre sí.
+        ${sinClasif.length > 10 ? ' Considera estandarizar la nomenclatura de los títulos para mejorar la clasificación.' : ''}
+      </div>
+    </div>`);
+  }
+
+  // ── HTML final ──
+  return `
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:4px;margin-bottom:14px">
+    <div class="cw" style="text-align:center;padding:14px 8px">
+      <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:4px">Categorías</div>
+      <div style="font-family:Montserrat,sans-serif;font-size:28px;font-weight:800;color:var(--navy)">${groupList.length}</div>
+      <div style="font-size:10px;color:var(--muted)">detectadas</div>
+    </div>
+    <div class="cw" style="text-align:center;padding:14px 8px">
+      <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:4px">Clasificadas</div>
+      <div style="font-family:Montserrat,sans-serif;font-size:28px;font-weight:800;color:var(--navy)">${pctClasif}%</div>
+      <div style="font-size:10px;color:var(--muted)">${bl.length - sinClasif.length} de ${bl.length}</div>
+    </div>
+    <div class="cw" style="text-align:center;padding:14px 8px">
+      <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:4px">HH Totales</div>
+      <div style="font-family:Montserrat,sans-serif;font-size:28px;font-weight:800;color:var(--navy)">${Math.round(globalHHP)}h</div>
+      <div style="font-size:10px;color:var(--muted)">planificadas</div>
+    </div>
+    <div class="cw" style="text-align:center;padding:14px 8px">
+      <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:4px">Alertas</div>
+      <div style="font-family:Montserrat,sans-serif;font-size:28px;font-weight:800;color:${totalAlerts>0?'var(--red)':'var(--green)'}">${totalAlerts}</div>
+      <div style="font-size:10px;color:var(--muted)">en categorías activas</div>
+    </div>
+  </div>
+
+  <div class="cw" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="font-size:18px">🎯</span>
+      <div class="ct" style="margin:0">Ranking — Dónde va el tiempo del equipo</div>
+      <span style="font-size:10px;color:var(--muted);margin-left:auto">🟢 sin alertas &nbsp;🟡 advertencia &nbsp;🔴 crítico</span>
+    </div>
+    ${rankingRows}
+    ${sinClasif.length > 0 ? `<div style="font-size:10px;color:var(--muted);margin-top:8px;border-top:1px solid var(--border);padding-top:6px">
+      + ${sinClasif.length} tarea${sinClasif.length>1?'s':''} sin clasificar (${globalHHP>0?Math.round(stats(sinClasif).totalHHP/globalHHP*100):0}% de HH)</div>` : ''}
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    ${cards.join('')}
+  </div>`;
+}
 
 // ── Gestión Registros ──
 function buscarReg(){
@@ -5748,7 +6371,7 @@ function ctrlRenderDay() {
   const body = document.getElementById('ctrlBody'); if(!body)return;
   const today=new Date();
   const target=new Date(today); target.setDate(today.getDate()+_ctrlDayOffset);
-  const ds=target.toISOString().split('T')[0];
+  const ds=dateStr(target);
   const dow=target.getDay();
   const dayLabel=_ctrlDayOffset===-1?'Ayer':_ctrlDayOffset===0?'Hoy':'Mañana';
   const dateLabel=target.toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long'});
@@ -5774,7 +6397,7 @@ function ctrlRenderDay() {
   const totalWorkHrs=(workEnd-workStart)-(lunchEnd-lunchStart);
 
   // Per user analysis
-  const hoyStr = new Date().toISOString().split('T')[0];
+  const hoyStr = todayStr();
   const nowMin = new Date().getHours()*60+new Date().getMinutes();
   const userRows = users.map(p => {
     const bProg = BLOQUES.filter(b=>b.responsable===p&&b.estado==='Programado'&&b.fechaProg===ds);
