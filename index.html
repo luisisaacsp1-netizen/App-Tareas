@@ -724,7 +724,11 @@ function buildFeriados() {
   const isValidStr = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
   const toDateStr  = v => {
     if (isValidStr(v)) return v;
-    if (v instanceof Date && !isNaN(v)) return dateStr(v); // convert Sheets Date → "YYYY-MM-DD"
+    if (v instanceof Date && !isNaN(v)) return dateStr(v); // Date object → "YYYY-MM-DD"
+    // JSON serializa Date de Apps Script como ISO string ("2025-05-21T03:00:00.000Z")
+    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+      const d = new Date(v); if (!isNaN(d)) return dateStr(d);
+    }
     return null;
   };
   const fromBackend = (LISTAS['Feriado'] || []).map(toDateStr).filter(Boolean);
@@ -1526,6 +1530,10 @@ function vAgenda() {
       <span class="ag-tray-title">📥 Por Iniciar</span>
       <span class="ag-tray-count" id="agTrayCount">0</span>
     </div>
+    <div style="padding:6px 8px 2px">
+      <input id="traySearch" placeholder="🔍 Buscar tarea..." oninput="calFilterTray(this.value)"
+        style="width:100%;box-sizing:border-box;padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#f8fafc;outline:none">
+    </div>
     <div class="ag-tray-hint">← Arrastra al calendario</div>
     <div class="ag-tray-body" id="calTrayList"></div>
   </div>
@@ -2071,6 +2079,9 @@ function calRefreshTray(person) {
   const _p = SESSION.nombre;
   const list = document.getElementById('calTrayList');
   if (!list) return;
+  // Clear search when tray is refreshed (task was scheduled)
+  const srch = document.getElementById('traySearch');
+  if (srch) srch.value = '';
 
   const porIniciar = BLOQUES.filter(b => b.responsable === _p && b.estado === 'Por Iniciar');
   const standby    = BLOQUES.filter(b => b.responsable === _p && b.estado === 'Standby');
@@ -2115,6 +2126,26 @@ function calRefreshTray(person) {
       </div>
     </div>`;
   }).join('');
+}
+
+function calFilterTray(q) {
+  const list = document.getElementById('calTrayList');
+  if (!list) return;
+  const term = (q || '').toLowerCase().trim();
+  list.querySelectorAll('.ag-tray-card').forEach(card => {
+    const title = (card.querySelector('.ag-tc-title')?.textContent || '').toLowerCase();
+    const id    = (card.querySelector('.ag-tc-id')?.textContent   || '').toLowerCase();
+    const area  = card.textContent.toLowerCase();
+    card.style.display = (!term || title.includes(term) || id.includes(term) || area.includes(term)) ? '' : 'none';
+  });
+  // Show "no results" if all hidden
+  let visible = 0;
+  list.querySelectorAll('.ag-tray-card').forEach(c => { if(c.style.display!=='none') visible++; });
+  let noRes = list.querySelector('.tray-no-results');
+  if (!visible && term) {
+    if (!noRes) { noRes = document.createElement('div'); noRes.className='tray-no-results'; noRes.style.cssText='font-size:11px;color:var(--muted);padding:10px 4px;text-align:center'; list.appendChild(noRes); }
+    noRes.textContent = `Sin resultados para "${q}"`;
+  } else if (noRes) noRes.remove();
 }
 
 // ── Drag & Drop ───────────────────────────────────────────────────
@@ -5131,9 +5162,11 @@ function buildDashAnalisis(f) {
   customRules.forEach(rule => {
     const key = 'rule_' + rule.id;
     const excluidos = new Set(cExcl[key] || []);
+    const excKw = (rule.excludeKw || []).map(k => k.toLowerCase());
     blBase.forEach(b => {
       if (assignedA.has(b.id) || excluidos.has(b.id)) return;
       const t = (b.titulo||'').toLowerCase();
+      if (excKw.some(ew => t.includes(ew))) return; // palabra de exclusión → no aplica
       if (rule.keywords.some(kw => t.includes(kw.toLowerCase()))) {
         if (!catGroupsA[key]) catGroupsA[key] = { label: rule.name, tasks: [], isCustom: true };
         catGroupsA[key].tasks.push(b);
@@ -5510,22 +5543,48 @@ function abrirReglasClasif() {
     .filter(([ng,n])=>n>=3&&!allKw.some(k=>ng.includes(k)||k.includes(ng)))
     .sort((a,b)=>b[1]-a[1]).slice(0,10);
 
-  const rulesHtml=rules.length?rules.map(r=>`
-    <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+  const btnSm='background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;padding:2px 6px;font-size:11px;color:var(--muted);line-height:1.4';
+  const rulesHtml=rules.length?rules.map((r,idx)=>{
+    const excKws=(r.excludeKw||[]);
+    const canUp=idx>0, canDown=idx<rules.length-1;
+    return `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#fff">
+      <!-- Header -->
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <strong style="font-size:13px;color:var(--navy)">${r.name}</strong>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <button onclick="clasifMoveRule('${r.id}',-1)" ${canUp?'':'disabled'} style="${btnSm};${canUp?'':'opacity:.35;cursor:default'}">▲</button>
+            <button onclick="clasifMoveRule('${r.id}',1)"  ${canDown?'':'disabled'} style="${btnSm};${canDown?'':'opacity:.35;cursor:default'}">▼</button>
+          </div>
+          <span style="font-size:10px;color:var(--muted);width:16px;text-align:center;font-weight:700">${idx+1}</span>
+          <strong style="font-size:13px;color:var(--navy)">${r.name}</strong>
+        </div>
         <button onclick="clasifDelRule('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1">×</button>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+      <!-- Incluir si contiene -->
+      <div style="font-size:10px;font-weight:700;color:#3730a3;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">✅ Incluir si contiene</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;min-height:22px">
         ${r.keywords.map(kw=>`<span style="background:#e0e7ff;color:#3730a3;border-radius:4px;padding:2px 8px;font-size:11px;display:inline-flex;align-items:center;gap:4px">${kw}
           <button onclick="clasifDelKw('${r.id}','${kw.replace(/'/g,"\\'")}')" style="background:none;border:none;cursor:pointer;color:#6366f1;font-size:14px;padding:0;line-height:1">×</button></span>`).join('')}
-        ${!r.keywords.length?'<span style="font-size:11px;color:var(--muted)">Sin palabras clave aún</span>':''}
+        ${!r.keywords.length?'<span style="font-size:10px;color:var(--muted)">Sin palabras aún</span>':''}
       </div>
-      <div style="display:flex;gap:6px">
-        <input id="kwi-${r.id}" placeholder="agregar palabra clave..." style="flex:1;padding:5px 9px;border:1px solid var(--border);border-radius:5px;font-size:11px">
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <input id="kwi-${r.id}" placeholder="agregar incluir..." style="flex:1;padding:5px 9px;border:1px solid var(--border);border-radius:5px;font-size:11px">
         <button onclick="clasifAddKw('${r.id}')" style="padding:5px 12px;background:var(--navy);color:#fff;border:none;border-radius:5px;font-size:11px;cursor:pointer">+</button>
       </div>
-    </div>`).join('')
+      <!-- Excluir si contiene -->
+      <div style="font-size:10px;font-weight:700;color:#991b1b;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">🚫 Excluir si contiene</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;min-height:22px">
+        ${excKws.map(kw=>`<span style="background:#fee2e2;color:#991b1b;border-radius:4px;padding:2px 8px;font-size:11px;display:inline-flex;align-items:center;gap:4px">${kw}
+          <button onclick="clasifDelExcKw('${r.id}','${kw.replace(/'/g,"\\'")}')" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:14px;padding:0;line-height:1">×</button></span>`).join('')}
+        ${!excKws.length?'<span style="font-size:10px;color:var(--muted)">Ninguna</span>':''}
+      </div>
+      <div style="display:flex;gap:6px">
+        <input id="exki-${r.id}" placeholder="agregar excluir..." style="flex:1;padding:5px 9px;border:1px solid #fecaca;border-radius:5px;font-size:11px">
+        <button onclick="clasifAddExcKw('${r.id}')" style="padding:5px 12px;background:#dc2626;color:#fff;border:none;border-radius:5px;font-size:11px;cursor:pointer">+</button>
+      </div>
+    </div>`;
+  }).join('')
   :'<div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:10px;background:#f8fafc;border-radius:6px">Aún no tienes categorías personalizadas. Crea la primera abajo.</div>';
 
   const sugHtml=sugs.length?`
@@ -5540,13 +5599,24 @@ function abrirReglasClasif() {
 
   openModal(`<div>
     <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:4px">⚙ Gestionar Categorías</div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.6">Las categorías personalizadas tienen <strong>prioridad</strong> sobre la detección automática. Una tarea se asigna a la primera categoría cuyas palabras clave aparezcan en el título. Puedes poner varias palabras clave separadas por coma.</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6">Las categorías se evalúan <strong>en orden</strong> (▲▼ para cambiar prioridad). Una tarea queda en la primera categoría cuyas palabras de inclusión aparezcan en el título <em>y</em> ninguna de exclusión esté presente.</div>
+
+    <!-- Buscador de sondeo -->
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:6px">🔍 Sondear palabra — ver qué tareas la contienen</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <input id="clasifSondeo" placeholder="Escribe una palabra o frase..." oninput="clasifBuscador(this.value)"
+          style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+      </div>
+      <div id="clasifBuscResult" style="max-height:160px;overflow-y:auto;font-size:11px"></div>
+    </div>
+
     ${rulesHtml}
     <div style="border-top:2px solid var(--border);padding-top:14px;margin-top:6px">
       <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">Nueva categoría</div>
       <input id="newRName" placeholder="Nombre (ej: Presupuesto / Costeo)" style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-bottom:8px">
       <div style="display:flex;gap:8px">
-        <input id="newRKw" placeholder="Palabras clave separadas por coma (ej: cotización, costeo, presupuesto, valorización)" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+        <input id="newRKw" placeholder="Palabras clave separadas por coma (ej: cotización, costeo, presupuesto)" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px">
         <button onclick="clasifAddRule()" style="padding:7px 16px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap">Crear</button>
       </div>
     </div>
@@ -5584,6 +5654,54 @@ function clasifDelKw(id, kw) {
   const rules=_cRules(), r=rules.find(x=>x.id===id);
   if(r){r.keywords=r.keywords.filter(k=>k!==kw);_saveRules(rules);applyDashFilter('clasif');}
   abrirReglasClasif();
+}
+function clasifMoveRule(id, dir) {
+  const rules=_cRules();
+  const i=rules.findIndex(r=>r.id===id);
+  if(i<0) return;
+  const ni=i+dir;
+  if(ni<0||ni>=rules.length) return;
+  [rules[i],rules[ni]]=[rules[ni],rules[i]];
+  _saveRules(rules); applyDashFilter('clasif'); abrirReglasClasif();
+}
+function clasifAddExcKw(id) {
+  const inp=document.getElementById('exki-'+id); if(!inp) return;
+  const kw=inp.value.trim().toLowerCase(); if(!kw) return;
+  const rules=_cRules(), r=rules.find(x=>x.id===id);
+  if(r){
+    if(!r.excludeKw) r.excludeKw=[];
+    if(!r.excludeKw.includes(kw)){ r.excludeKw.push(kw); _saveRules(rules); applyDashFilter('clasif'); }
+  }
+  abrirReglasClasif();
+}
+function clasifDelExcKw(id, kw) {
+  const rules=_cRules(), r=rules.find(x=>x.id===id);
+  if(r && r.excludeKw){ r.excludeKw=r.excludeKw.filter(k=>k!==kw); _saveRules(rules); applyDashFilter('clasif'); }
+  abrirReglasClasif();
+}
+function clasifBuscador(q) {
+  const el=document.getElementById('clasifBuscResult');
+  if(!el) return;
+  const term=(q||'').toLowerCase().trim();
+  if(!term){ el.innerHTML=''; return; }
+  const matches=BLOQUES.filter(b=>(b.titulo||'').toLowerCase().includes(term));
+  const total=matches.length;
+  if(!total){
+    el.innerHTML='<div style="color:var(--muted);padding:4px 0">Sin coincidencias en el banco de tareas.</div>';
+    return;
+  }
+  const show=matches.slice(0,12);
+  el.innerHTML=`<div style="color:var(--muted);margin-bottom:4px">${total} tarea${total!==1?'s':''} contienen "${term}"${total>12?' (mostrando 12)':''}:</div>`+
+    show.map(b=>{
+      const t=(b.titulo||'').toLowerCase();
+      const hi=t.replace(new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'),`<mark style="background:#fef08a;border-radius:2px">${term}</mark>`);
+      return `<div style="padding:3px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
+        <span style="font-size:10px;color:var(--muted);flex-shrink:0">#${b.id}</span>
+        <span style="flex:1;font-size:11px">${hi.charAt(0).toUpperCase()+hi.slice(1)}</span>
+        <span style="font-size:10px;color:var(--muted);flex-shrink:0">${shortName(b.responsable||'')}</span>
+        <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:#f1f5f9;color:var(--muted);flex-shrink:0">${b.estado}</span>
+      </div>`;
+    }).join('');
 }
 
 function vDashClasif() {
@@ -5693,9 +5811,11 @@ function buildDashClasif(f) {
   customRules.forEach(rule => {
     const key = 'rule_' + rule.id;
     const excluidos = new Set(cExcl[key] || []);
+    const excKw = (rule.excludeKw || []).map(k => k.toLowerCase());
     bl.forEach(b => {
       if (assigned.has(b.id) || excluidos.has(b.id)) return;
       const t = (b.titulo||'').toLowerCase();
+      if (excKw.some(ew => t.includes(ew))) return; // palabra de exclusión → no aplica
       if (rule.keywords.some(kw => t.includes(kw.toLowerCase()))) {
         if (!groups[key]) groups[key] = { label: rule.name, tasks: [], isCustom: true };
         groups[key].tasks.push(b);
