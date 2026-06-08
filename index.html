@@ -2217,7 +2217,8 @@ function calRefreshTray(person) {
     if (b.fechaLimite) {
       const dias = Math.round((new Date(b.fechaLimite+'T23:59:00') - new Date(hoy+'T00:00:00')) / 86400000);
       const dlColor = dias < 0 ? '#dc2626' : dias === 0 ? '#ea580c' : dias <= 2 ? '#d97706' : '#64748b';
-      const dlTxt = dias < 0 ? `⚠️ Venció hace ${Math.abs(dias)}d` : dias === 0 ? '🔴 Vence hoy' : dias === 1 ? '🟠 Vence mañana' : `📅 ${b.fechaLimite}`;
+      const dlHora = b.horaLimite ? ` ${b.horaLimite}` : '';
+      const dlTxt = dias < 0 ? `⚠️ Venció hace ${Math.abs(dias)}d` : dias === 0 ? `🔴 Vence hoy${dlHora}` : dias === 1 ? `🟠 Vence mañana${dlHora}` : `📅 ${b.fechaLimite}${dlHora}`;
       deadlineBadge = `<div style="font-size:9px;color:${dlColor};font-weight:700;margin-top:2px">${dlTxt}${b.instrucciones?' · 📝 Con instrucciones':''}</div>`;
     }
     const isDelegado = !!b.creadoPor;
@@ -4140,6 +4141,7 @@ async function guardarNuevoBloque() {
     creadoPor,
     fechaLimite,
     instrucciones,
+    horaLimite,
   };
 
   // Optimistic insert — UI responde al instante
@@ -4152,7 +4154,8 @@ async function guardarNuevoBloque() {
     fechaReal: bloque.fechaReal||'', horaInicio: bloque.horaInicio||'', horaFin: bloque.horaFin||'',
     hhReal: parseFloat(bloque.hhReal)||0, hhPlan: parseFloat(bloque.hhPlan)||0,
     fechaProg:'', horaInicioProg:'', horaFinProg:'', fechaIngreso: todayStr(),
-    creadoPor: bloque.creadoPor||'', fechaLimite: bloque.fechaLimite||'', instrucciones: bloque.instrucciones||''
+    creadoPor: bloque.creadoPor||'', fechaLimite: bloque.fechaLimite||'',
+    instrucciones: bloque.instrucciones||'', horaLimite: bloque.horaLimite||''
   };
   BLOQUES.unshift(tempBloque);
   clearFormError('nbFormError');
@@ -6910,16 +6913,18 @@ function renderRegB(lista){
             ${b.creadoPor || b.fechaLimite || b.instrucciones ? `
             <div class="efi fw" style="grid-column:1/-1;margin-top:4px;padding-top:8px;border-top:1px dashed var(--border)">
               <div style="font-size:10px;font-weight:700;color:#1e40af;text-transform:uppercase;margin-bottom:6px">Delegación</div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
                 <div class="efi"><label>Fecha Límite (Deadline)</label><input type="date" id="eb_fl_${b.id}" value="${b.fechaLimite||''}"></div>
+                <div class="efi"><label>Hora Límite</label><input type="time" id="eb_hl_${b.id}" value="${b.horaLimite||''}"></div>
                 <div class="efi"><label>Creado por</label><input type="text" id="eb_cp_${b.id}" value="${b.creadoPor||''}" placeholder="—"></div>
               </div>
               <div class="efi fw" style="margin-top:4px"><label>Instrucciones</label><textarea id="eb_ins_${b.id}" rows="2">${b.instrucciones||''}</textarea></div>
             </div>` : `
             <div class="efi fw" style="grid-column:1/-1;margin-top:4px;padding-top:8px;border-top:1px dashed var(--border)">
               <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:6px">Delegación <span style="font-weight:400;font-size:9px">(opcional)</span></div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
                 <div class="efi"><label>Fecha Límite (Deadline)</label><input type="date" id="eb_fl_${b.id}" value="${b.fechaLimite||''}"></div>
+                <div class="efi"><label>Hora Límite</label><input type="time" id="eb_hl_${b.id}" value="${b.horaLimite||''}"></div>
                 <div class="efi"><label>Creado por</label><input type="text" id="eb_cp_${b.id}" value="${b.creadoPor||''}" placeholder="—"></div>
               </div>
               <div class="efi fw" style="margin-top:4px"><label>Instrucciones</label><textarea id="eb_ins_${b.id}" rows="2">${b.instrucciones||''}</textarea></div>
@@ -6996,6 +7001,7 @@ async function savEdB(id){
     20: v('eb_cp'),              // Creado Por
     21: v('eb_fl'),              // Fecha Límite (Deadline)
     22: v('eb_ins'),             // Instrucciones
+    23: v('eb_hl'),              // Hora Límite
   };
   await apiPost({accion:'actualizar', id, campos});
   const idx = BLOQUES.findIndex(b => String(b.id) === String(id));
@@ -7008,7 +7014,7 @@ async function savEdB(id){
     b.horaFin=campos[13];    b.hhReal=campos[14];     b.hhPlan=campos[15];
     b.fechaProg=campos[16];  b.horaInicioProg=campos[17]; b.horaFinProg=campos[18];
     b.fechaIngreso=campos[19]; b.creadoPor=campos[20]; b.fechaLimite=campos[21];
-    b.instrucciones=campos[22];
+    b.instrucciones=campos[22]; b.horaLimite=campos[23];
   }
   syncCache();
   cefT(id); toast('✅ Bloque actualizado','ok'); buscarReg();
