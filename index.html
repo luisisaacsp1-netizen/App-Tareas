@@ -6882,6 +6882,30 @@ function renderRegB(lista){
               ${['Por Iniciar','Programado','En Proceso','Confirmado','Standby','Cancelado'].map(e=>`<option ${e===b.estado?'selected':''}>${e}</option>`).join('')}</select></div>
             <div class="efi"><label>HH Plan</label><input type="number" id="eb_hhp_${b.id}" value="${b.hhPlan||''}" step="0.25" min="0"></div>
             <div class="efi fw"><label>Comentario</label><input type="text" id="eb_com_${b.id}" value="${b.comentario||''}"></div>
+            <!-- Fechas y horas reales -->
+            <div class="efi fw" style="grid-column:1/-1;margin-top:4px;padding-top:8px;border-top:1px dashed var(--border)">
+              <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Ejecución real</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
+                <div class="efi"><label>Fecha Real</label><input type="date" id="eb_fr_${b.id}" value="${b.fechaReal||''}"></div>
+                <div class="efi"><label>Hora Inicio</label><input type="time" id="eb_hi_${b.id}" value="${b.horaInicio||''}" oninput="ebCalcHH('${b.id}')"></div>
+                <div class="efi"><label>Hora Fin</label><input type="time" id="eb_hf_${b.id}" value="${b.horaFin||''}" oninput="ebCalcHH('${b.id}')"></div>
+                <div class="efi"><label>HH Real</label><input type="number" id="eb_hhr_${b.id}" value="${b.hhReal||''}" step="0.25" min="0"></div>
+              </div>
+            </div>
+            <!-- Fechas programadas -->
+            <div class="efi fw" style="grid-column:1/-1;margin-top:4px;padding-top:8px;border-top:1px dashed var(--border)">
+              <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Programación</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+                <div class="efi"><label>Fecha Programada</label><input type="date" id="eb_fp_${b.id}" value="${b.fechaProg||''}"></div>
+                <div class="efi"><label>Hora Inicio Prog.</label><input type="time" id="eb_hip_${b.id}" value="${b.horaInicioProg||''}"></div>
+                <div class="efi"><label>Hora Fin Prog.</label><input type="time" id="eb_hfp_${b.id}" value="${b.horaFinProg||''}"></div>
+              </div>
+            </div>
+            <!-- Fecha ingreso -->
+            <div class="efi" style="margin-top:4px;padding-top:8px;border-top:1px dashed var(--border)">
+              <label>Fecha de Ingreso</label>
+              <input type="date" id="eb_fi_${b.id}" value="${b.fechaIngreso||''}">
+            </div>
           </div>
           <div class="eb">
             <button class="btn ghost sm" onclick="cefT(${b.id})"><span class="bt">Cancelar</span></button>
@@ -6905,6 +6929,16 @@ function renderRegB(lista){
 
 function renderRegS(lista){ /* legacy stub — sessions removed */ }
 
+function ebCalcHH(id) {
+  const ini = document.getElementById('eb_hi_'+id)?.value;
+  const fin = document.getElementById('eb_hf_'+id)?.value;
+  const hhrEl = document.getElementById('eb_hhr_'+id);
+  if (ini && fin && hhrEl) {
+    const hh = calcHHRaw(ini, fin);
+    if (hh > 0) hhrEl.value = Math.round(hh * 100) / 100;
+  }
+}
+
 function togEf(id){const e=document.getElementById('ef-'+id),d=document.getElementById('cd-'+id);d?.classList.remove('op');e?.classList.toggle('op');}
 
 function cefT(id){document.getElementById('ef-'+id)?.classList.remove('op');}
@@ -6920,29 +6954,44 @@ function ccd(t,id){document.getElementById(t==='T'?`cd-${id}`:`cds-${id}`)?.clas
 function rcS(i){const a=document.getElementById('es_ini_'+i)?.value,b=document.getElementById('es_ter_'+i)?.value,h=document.getElementById('es_hh_'+i);if(a&&b&&h)h.value=calcHHRaw(a,b).toFixed(2);}
 
 async function savEdB(id){
+  const v = k => document.getElementById(k+'_'+id)?.value ?? '';
   const campos={
-    1:document.getElementById('eb_tin_'+id)?.value||'',
-    2:document.getElementById('eb_tip_'+id)?.value||'',
-    3:document.getElementById('eb_tit_'+id)?.value||'',
-    4:document.getElementById('eb_are_'+id)?.value||'',
-    5:document.getElementById('eb_sol_'+id)?.value||'',
-    6:document.getElementById('eb_res_'+id)?.value||'',
-    7:document.getElementById('eb_urg_'+id)?.value||'',
-    8:document.getElementById('eb_imp_'+id)?.value||'',
-    9:document.getElementById('eb_com_'+id)?.value||'',
-    10:document.getElementById('eb_est_'+id)?.value||'',
-    15:parseFloat(document.getElementById('eb_hhp_'+id)?.value)||''
+    1:  v('eb_tin'),
+    2:  v('eb_tip'),
+    3:  v('eb_tit'),
+    4:  v('eb_are'),
+    5:  v('eb_sol'),
+    6:  v('eb_res'),
+    7:  v('eb_urg'),
+    8:  v('eb_imp'),
+    9:  v('eb_com'),
+    10: v('eb_est'),
+    11: v('eb_fr'),   // Fecha Real
+    12: v('eb_hi'),   // Hora Inicio
+    13: v('eb_hf'),   // Hora Fin
+    14: parseFloat(v('eb_hhr')) || '',  // HH Real
+    15: parseFloat(v('eb_hhp')) || '',  // HH Plan
+    16: v('eb_fp'),   // Fecha Programada
+    17: v('eb_hip'),  // Hora Inicio Prog
+    18: v('eb_hfp'),  // Hora Fin Prog
+    19: v('eb_fi'),   // Fecha Ingreso
   };
-  await apiPost({accion:'actualizar',id,campos});
-  const idx=BLOQUES.findIndex(b=>String(b.id)===String(id));
-  if(idx>-1){
-    const b=BLOQUES[idx];
-    b.tipoIngreso=campos[1];b.tipoBloque=campos[2];b.titulo=campos[3];
-    b.area=campos[4];b.solicitante=campos[5];b.responsable=campos[6];
-    b.urgente=campos[7];b.importante=campos[8];b.comentario=campos[9];
-    b.estado=campos[10];b.hhPlan=campos[15];
+  await apiPost({accion:'actualizar', id, campos});
+  const idx = BLOQUES.findIndex(b => String(b.id) === String(id));
+  if (idx > -1) {
+    const b = BLOQUES[idx];
+    b.tipoIngreso=campos[1]; b.tipoBloque=campos[2];  b.titulo=campos[3];
+    b.area=campos[4];        b.solicitante=campos[5]; b.responsable=campos[6];
+    b.urgente=campos[7];     b.importante=campos[8];  b.comentario=campos[9];
+    b.estado=campos[10];     b.fechaReal=campos[11];  b.horaInicio=campos[12];
+    b.horaFin=campos[13];    b.hhReal=campos[14];     b.hhPlan=campos[15];
+    b.fechaProg=campos[16];  b.horaInicioProg=campos[17]; b.horaFinProg=campos[18];
+    b.fechaIngreso=campos[19];
   }
-  cefT(id);toast('Bloque actualizado','ok');buscarReg();
+  syncCache();
+  cefT(id); toast('✅ Bloque actualizado','ok'); buscarReg();
+  // Refrescar calendario si está abierto
+  if (document.getElementById('calWrap')) calRender();
 }
 
 async function delB(id){
