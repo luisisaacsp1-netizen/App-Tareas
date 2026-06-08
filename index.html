@@ -6906,6 +6906,24 @@ function renderRegB(lista){
               <label>Fecha de Ingreso</label>
               <input type="date" id="eb_fi_${b.id}" value="${b.fechaIngreso||''}">
             </div>
+            <!-- Delegación -->
+            ${b.creadoPor || b.fechaLimite || b.instrucciones ? `
+            <div class="efi fw" style="grid-column:1/-1;margin-top:4px;padding-top:8px;border-top:1px dashed var(--border)">
+              <div style="font-size:10px;font-weight:700;color:#1e40af;text-transform:uppercase;margin-bottom:6px">Delegación</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                <div class="efi"><label>Fecha Límite (Deadline)</label><input type="date" id="eb_fl_${b.id}" value="${b.fechaLimite||''}"></div>
+                <div class="efi"><label>Creado por</label><input type="text" id="eb_cp_${b.id}" value="${b.creadoPor||''}" placeholder="—"></div>
+              </div>
+              <div class="efi fw" style="margin-top:4px"><label>Instrucciones</label><textarea id="eb_ins_${b.id}" rows="2">${b.instrucciones||''}</textarea></div>
+            </div>` : `
+            <div class="efi fw" style="grid-column:1/-1;margin-top:4px;padding-top:8px;border-top:1px dashed var(--border)">
+              <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:6px">Delegación <span style="font-weight:400;font-size:9px">(opcional)</span></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                <div class="efi"><label>Fecha Límite (Deadline)</label><input type="date" id="eb_fl_${b.id}" value="${b.fechaLimite||''}"></div>
+                <div class="efi"><label>Creado por</label><input type="text" id="eb_cp_${b.id}" value="${b.creadoPor||''}" placeholder="—"></div>
+              </div>
+              <div class="efi fw" style="margin-top:4px"><label>Instrucciones</label><textarea id="eb_ins_${b.id}" rows="2">${b.instrucciones||''}</textarea></div>
+            </div>`}
           </div>
           <div class="eb">
             <button class="btn ghost sm" onclick="cefT(${b.id})"><span class="bt">Cancelar</span></button>
@@ -6966,15 +6984,18 @@ async function savEdB(id){
     8:  v('eb_imp'),
     9:  v('eb_com'),
     10: v('eb_est'),
-    11: v('eb_fr'),   // Fecha Real
-    12: v('eb_hi'),   // Hora Inicio
-    13: v('eb_hf'),   // Hora Fin
+    11: v('eb_fr'),              // Fecha Real
+    12: v('eb_hi'),              // Hora Inicio
+    13: v('eb_hf'),              // Hora Fin
     14: parseFloat(v('eb_hhr')) || '',  // HH Real
     15: parseFloat(v('eb_hhp')) || '',  // HH Plan
-    16: v('eb_fp'),   // Fecha Programada
-    17: v('eb_hip'),  // Hora Inicio Prog
-    18: v('eb_hfp'),  // Hora Fin Prog
-    19: v('eb_fi'),   // Fecha Ingreso
+    16: v('eb_fp'),              // Fecha Programada
+    17: v('eb_hip'),             // Hora Inicio Prog
+    18: v('eb_hfp'),             // Hora Fin Prog
+    19: v('eb_fi'),              // Fecha Ingreso
+    20: v('eb_cp'),              // Creado Por
+    21: v('eb_fl'),              // Fecha Límite (Deadline)
+    22: v('eb_ins'),             // Instrucciones
   };
   await apiPost({accion:'actualizar', id, campos});
   const idx = BLOQUES.findIndex(b => String(b.id) === String(id));
@@ -6986,7 +7007,8 @@ async function savEdB(id){
     b.estado=campos[10];     b.fechaReal=campos[11];  b.horaInicio=campos[12];
     b.horaFin=campos[13];    b.hhReal=campos[14];     b.hhPlan=campos[15];
     b.fechaProg=campos[16];  b.horaInicioProg=campos[17]; b.horaFinProg=campos[18];
-    b.fechaIngreso=campos[19];
+    b.fechaIngreso=campos[19]; b.creadoPor=campos[20]; b.fechaLimite=campos[21];
+    b.instrucciones=campos[22];
   }
   syncCache();
   cefT(id); toast('✅ Bloque actualizado','ok'); buscarReg();
