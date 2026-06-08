@@ -1317,8 +1317,12 @@ function renderSubNav(sec) {
     .filter(s=>!s.adminOnly||SESSION.rol==='admin')
     .map(s=>{
       const alert=s.id==='nuevaTarea'&&alertasNoProgCount>0?`<span class="badge-alert">${alertasNoProgCount}</span>`:'';
+      // Badge delegados en Agenda (para no-admin)
+      const delegN = (s.id==='agenda' && activeRol()!=='admin')
+        ? BLOQUES.filter(b=>b.responsable===SESSION.nombre&&b.creadoPor&&b.creadoPor!==SESSION.nombre&&b.estado==='Por Iniciar').length : 0;
+      const delegBadge = delegN>0 ? `<span class="badge-alert" style="background:#1e40af">${delegN}</span>` : '';
       return`<button class="snb ${s.id===currentSub?'on':''}" id="snb-${s.id}" onclick="goSub('${sec}','${s.id}')">
-        <span class="i">${s.ico}</span><span>${s.lbl}</span>${alert}
+        <span class="i">${s.ico}</span><span>${s.lbl}</span>${alert}${delegBadge}
       </button>`;
     }).join('');
   // Sync sidebar active states
@@ -1369,7 +1373,7 @@ async function goSub(sec, sub) {
   </div></div>`;
   switch(sub) {
     // SECTION A
-    case 'agenda':      main.innerHTML=vAgenda(); setTimeout(()=>initCal(),60); break;
+    case 'agenda':      _agViewPerson=null; main.innerHTML=vAgenda(); setTimeout(()=>initCal(),60); break;
     case 'bloques':     main.innerHTML=vBloques(); break;
     case 'nuevoBloque': nbTipo='';nbEisUrgente=null;nbEisImportante=null;nbModo='propio';main.innerHTML=vNuevoBloque(); break;
     case 'confirmar':   main.innerHTML=vConfirmarBloque(); setTimeout(()=>document.querySelectorAll('[id^="cf_ini_"]').forEach(el=>{const tid=el.id.replace('cf_ini_','');cfCalcHH(tid);}),100); break;
@@ -1478,7 +1482,7 @@ function vAgenda() {
 
     <!-- Equipo -->
     <div class="ag-equipo-section"><div>
-      <div class="ag-sec-lbl">Equipo</div>
+      <div class="ag-sec-lbl">Equipo <span style="font-size:9px;color:var(--muted);font-weight:400">· clic para ver su agenda</span></div>
       <div id="agEquipo"></div>
     </div></div>
 
@@ -1501,6 +1505,12 @@ function vAgenda() {
 
   <!-- ── Centro: toolbar + calendario ── -->
   <div class="ag-center">
+    <div id="agDelegAlert" style="display:none"></div>
+    <div id="agViewBanner" style="display:none;background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:6px 14px;font-size:11px;display:none;align-items:center;gap:8px">
+      <span>👁 Viendo agenda de <strong id="agViewName"></strong></span>
+      <span style="color:var(--muted)">· Solo lectura — los cambios aplican a tu propia agenda</span>
+      <button onclick="agFilterPerson(null)" style="margin-left:auto;padding:2px 10px;border:1px solid #93c5fd;border-radius:4px;background:#fff;font-size:11px;cursor:pointer;color:#1e40af">← Volver a mi agenda</button>
+    </div>
     <div class="ag-toolbar">
       <button class="tb-btn" onclick="calNav(-1)">‹</button>
       <button class="tb-btn" onclick="calNav(0)">Hoy</button>
@@ -1550,8 +1560,11 @@ let _calView = 'semana';
 let _calOffset = 0;
 const HOUR_H = 52;
 
+let _agViewPerson = null; // admin puede ver la agenda de otro — solo lectura
+
 function calGetPerson() {
-  // ALWAYS the logged-in user. No exceptions. No selector. No contamination.
+  // Admin puede ver la agenda de otro (solo lectura visual)
+  if (activeRol() === 'admin' && _agViewPerson) return _agViewPerson;
   return SESSION.nombre;
 }
 
@@ -1628,9 +1641,10 @@ function agRenderEquipo() {
   const colors = {'Luis Sanchez':'#2563eb','Luis Diaz':'#16a34a','Yamila Silva':'#9333ea'};
   const dates = calGetDates();
   const todayS = todayStr();
+  const hoy = todayStr();
   el.innerHTML = persons.map(p => {
-    // compute avg weekly saturation
-    let totalSat = 0, daysCount = 0;
+    // Saturación semanal promedio
+    let totalSat = 0, daysCount = 0, hhSemana = 0;
     dates.forEach(d => {
       const ds = dateStr(d);
       const blks = getWorkBlocks(ds, p);
@@ -1664,16 +1678,31 @@ function agRenderEquipo() {
       ivs.sort((a,b)=>a[0]-b[0]);
       const mg=[];ivs.forEach(([s,e])=>{if(!mg.length||s>mg[mg.length-1][1])mg.push([s,e]);else mg[mg.length-1][1]=Math.max(mg[mg.length-1][1],e);});
       const hh=mg.reduce((s,[a,b])=>s+(b-a)/60,0);
+      hhSemana += hh;
       totalSat += hh/tw*100; daysCount++;
     });
     const sat = daysCount > 0 ? Math.round(totalSat / daysCount) : 0;
-    const satColor = sat>=80?'#e63329':sat>=60?'#c97a00':sat>0?'#1a7a4a':'var(--muted)';
+    const satColor = sat>=80?'#dc2626':sat>=60?'#d97706':sat>0?'#16a34a':'var(--muted)';
+    const satBg    = sat>=80?'#fef2f2':sat>=60?'#fffbeb':sat>0?'#f0fdf4':'transparent';
     const dot = colors[p] || '#637388';
     const nm = shortName ? shortName(p) : p.split(' ')[0];
-    return `<div class="ag-p-row" onclick="agFilterPerson('${p}')">
-      <div class="ag-p-dot" style="background:${dot}"></div>
-      <span class="ag-p-name">${nm}</span>
-      ${sat>0?`<span class="ag-p-pct" style="color:${satColor}">${sat}%</span>`:''}
+    // Backlog: bloques Por Iniciar sin programar
+    const backlog = BLOQUES.filter(b=>b.responsable===p&&b.estado==='Por Iniciar'&&!b.fechaProg).length;
+    // Bloques delegados pendientes
+    const delegPend = BLOQUES.filter(b=>b.responsable===p&&b.creadoPor&&b.creadoPor!==p&&!['Confirmado','Cancelado'].includes(b.estado)).length;
+    const isActive = _agViewPerson === p;
+    const isMe = p === SESSION.nombre;
+    return `<div onclick="agFilterPerson('${p}')" style="cursor:pointer;padding:6px 8px;border-radius:6px;margin-bottom:4px;border:1.5px solid ${isActive?'var(--navy)':'transparent'};background:${isActive?'#f0f4ff':isMe?'#f8fafc':'transparent'};transition:all .15s">
+      <div style="display:flex;align-items:center;gap:6px">
+        <div style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0"></div>
+        <span style="font-size:11px;font-weight:${isActive?700:600};color:${isActive?'var(--navy)':'var(--txt)'};flex:1">${nm}${isMe?' (yo)':''}</span>
+        ${sat>0?`<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${satBg};color:${satColor}">${sat}%</span>`:''}
+      </div>
+      <div style="display:flex;gap:6px;margin-top:3px;padding-left:14px">
+        <span style="font-size:9px;color:var(--muted)">${Math.round(hhSemana*10)/10}h esta semana</span>
+        ${backlog>0?`<span style="font-size:9px;color:#d97706">· ${backlog} pendientes</span>`:''}
+        ${delegPend>0?`<span style="font-size:9px;color:#7c3aed">· ${delegPend} delegados</span>`:''}
+      </div>
     </div>`;
   }).join('');
 }
@@ -1719,9 +1748,69 @@ function agRenderTodaySat() {
   badge.innerHTML = `<span style="color:var(--muted)">Hoy:</span> <span style="color:${col}">${sat}%</span>`;
 }
 
+function agRenderDelegAlert() {
+  const el = document.getElementById('agDelegAlert');
+  if (!el) return;
+  // Solo para no-admin: mostrar alerta si tiene bloques delegados sin programar
+  if (activeRol() === 'admin') { el.style.display='none'; return; }
+  const delegados = BLOQUES.filter(b =>
+    b.responsable === SESSION.nombre &&
+    b.creadoPor && b.creadoPor !== SESSION.nombre &&
+    b.estado === 'Por Iniciar'
+  );
+  if (!delegados.length) { el.style.display='none'; return; }
+
+  const hoy = todayStr();
+  // Ordenar: vencidos primero, luego por deadline
+  const sorted = [...delegados].sort((a,b) => {
+    const da = a.fechaLimite ? new Date(a.fechaLimite+'T23:59:00') : new Date('2099-01-01');
+    const db = b.fechaLimite ? new Date(b.fechaLimite+'T23:59:00') : new Date('2099-01-01');
+    return da - db;
+  });
+
+  const items = sorted.slice(0,4).map(b => {
+    let dlTxt = '';
+    if (b.fechaLimite) {
+      const dias = Math.round((new Date(b.fechaLimite+'T23:59:00') - new Date(hoy+'T00:00:00')) / 86400000);
+      dlTxt = dias < 0 ? `<span style="color:#dc2626;font-weight:700">⚠️ Venció hace ${Math.abs(dias)}d</span>`
+             : dias === 0 ? `<span style="color:#ea580c;font-weight:700">🔴 Hoy</span>`
+             : dias === 1 ? `<span style="color:#d97706;font-weight:700">🟠 Mañana</span>`
+             : `<span style="color:#64748b">📅 ${b.fechaLimite}</span>`;
+    }
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #bfdbfe;cursor:pointer" onclick="abrirModalProgramarBloque('${b.id}')">
+      <span style="font-size:11px;font-weight:600;flex:1;color:#1e3a5f">${(b.titulo||'').length>40?(b.titulo||'').substring(0,40)+'…':b.titulo||'Sin título'}</span>
+      ${dlTxt}
+      <span style="font-size:10px;color:#3b82f6">Programar →</span>
+    </div>`;
+  }).join('');
+
+  const masCount = sorted.length > 4 ? `<div style="font-size:10px;color:#3b82f6;margin-top:4px">+ ${sorted.length-4} más en tu bandeja</div>` : '';
+
+  el.style.display = 'block';
+  el.innerHTML = `<div style="background:#eff6ff;border:1.5px solid #3b82f6;border-radius:8px;padding:10px 14px;margin:6px 0 10px">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+      <span style="font-size:14px">👔</span>
+      <span style="font-size:12px;font-weight:700;color:#1e40af">Tienes ${delegados.length} bloque${delegados.length!==1?'s':''} asignado${delegados.length!==1?'s':''} por ${shortName(delegados[0].creadoPor)} sin programar</span>
+      <button onclick="document.getElementById('agDelegAlert').style.display='none'" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#64748b;font-size:16px;line-height:1">×</button>
+    </div>
+    ${items}
+    ${masCount}
+  </div>`;
+}
+
 function agFilterPerson(nombre) {
-  // For now: click a person to navigate to their day view
-  // Future: filter calendar to show only that person
+  if (activeRol() !== 'admin') return;
+  // null = volver a propia agenda; mismo nombre = toggle off
+  _agViewPerson = (!nombre || _agViewPerson === nombre) ? null : nombre;
+  // Banner
+  const banner = document.getElementById('agViewBanner');
+  const nameEl = document.getElementById('agViewName');
+  if (banner) banner.style.display = _agViewPerson ? 'flex' : 'none';
+  if (nameEl && _agViewPerson) nameEl.textContent = _agViewPerson;
+  // Re-render calendar y sidebar
+  calRender();
+  agRenderMiniCal();
+  agRenderEquipo();
 }
 
 
@@ -1751,7 +1840,7 @@ function initCal() {
   document.getElementById('main')?.classList.add('agenda-mode');
   calRender();
   calRefreshTray(SESSION.nombre);
-  setTimeout(() => { agRenderMiniCal(); agRenderEquipo(); agRenderTodaySat(); agRenderFeriados(); }, 50);
+  setTimeout(() => { agRenderMiniCal(); agRenderEquipo(); agRenderTodaySat(); agRenderFeriados(); agRenderDelegAlert(); }, 50);
 }
 
 function calSwitchView(v) {
@@ -2087,8 +2176,17 @@ function calRefreshTray(person) {
   const srch = document.getElementById('traySearch');
   if (srch) srch.value = '';
 
-  const porIniciar = BLOQUES.filter(b => b.responsable === _p && b.estado === 'Por Iniciar');
-  const standby    = BLOQUES.filter(b => b.responsable === _p && b.estado === 'Standby');
+  const hoyTray = todayStr();
+  const porIniciar = BLOQUES.filter(b => {
+    if (b.responsable !== _p || b.estado !== 'Por Iniciar') return false;
+    // Bloques con fecha asignada (recurrentes): solo mostrar si son de los próximos 7 días
+    if (b.fechaProg) {
+      const dias = Math.round((new Date(b.fechaProg+'T12:00:00') - new Date(hoyTray+'T00:00:00')) / 86400000);
+      return dias >= 0 && dias <= 7;
+    }
+    return true; // Sin fecha: siempre en el tray
+  });
+  const standby = BLOQUES.filter(b => b.responsable === _p && b.estado === 'Standby');
   const all = [...porIniciar, ...standby];
 
   // Update count badges (desktop + mobile button)
@@ -2122,14 +2220,25 @@ function calRefreshTray(person) {
       const dlTxt = dias < 0 ? `⚠️ Venció hace ${Math.abs(dias)}d` : dias === 0 ? '🔴 Vence hoy' : dias === 1 ? '🟠 Vence mañana' : `📅 ${b.fechaLimite}`;
       deadlineBadge = `<div style="font-size:9px;color:${dlColor};font-weight:700;margin-top:2px">${dlTxt}${b.instrucciones?' · 📝 Con instrucciones':''}</div>`;
     }
-    const delegadoBadge = b.creadoPor ? `<div style="font-size:9px;color:#1e40af;margin-top:1px">👔 Delegado por ${shortName(b.creadoPor)}</div>` : '';
+    const isDelegado = !!b.creadoPor;
+    const cardBorder = isDelegado ? '#1e40af' : borderColor;
+    const cardBg     = isDelegado ? '#eff6ff' : '';
+    const delegHeader = isDelegado ? `
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:5px;padding:3px 6px;background:#1e40af;border-radius:4px;margin:-2px -2px 5px -2px">
+        <span style="font-size:10px;color:#fff;font-weight:700">👔 Asignado por ${shortName(b.creadoPor)}</span>
+      </div>` : '';
+    const instrHtml = (isDelegado && b.instrucciones) ? `
+      <div style="font-size:10px;color:#1e3a5f;background:#dbeafe;border-radius:4px;padding:4px 6px;margin-top:4px;border-left:2px solid #3b82f6">
+        📝 ${b.instrucciones.length>80?b.instrucciones.substring(0,80)+'…':b.instrucciones}
+      </div>` : '';
     return `<div draggable="true" id="trayTask_${b.id}"
       class="ag-tray-card"
-      style="border-left-color:${borderColor}"
+      style="border-left-color:${cardBorder};background:${cardBg};${isDelegado?'border:1px solid #bfdbfe;':''}padding:${isDelegado?'6px 8px':''};"
       onclick="abrirModalProgramarBloque('${b.id}')"
       ondragstart="calTrayDragStart(event,${b.id})"
       ondragend="this.style.opacity='1'"
-      title="Clic para programar / Arrastra al calendario">
+      title="${isDelegado?'Bloque asignado — clic para ver instrucciones y programar':'Clic para programar / Arrastra al calendario'}">
+      ${delegHeader}
       <div class="ag-tc-drag">⠿ arrastrar</div>
       <div class="ag-tc-title">${b.titulo||'Sin título'}</div>
       <div class="ag-tc-meta">
@@ -2138,7 +2247,7 @@ function calRefreshTray(person) {
         ${b.area?`<span>· ${b.area}</span>`:''}
         <span class="ag-tc-badge ${badgeCls}">${badgeTxt}</span>
       </div>
-      ${delegadoBadge}${deadlineBadge}
+      ${instrHtml}${deadlineBadge}
     </div>`;
   }).join('');
 }
@@ -3767,6 +3876,33 @@ function vNuevoBloque() {
           </div>
         </div>
       </div>
+      <!-- Repetición semanal -->
+      <div style="border-top:1px dashed var(--border);margin-top:14px;padding-top:12px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+          <input type="checkbox" id="nbChkRepetir" onchange="toggleNBRepetir(this.checked)" style="width:15px;height:15px;cursor:pointer;accent-color:var(--navy)">
+          <span style="font-size:12px;font-weight:700;color:var(--navy)">🔄 Repetir este bloque semanalmente</span>
+        </label>
+        <div id="nbRepOpts" style="display:none;margin-top:12px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Días en que se repetirá:</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
+            ${[['L',1],['M',2],['X',3],['J',4],['V',5],['S',6],['D',7]].map(([lbl,d])=>`
+              <button id="nbDia${d}" type="button" onclick="toggleNBDia(${d})"
+                style="width:32px;height:32px;border:1.5px solid var(--border);border-radius:7px;font-size:11px;font-weight:700;background:#fff;cursor:pointer;transition:all .15s">
+                ${lbl}
+              </button>`).join('')}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <span style="font-size:11px;color:var(--txt)">Generar para las próximas</span>
+            <select id="nbSemanasRep" onchange="updateNBRepPreview()" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px">
+              <option value="2">2 semanas</option>
+              <option value="4" selected>4 semanas</option>
+              <option value="8">8 semanas</option>
+              <option value="12">12 semanas</option>
+            </select>
+          </div>
+          <div id="nbRepPreview" style="font-size:11px;color:#1e40af;background:#eff6ff;padding:7px 10px;border-radius:6px;border:1px solid #bfdbfe;display:none"></div>
+        </div>
+      </div>
       <div class="al info" style="margin-top:8px"><span class="al-ico">📅</span><div class="al-txt" id="nbSimpleMsg">Este bloque quedará en estado <strong>Por Iniciar</strong>. Podrás programarlo desde la Agenda.</div></div>
     </div>
 
@@ -3783,6 +3919,63 @@ let nbTipo = '';
 let nbEisUrgente = null;
 let nbEisImportante = null;
 let nbModo = 'propio'; // 'propio' | 'delegar'
+let nbRepetir = false;
+let nbDiasRep = new Set(); // 1=Lun … 7=Dom
+
+function toggleNBRepetir(on) {
+  nbRepetir = on;
+  document.getElementById('nbRepOpts').style.display = on ? 'block' : 'none';
+  if (on && nbDiasRep.size === 0) {
+    // Default: lunes a viernes
+    [1,2,3,4,5].forEach(d => { nbDiasRep.add(d); _nbDiaBtn(d); });
+    updateNBRepPreview();
+  }
+}
+
+function toggleNBDia(d) {
+  nbDiasRep.has(d) ? nbDiasRep.delete(d) : nbDiasRep.add(d);
+  _nbDiaBtn(d);
+  updateNBRepPreview();
+}
+
+function _nbDiaBtn(d) {
+  const btn = document.getElementById('nbDia'+d);
+  if (!btn) return;
+  const on = nbDiasRep.has(d);
+  btn.style.background   = on ? 'var(--navy)' : '#fff';
+  btn.style.color        = on ? '#fff'         : '';
+  btn.style.borderColor  = on ? 'var(--navy)'  : 'var(--border)';
+}
+
+function getNBRepFechas(semanas) {
+  const fechas = [];
+  const hoy    = new Date(todayStr()+'T12:00:00');
+  const dowHoy = hoy.getDay(); // 0=Dom
+  const daysToMon = dowHoy === 0 ? -6 : 1 - dowHoy;
+  const lunes = new Date(hoy); lunes.setDate(hoy.getDate() + daysToMon);
+  for (let w = 0; w < semanas; w++) {
+    for (let d = 1; d <= 7; d++) {
+      if (!nbDiasRep.has(d)) continue;
+      const dia = new Date(lunes);
+      dia.setDate(lunes.getDate() + (w * 7) + (d - 1));
+      if (dateStr(dia) >= todayStr()) fechas.push(dateStr(dia));
+    }
+  }
+  return fechas.sort();
+}
+
+function updateNBRepPreview() {
+  const el = document.getElementById('nbRepPreview');
+  if (!el) return;
+  if (!nbRepetir || nbDiasRep.size === 0) { el.style.display='none'; return; }
+  const sem = parseInt(document.getElementById('nbSemanasRep')?.value || '4');
+  const fechas = getNBRepFechas(sem);
+  const nombres = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const diasNombres = [...nbDiasRep].sort().map(d => nombres[d===7?0:d]).join(', ');
+  el.style.display = 'block';
+  el.innerHTML = `📋 Se crearán <strong>${fechas.length} bloques</strong> — cada ${diasNombres} por ${sem} semanas<br>
+    <span style="color:#64748b">Primeras fechas: ${fechas.slice(0,4).join(' · ')}${fechas.length>4?' …':''}</span>`;
+}
 
 function setNBMode(modo) {
   nbModo = modo;
@@ -3964,15 +4157,75 @@ async function guardarNuevoBloque() {
   BLOQUES.unshift(tempBloque);
   clearFormError('nbFormError');
   const tipoGuardado = nbTipo; const modoGuardado = nbModo;
+  const repetirGuardado = nbRepetir; const diasRepGuardados = new Set(nbDiasRep);
+  const semanasRep = parseInt(document.getElementById('nbSemanasRep')?.value || '4');
   nbTipo = ''; nbEisUrgente = null; nbEisImportante = null; nbModo = 'propio';
+  nbRepetir = false; nbDiasRep = new Set();
   syncCache();
+
+  // ── Repetición: generar un bloque por fecha ──
+  if (repetirGuardado && diasRepGuardados.size > 0 && tipoGuardado === 'simple') {
+    // Calcular fechas usando los valores guardados
+    const _getFechas = (sem) => {
+      const fechas = [];
+      const hoyD = new Date(todayStr()+'T12:00:00');
+      const dow = hoyD.getDay();
+      const dToM = dow===0?-6:1-dow;
+      const lunes = new Date(hoyD); lunes.setDate(hoyD.getDate()+dToM);
+      for (let w=0; w<sem; w++) {
+        for (let d=1; d<=7; d++) {
+          if (!diasRepGuardados.has(d)) continue;
+          const dia = new Date(lunes); dia.setDate(lunes.getDate()+(w*7)+(d-1));
+          if (dateStr(dia) >= todayStr()) fechas.push(dateStr(dia));
+        }
+      }
+      return fechas.sort();
+    };
+    const fechas = _getFechas(semanasRep);
+    const nombres = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    const diasNombres = [...diasRepGuardados].sort().map(d=>nombres[d===7?0:d]).join(', ');
+
+    // Quitar el bloque temporal único que ya insertamos — se reemplaza por los recurrentes
+    BLOQUES = BLOQUES.filter(b => b.id !== tempId);
+
+    // Insertar un bloque por fecha
+    const tempIds = fechas.map(f => `tmp_rep_${f}_${Date.now()}`);
+    fechas.forEach((fecha, i) => {
+      const tb = {...tempBloque, id: tempIds[i], fechaProg: fecha};
+      BLOQUES.unshift(tb);
+    });
+    syncCache();
+    toast(`✅ ${fechas.length} bloques creados — cada ${diasNombres} por ${semanasRep} semanas`, 'ok');
+    goSub('A','bloques');
+
+    // Guardar en backend en paralelo
+    fechas.forEach((fecha, i) => {
+      const bloqueRep = {...bloque, fechaProg: fecha};
+      apiPost({accion:'insertar', bloque: bloqueRep})
+        .then(r => {
+          if (r?.ok) {
+            const ti = BLOQUES.findIndex(b => b.id === tempIds[i]);
+            if (ti > -1) BLOQUES[ti].id = r.id;
+            syncCache();
+          } else {
+            BLOQUES = BLOQUES.filter(b => b.id !== tempIds[i]);
+            syncCache();
+          }
+        }).catch(() => {
+          BLOQUES = BLOQUES.filter(b => b.id !== tempIds[i]);
+          syncCache();
+        });
+    });
+    return;
+  }
+
+  // ── Bloque único (comportamiento normal) ──
   const toastMsg = tipoGuardado==='express' ? '✅ Bloque Express guardado y confirmado'
     : modoGuardado==='delegar' ? `✅ Bloque delegado a ${resp} — aparece en su bandeja Por Iniciar`
     : '✅ Bloque Simple creado. Prográmalo desde la Agenda';
   toast(toastMsg,'ok');
   goSub('A','bloques');
 
-  // Sync en background — reemplaza tempId con el ID real
   apiPost({accion:'insertar', bloque})
     .then(r => {
       if (r?.ok) {
@@ -3980,7 +4233,6 @@ async function guardarNuevoBloque() {
         if (ti > -1) BLOQUES[ti].id = r.id;
         if (tipoGuardado === 'express') apiPost({accion:'actualizarUltimoRegistro', usuario:SESSION.usuario});
         syncCache();
-        // Re-renderizar lista si el usuario sigue en esa vista
         if (currentSub === 'bloques') document.getElementById('main').innerHTML = vBloques();
       } else {
         BLOQUES = BLOQUES.filter(b => b.id !== tempId);
@@ -5602,6 +5854,9 @@ function vDelegados() {
     <div class="pt"><div class="rb"></div>👔 Mis Delegados</div>
     <div class="pd">Bloques que creaste y asignaste a tu equipo. Semáforo de deadline y estado de avance.</div>
   </div>
+  <!-- Panel de capacidad del equipo -->
+  <div id="delgCapacidad" style="margin-bottom:14px"></div>
+
   <div style="display:flex;gap:8px;flex-wrap:wrap;padding:0 2px 10px;align-items:center">
     <select id="delgFiltroP" onchange="renderDelegados()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px">
       <option value="">Todos</option>
@@ -5619,7 +5874,101 @@ function vDelegados() {
   <div id="delgContent"></div>`;
 }
 
+let _capVista = 'hoy'; // 'hoy' | 'semana'
+
+function renderCapacidadEquipo() {
+  const el = document.getElementById('delgCapacidad');
+  if (!el) return;
+  const hoy = todayStr();
+  const todayD = new Date(hoy+'T12:00:00');
+  // Fechas de referencia
+  const mananaD = new Date(todayD); mananaD.setDate(todayD.getDate()+1);
+  const manana = dateStr(mananaD);
+  const dow = todayD.getDay(); const daysToMon = dow===0?-6:1-dow;
+  const lunes = new Date(todayD); lunes.setDate(todayD.getDate()+daysToMon);
+  const semDates = Array.from({length:5},(_,i)=>{ const d=new Date(lunes); d.setDate(lunes.getDate()+i); return dateStr(d); });
+
+  const team = PERSONAS.filter(p=>p!==SESSION.nombre);
+  const colors = {'Luis Sanchez':'#2563eb','Luis Diaz':'#16a34a','Yamila Silva':'#9333ea'};
+
+  // Helpers
+  const getHH = (p, dates) => {
+    let hh = 0;
+    BLOQUES.filter(b=>b.responsable===p&&!['Standby','Cancelado'].includes(b.estado)).forEach(b=>{
+      const fd = b.fechaProg||b.fechaReal||'';
+      if(dates.includes(fd)) hh += parseFloat(b.hhPlan)||parseFloat(b.hhReal)||0;
+    });
+    return Math.round(hh*10)/10;
+  };
+  const getBlocks = (p, dates) => BLOQUES.filter(b=>b.responsable===p&&!['Standby','Cancelado'].includes(b.estado)&&dates.includes(b.fechaProg||b.fechaReal||''));
+
+  const cards = team.map(p => {
+    const col = colors[p]||'#637388';
+    const capDia = 7, capSem = 35;
+
+    // Datos según vista
+    const hhHoy = getHH(p,[hoy]);
+    const hhMan = getHH(p,[manana]);
+    const hhSem = getHH(p,semDates);
+    const bloqHoy = getBlocks(p,[hoy]);
+    const bloqMan = getBlocks(p,[manana]);
+    const backlog = BLOQUES.filter(b=>b.responsable===p&&b.estado==='Por Iniciar'&&!b.fechaProg).length;
+    const delegPend = BLOQUES.filter(b=>b.responsable===p&&b.creadoPor&&b.creadoPor!==p&&!['Confirmado','Cancelado'].includes(b.estado)).length;
+
+    const pctHoy = Math.min(Math.round(hhHoy/capDia*100),100);
+    const pctMan = Math.min(Math.round(hhMan/capDia*100),100);
+    const pctSem = Math.min(Math.round(hhSem/capSem*100),100);
+    const barC = (pct) => pct>=85?'#dc2626':pct>=65?'#d97706':'#16a34a';
+
+    const barRow = (label, hh, cap, pct) => `
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+          <span style="font-size:10px;font-weight:600;color:var(--txt)">${label}</span>
+          <span style="font-size:10px;color:${barC(pct)};font-weight:700">${hh}h / ${cap}h est. (${pct}%)</span>
+        </div>
+        <div style="height:7px;background:#f1f5f9;border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${barC(pct)};border-radius:4px;transition:width .3s"></div>
+        </div>
+        ${pct<50?`<div style="font-size:9px;color:#16a34a;margin-top:1px">✓ Tiene espacio — ${cap-hh}h disponibles</div>`
+          :pct>=85?`<div style="font-size:9px;color:#dc2626;margin-top:1px">⚠️ Muy ocupado — solo ${Math.max(cap-hh,0)}h libres</div>`:''}
+      </div>`;
+
+    // Mini lista de bloques del día
+    const listaBloqs = (bloqs) => bloqs.length ? bloqs.slice(0,3).map(b=>
+      `<div style="font-size:9px;color:#475569;padding:1px 0">· ${(b.titulo||'').substring(0,35)}${b.titulo?.length>35?'…':''} <span style="color:var(--muted)">(${parseFloat(b.hhPlan)||0}h)</span></div>`
+    ).join('') + (bloqs.length>3?`<div style="font-size:9px;color:var(--muted)">+ ${bloqs.length-3} más...</div>`:'') : `<div style="font-size:9px;color:var(--muted)">Sin bloques programados</div>`;
+
+    return `<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;flex:1;min-width:200px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+        <div style="width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0"></div>
+        <span style="font-size:12px;font-weight:700;color:var(--navy)">${p.split(' ')[0]} ${p.split(' ')[1]?.charAt(0)||''}</span>
+        ${delegPend>0?`<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:#ede9fe;color:#7c3aed;font-weight:700">👔 ${delegPend}</span>`:''}
+        <button onclick="agFilterPerson('${p}');goSub('A','agenda')" style="margin-left:auto;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:#fff;font-size:10px;cursor:pointer">📅 Ver</button>
+      </div>
+      ${barRow('Hoy',hhHoy,capDia,pctHoy)}
+      ${barRow('Mañana',hhMan,capDia,pctMan)}
+      ${barRow('Esta semana',hhSem,capSem,pctSem)}
+      <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
+        <div style="font-size:9px;font-weight:700;color:var(--muted);margin-bottom:3px">BLOQUES DE HOY</div>
+        ${listaBloqs(bloqHoy)}
+      </div>
+      <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px">
+        <div style="font-size:9px;font-weight:700;color:var(--muted);margin-bottom:3px">BLOQUES DE MAÑANA</div>
+        ${listaBloqs(bloqMan)}
+      </div>
+      <div style="margin-top:6px;font-size:10px;color:#d97706">${backlog>0?`📥 ${backlog} bloque${backlog!==1?'s':''} en cola sin programar`:''}</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div style="margin-bottom:4px">
+    <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:8px">⚡ Capacidad del equipo</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">${cards}</div>
+    <div style="font-size:9px;color:var(--muted);margin-top:6px">Capacidad estimada: 7h/día · 35h/semana · Programado incluye bloques Por Iniciar con fecha asignada</div>
+  </div>`;
+}
+
 function renderDelegados() {
+  renderCapacidadEquipo();
   const el = document.getElementById('delgContent');
   if (!el) return;
   const hoy = todayStr();
